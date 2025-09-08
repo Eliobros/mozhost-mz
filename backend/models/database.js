@@ -48,29 +48,47 @@ class Database {
         )
       `);
 
-      // Tabela de containers
-      await this.query(`
-        CREATE TABLE IF NOT EXISTS containers (
-          id VARCHAR(36) PRIMARY KEY,
-          user_id INT NOT NULL,
-          name VARCHAR(100) NOT NULL,
-          type ENUM('nodejs', 'python') NOT NULL,
-          status ENUM('stopped', 'running', 'error', 'building') DEFAULT 'stopped',
-          docker_container_id VARCHAR(100),
-          port INT,
-          domain VARCHAR(255),
-          cpu_limit DECIMAL(3,2) DEFAULT 0.5,
-          memory_limit_mb INT DEFAULT 512,
-          storage_used_mb INT DEFAULT 0,
-          auto_restart BOOLEAN DEFAULT true,
-          environment TEXT, -- JSON string
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          INDEX idx_user_containers (user_id),
-          INDEX idx_container_status (status)
-        )
-      `);
+      // Verificar e corrigir a tabela de containers
+      try {
+        // Primeiro, tentar criar a tabela se não existir
+        await this.query(`
+          CREATE TABLE IF NOT EXISTS containers (
+            id VARCHAR(36) PRIMARY KEY,
+            user_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            type ENUM('nodejs', 'python') NOT NULL,
+            status ENUM('stopped', 'running', 'error', 'building') DEFAULT 'stopped',
+            docker_container_id VARCHAR(100),
+            port INT,
+            domain VARCHAR(255),
+            cpu_limit DECIMAL(3,2) DEFAULT 0.5,
+            memory_limit_mb INT DEFAULT 512,
+            storage_used_mb INT DEFAULT 0,
+            auto_restart BOOLEAN DEFAULT true,
+            environment TEXT, -- JSON string
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_user_containers (user_id),
+            INDEX idx_container_status (status)
+          )
+        `);
+        
+        // Tentar atualizar o ENUM status caso a tabela já exista
+        try {
+          await this.query(`
+            ALTER TABLE containers 
+            MODIFY COLUMN status ENUM('stopped', 'running', 'error', 'building') DEFAULT 'stopped'
+          `);
+          console.log('✅ ENUM status da tabela containers atualizado');
+        } catch (alterError) {
+          // Se der erro, provavelmente já está correto ou é uma tabela nova
+          console.log('ℹ️  ENUM status já estava correto ou tabela é nova');
+        }
+      } catch (containerError) {
+        console.error('⚠️  Erro ao configurar tabela containers:', containerError.message);
+        throw containerError;
+      }
 
       // Tabela de logs
       await this.query(`
