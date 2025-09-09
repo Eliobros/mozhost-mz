@@ -57,11 +57,26 @@ class DockerManager {
       // Criar container no Docker
       const container = await this.docker.createContainer(containerConfig);
       
+      // Buscar username para gerar subdomínio
+      const userInfo = await database.query(
+        'SELECT username FROM users WHERE id = ?',
+        [userId]
+      );
+      const username = userInfo[0]?.username || 'user';
+      
+      // Gerar subdomínio automático: username-containername
+      const subdomain = `${username}-${name}`.toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')  // Substituir caracteres especiais por hífen
+        .replace(/-+/g, '-')          // Remover hífens duplos
+        .replace(/^-|-$/g, '');       // Remover hífens no início/fim
+      
+      const domain = `${subdomain}.mozhost.topaziocoin.online`;
+
       // Salvar no banco
       await database.query(`
-        INSERT INTO containers (id, user_id, name, type, docker_container_id, port, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'stopped')
-      `, [containerId, userId, name, type, container.id, port]);
+        INSERT INTO containers (id, user_id, name, type, docker_container_id, port, domain, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'stopped')
+      `, [containerId, userId, name, type, container.id, port, domain]);
 
       // Criar arquivos iniciais
       await this.createInitialFiles(containerPath, type);
@@ -70,6 +85,7 @@ class DockerManager {
         id: containerId,
         dockerId: container.id,
         port,
+        domain,
         path: containerPath,
         status: 'stopped'
       };

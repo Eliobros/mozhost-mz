@@ -13,6 +13,7 @@ const database = require('./models/database');
 const authRoutes = require('./routes/auth');
 const containerRoutes = require('./routes/containers');
 const fileRoutes = require('./routes/files');
+const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
 
 const app = express();
@@ -72,6 +73,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/containers', containerRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/proxy', proxyRoutes);
 
 // Socket.IO para terminal e logs em tempo real
 io.on('connection', (socket) => {
