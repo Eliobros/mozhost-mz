@@ -20,7 +20,8 @@ import {
   AlertCircle,
   CheckCircle,
   Loader,
-  X
+  X,
+  Globe
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
 
@@ -379,6 +380,20 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
             <div className="flex items-center text-sm text-gray-600">
               <ExternalLink className="w-4 h-4 mr-2" />
               <span>Porta: {container.port}</span>
+            </div>
+          )}
+          
+          {container.domain && (
+            <div className="flex items-center text-sm text-gray-600">
+              <Globe className="w-4 h-4 mr-2" />
+              <a 
+                href={`http://${container.domain}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                {container.domain}
+              </a>
             </div>
           )}
           
