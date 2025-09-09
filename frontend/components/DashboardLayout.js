@@ -124,6 +124,37 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
             {children}
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 mt-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center">
+              <div className="flex items-center space-x-6 text-sm text-gray-600">
+                <button 
+                  onClick={() => window.location.hash = 'terms'}
+                  className="hover:text-gray-900 transition-colors"
+                >
+                  Termos e Condições
+                </button>
+                <button 
+                  onClick={() => window.location.hash = 'privacy'}
+                  className="hover:text-gray-900 transition-colors"
+                >
+                  Política de Privacidade
+                </button>
+                <a 
+                  href="mailto:support@mozhost.com" 
+                  className="hover:text-gray-900 transition-colors"
+                >
+                  Suporte
+                </a>
+              </div>
+              <div className="mt-4 sm:mt-0 text-sm text-gray-500">
+                © 2025 Eliobros Tech. Todos os direitos reservados.
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

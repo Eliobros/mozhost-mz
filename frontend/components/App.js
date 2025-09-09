@@ -6,6 +6,8 @@ import WebTerminal from './WebTerminal';
 import ContainersPage from './ContainersPage';
 import MonitoringPage from './MonitoringPage';
 import SettingsPage from './SettingsPage';
+import TermsConditionsPage from './TermsConditionsPage';
+import PrivacyPolicyPage from './PrivacyPolicyPage';
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -76,6 +78,21 @@ const App = () => {
         </div>
       </div>
     );
+  }
+
+  // Páginas legais (acessíveis sem autenticação)
+  if (currentPage === 'terms') {
+    return <TermsConditionsPage onBack={() => {
+      window.location.hash = isAuthenticated ? 'dashboard' : '';
+      setCurrentPage(isAuthenticated ? 'dashboard' : 'login');
+    }} />;
+  }
+
+  if (currentPage === 'privacy') {
+    return <PrivacyPolicyPage onBack={() => {
+      window.location.hash = isAuthenticated ? 'dashboard' : '';
+      setCurrentPage(isAuthenticated ? 'dashboard' : 'login');
+    }} />;
   }
 
   // Se não autenticado, mostrar login
