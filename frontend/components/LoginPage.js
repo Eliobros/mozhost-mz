@@ -11,7 +11,8 @@ const LoginPage = () => {
     login: '',
     username: '',
     email: '',
-    password: ''
+    password: '',
+    acceptTerms: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,6 +39,12 @@ const LoginPage = () => {
 
     if (!isLogin && formData.username.length < 3) {
       setError('O nome de usuário deve ter pelo menos 3 caracteres');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isLogin && !formData.acceptTerms) {
+      setError('Você deve aceitar os Termos e Condições e a Política de Privacidade');
       setIsLoading(false);
       return;
     }
@@ -114,7 +121,7 @@ const LoginPage = () => {
     setIsLogin(!isLogin);
     setError('');
     setSuccess('');
-    setFormData({ login: '', username: '', email: '', password: '' });
+    setFormData({ login: '', username: '', email: '', password: '', acceptTerms: false });
   };
 
   const features = [
@@ -312,6 +319,42 @@ const LoginPage = () => {
                   )}
                 </div>
 
+                {/* Aceite de Termos (só no cadastro) */}
+                {!isLogin && (
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="acceptTerms"
+                        name="acceptTerms"
+                        type="checkbox"
+                        checked={formData.acceptTerms}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="acceptTerms" className="text-blue-200">
+                        Eu concordo com os{' '}
+                        <button
+                          type="button"
+                          onClick={() => window.location.hash = 'terms'}
+                          className="text-blue-300 hover:text-white underline"
+                        >
+                          Termos e Condições
+                        </button>
+                        {' '}e a{' '}
+                        <button
+                          type="button"
+                          onClick={() => window.location.hash = 'privacy'}
+                          className="text-blue-300 hover:text-white underline"
+                        >
+                          Política de Privacidade
+                        </button>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 {/* Botão Submit */}
                 <button
                   type="button"
@@ -351,10 +394,45 @@ const LoginPage = () => {
                   <span className="text-xs opacity-75">Ou crie uma nova conta</span>
                 </p>
               </div>
+
+              {/* Legal Links */}
+              <div className="mt-6 text-center text-xs text-blue-300 space-x-4">
+                <button 
+                  onClick={() => window.location.hash = 'terms'}
+                  className="hover:text-white transition-colors underline"
+                >
+                  Termos e Condições
+                </button>
+                <span>•</span>
+                <button 
+                  onClick={() => window.location.hash = 'privacy'}
+                  className="hover:text-white transition-colors underline"
+                >
+                  Política de Privacidade
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Footer */}
+      <footer className="relative z-10 bg-black/20 backdrop-blur-sm border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-blue-200">
+            <div className="flex items-center space-x-6">
+              <span>© 2025 Eliobros Tech</span>
+              <a href="mailto:contact@mozhost.com" className="hover:text-white transition-colors">
+                Contato
+              </a>
+              <span>Maputo, Moçambique</span>
+            </div>
+            <div className="mt-4 sm:mt-0">
+              <span>Versão 1.0.0</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
