@@ -46,6 +46,7 @@ app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(200);
 });
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
@@ -62,23 +63,25 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   });
 });
 
-// API Routes
+// API Routes PRIMEIRO - rotas específicas
 app.use('/api/auth', authRoutes);
 app.use('/api/containers', containerRoutes);
 app.use('/api/files', fileRoutes);
-app.use('/proxy', proxyRoutes);
+
+// Proxy routes POR ÚLTIMO - pega tudo que sobrar
+app.use('/', proxyRoutes);
 
 // Socket.IO para terminal e logs em tempo real
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
-  
+
   // Configurar terminal handler
   terminalHandler.handleConnection(socket, io);
 
@@ -91,14 +94,14 @@ io.on('connection', (socket) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  
+
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       error: 'Validation Error',
       details: err.message
     });
   }
-  
+
   if (err.name === 'UnauthorizedError') {
     return res.status(401).json({
       error: 'Unauthorized'
@@ -154,15 +157,15 @@ async function startServer() {
 async function cleanupOrphanedContainers() {
   try {
     const dockerManager = require('./utils/docker-manager');
-    
+
     // Verificar se há containers na tabela primeiro
     const containerCount = await database.query('SELECT COUNT(*) as count FROM containers');
-    
+
     if (containerCount[0].count === 0) {
       console.log('✅ No containers to cleanup');
       return;
     }
-    
+
     // Buscar todos os containers ativos no banco
     const activeContainers = await database.query(
       'SELECT id, docker_container_id FROM containers WHERE status = ? AND docker_container_id IS NOT NULL',
@@ -176,15 +179,15 @@ async function cleanupOrphanedContainers() {
         // Verificar se container ainda existe no Docker
         const dockerContainer = dockerManager.docker.getContainer(container.docker_container_id);
         const inspect = await dockerContainer.inspect();
-        
+
         // Atualizar status baseado no estado real
         const realStatus = inspect.State.Running ? 'running' : 'stopped';
-        
+
         await database.query(
           'UPDATE containers SET status = ? WHERE id = ?',
           [realStatus, container.id]
         );
-        
+
       } catch (dockerError) {
         // Container não existe mais no Docker
         console.log(`🧹 Cleaning up orphaned container: ${container.id}`);
