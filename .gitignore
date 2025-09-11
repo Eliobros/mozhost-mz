@@ -33,3 +33,4 @@ user-data/
 frontend/.next/
 frontend/out/
 frontend/build/
+*.mp4
