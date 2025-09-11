@@ -35,7 +35,7 @@ const TermsConditionsPage = ({ onBack }) => {
             <Clock className="w-5 h-5 text-blue-600 mr-3" />
             <div>
               <p className="text-sm font-medium text-blue-900">Última atualização</p>
-              <p className="text-sm text-blue-700">01 de Janeiro de 2025</p>
+              <p className="text-sm text-blue-700">12 de Setembro  de 2025</p>
             </div>
           </div>
 
@@ -254,8 +254,8 @@ const TermsConditionsPage = ({ onBack }) => {
                 </p>
                 <div className="space-y-2 text-sm">
                   <p><strong>Empresa:</strong> Eliobros Tech</p>
-                  <p><strong>Email:</strong> legal@mozhost.com</p>
-                  <p><strong>Telefone:</strong> +258 XX XXX XXXX</p>
+                  <p><strong>Email:</strong> legacy.mozhost@topaziocoin.online</p>
+                  <p><strong>Telefone:</strong> +258 86 284 0075</p>
                   <p><strong>Endereço:</strong> Maputo, Moçambique</p>
                 </div>
               </div>
@@ -266,7 +266,7 @@ const TermsConditionsPage = ({ onBack }) => {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <p>© 2025 Eliobros Tech. Todos os direitos reservados.</p>
-              <p>Versão 1.0 - Janeiro 2025</p>
+              <p>Versão 1.0 - Setembro 2025</p>
             </div>
           </div>
         </div>

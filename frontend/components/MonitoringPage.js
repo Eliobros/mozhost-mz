@@ -52,7 +52,7 @@ const MonitoringPage = () => {
   useEffect(() => {
     loadContainers();
     generateInitialData();
-    
+
     let interval;
     if (isLiveMode) {
       interval = setInterval(() => {
@@ -110,21 +110,30 @@ const MonitoringPage = () => {
     setRealTimeData(prevData => {
       const newData = [...prevData];
       const now = new Date();
-      
+
       // Remover dados antigos
       const maxPoints = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
       if (newData.length >= maxPoints) {
         newData.shift();
       }
 
+      // Verificar se há dados anteriores
+      const lastData = newData.length > 0 ? newData[newData.length - 1] : null;
+      
+      // Valores padrão se não há dados anteriores
+      const baseCpu = lastData?.cpu || 50;
+      const baseMemory = lastData?.memory || 40;
+      const baseStorage = lastData?.storage || 30;
+      const baseNetwork = lastData?.network || 100;
+
       // Adicionar novo ponto
       newData.push({
         time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         timestamp: now,
-        cpu: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.cpu + (Math.random() - 0.5) * 10)),
-        memory: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.memory + (Math.random() - 0.5) * 8)),
-        storage: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.storage + (Math.random() - 0.5) * 5)),
-        network: Math.max(0, prevData[prevData.length - 1]?.network + (Math.random() - 0.5) * 20),
+        cpu: Math.max(0, Math.min(100, baseCpu + (Math.random() - 0.5) * 10)),
+        memory: Math.max(0, Math.min(100, baseMemory + (Math.random() - 0.5) * 8)),
+        storage: Math.max(0, Math.min(100, baseStorage + (Math.random() - 0.5) * 5)),
+        network: Math.max(0, baseNetwork + (Math.random() - 0.5) * 20),
         containers: containers.filter(c => c.status === 'running').length
       });
 

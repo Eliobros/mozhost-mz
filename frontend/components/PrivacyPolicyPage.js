@@ -48,7 +48,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <Clock className="w-5 h-5 text-green-600 mr-3" />
             <div>
               <p className="text-sm font-medium text-green-900">Última atualização</p>
-              <p className="text-sm text-green-700">01 de Janeiro de 2025</p>
+              <p className="text-sm text-green-700">12  de Setembro  de 2025</p>
             </div>
           </div>
 
@@ -366,8 +366,8 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 notificadas via email e através da plataforma com 30 dias de antecedência.
               </p>
               <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-                <strong>Versão atual:</strong> 1.0 (Janeiro 2025)<br />
-                <strong>Próxima revisão:</strong> Julho 2025
+                <strong>Versão atual:</strong> 1.0 (Setembro 2025)<br />
+                <strong>Próxima revisão:</strong> Novembro 2025
               </div>
             </section>
 
@@ -382,9 +382,9 @@ const PrivacyPolicyPage = ({ onBack }) => {
                   Para questões sobre privacidade, exercer seus direitos ou reportar preocupações:
                 </p>
                 <div className="space-y-2 text-sm">
-                  <p><strong>Email Privacidade:</strong> privacy@mozhost.com</p>
+                  <p><strong>Email Privacidade:</strong> mozhost@topaziocoin.online</p>
                   <p><strong>Responsável DPO:</strong> Habibo Julio (Eliobros Tech)</p>
-                  <p><strong>Telefone:</strong> +258 XX XXX XXXX</p>
+                  <p><strong>Telefone:</strong> +258 86 284 0075</p>
                   <p><strong>Endereço:</strong> Maputo, Moçambique</p>
                   <p><strong>Tempo de resposta:</strong> Até 30 dias</p>
                 </div>
@@ -396,7 +396,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <p>© 2025 Eliobros Tech. Todos os direitos reservados.</p>
-              <p>Política v1.0 - Janeiro 2025</p>
+              <p>Política v1.0 - Setembro 2025</p>
             </div>
           </div>
         </div>
