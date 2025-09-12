@@ -51,8 +51,8 @@ const LoginPage = () => {
     
     try {
       const url = isLogin 
-        ? 'http://50.116.46.130:3001/api/auth/login' 
-        : 'http://50.116.46.130:3001/api/auth/register';
+        ? 'https://api.mozhost.topaziocoin.online/api/auth/login' 
+        : 'https://api.mozhost.topaziocoin.online/api/auth/register';
       
       const body = isLogin 
         ? { login: formData.login, password: formData.password }

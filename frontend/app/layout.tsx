@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   title: "MozHost - Hospedagem de Bots",
   description: "MozHost: Plataforma de hospedagem de Bots  para Node.js e Python",
   icons: {
-    icon: "/mozhost.png", // favicon na pasta public
+    icon: "https://mozhost.vercel.app/mozhost.png", // favicon na pasta public
   },
 };
 

@@ -45,7 +45,7 @@ const App = () => {
       }
 
       // Verificar se token ainda é válido
-      const response = await fetch('http://50.116.46.130:3001/api/auth/verify', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

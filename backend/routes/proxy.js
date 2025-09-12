@@ -7,14 +7,18 @@ const router = express.Router();
 // Captura qualquer subdomínio
 router.all('/*', async (req, res, next) => {
   try {
-    // Captura o subdomínio do host
     let host = req.headers.host; // ex: admin-tina-bot.mozhost.topaziocoin.online
     let containerName = host.split('.')[0]; // pega "admin-tina-bot"
+
+    // 🚨 Exceção para o subdomínio "api"
+    if (containerName === 'api') {
+      console.log(`Skipping proxy for host: ${host} (reserved for backend API)`);
+      return next(); // passa pro Express normal (authRoutes, etc.)
+    }
 
     console.log(`Proxy request for host: ${host}, container: ${containerName}`);
     console.log(`Original path: ${req.path}`);
 
-    // Buscar pelo domain completo primeiro, depois pelo name
     const container = await database.query(
       'SELECT port FROM containers WHERE (domain = ? OR name = ?) AND status = ?',
       [host, containerName, 'running']
@@ -32,11 +36,9 @@ router.all('/*', async (req, res, next) => {
     const port = container[0].port;
     console.log(`Found container on port: ${port}`);
 
-    // Criar proxy middleware
     const proxy = createProxyMiddleware({
       target: `http://localhost:${port}`,
       changeOrigin: true,
-      // Mantém o path original
       pathRewrite: {
         '^/': '/'
       },

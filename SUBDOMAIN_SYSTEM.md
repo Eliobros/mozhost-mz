@@ -164,7 +164,7 @@ sudo crontab -e
 ### API REST:
 ```javascript
 // Container do usuário "dev" chamado "api"
-// Acessível em: dev-api.mozhost.topaziocoin.online
+// Acessível em: dev-https://api.mozhost.topaziocoin.online
 
 app.get('/users', (req, res) => {
   res.json({ users: [...] });

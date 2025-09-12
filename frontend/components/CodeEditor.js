@@ -71,7 +71,7 @@ const CodeEditor = () => {
   const loadContainers = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/containers', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -95,7 +95,7 @@ const CodeEditor = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       const response = await fetch(
-        `http://50.116.46.130:3001/api/files/${selectedContainer.id}?path=${encodeURIComponent(path)}`,
+        `https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}?path=${encodeURIComponent(path)}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -136,7 +136,7 @@ const CodeEditor = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       const response = await fetch(
-        `http://50.116.46.130:3001/api/files/${selectedContainer.id}?path=${encodeURIComponent(file.path)}`,
+        `https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}?path=${encodeURIComponent(file.path)}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -160,7 +160,7 @@ const CodeEditor = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       const response = await fetch(
-        `http://50.116.46.130:3001/api/files/${selectedContainer.id}/${currentFile.path}`,
+        `https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}/${currentFile.path}`,
         {
           method: 'PUT',
           headers: {
@@ -196,7 +196,7 @@ const CodeEditor = () => {
       const token = localStorage.getItem('mozhost_token');
       const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
       
-      const response = await fetch(`http://50.116.46.130:3001/api/files/${selectedContainer.id}`, {
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -227,7 +227,7 @@ const CodeEditor = () => {
       const token = localStorage.getItem('mozhost_token');
       const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
       
-      const response = await fetch(`http://50.116.46.130:3001/api/files/${selectedContainer.id}`, {
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -253,7 +253,7 @@ const CodeEditor = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       const response = await fetch(
-        `http://50.116.46.130:3001/api/files/${selectedContainer.id}/${file.path}`,
+        `https://api.mozhost.topaziocoin.online/api/files/${selectedContainer.id}/${file.path}`,
         {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
