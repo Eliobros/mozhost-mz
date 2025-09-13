@@ -5,6 +5,7 @@ import CodeEditor from './CodeEditor';
 import WebTerminal from './WebTerminal';
 import ContainersPage from './ContainersPage';
 import MonitoringPage from './MonitoringPage';
+import ProfilePage from './ProfilePage';
 import SettingsPage from './SettingsPage';
 import TermsConditionsPage from './TermsConditionsPage';
 import PrivacyPolicyPage from './PrivacyPolicyPage';
@@ -114,6 +115,8 @@ const App = () => {
         return <ContainersPage />;
       case 'monitoring':
         return <MonitoringPage />;
+      case 'profile':
+        return <ProfilePage />;
       case 'settings':
         return <SettingsPage />; // Implementaremos depois se necessário
       default:

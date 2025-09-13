@@ -63,6 +63,7 @@ class DockerManager {
         [userId]
       );
       const username = userInfo[0]?.username || 'user';
+      console.log(`🔍 Username encontrado: ${username} para user_id: ${userId}`);
       
       // Gerar subdomínio automático: username-containername
       const subdomain = `${username}-${name}`.toLowerCase()
@@ -71,6 +72,7 @@ class DockerManager {
         .replace(/^-|-$/g, '');       // Remover hífens no início/fim
       
       const domain = `${subdomain}.mozhost.topaziocoin.online`;
+      console.log(`🌐 Domínio gerado: ${domain}`);
 
       // Salvar no banco
       await database.query(`
@@ -81,7 +83,7 @@ class DockerManager {
       // Criar arquivos iniciais
       await this.createInitialFiles(containerPath, type);
 
-      return {
+      const result = {
         id: containerId,
         dockerId: container.id,
         port,
@@ -89,6 +91,9 @@ class DockerManager {
         path: containerPath,
         status: 'stopped'
       };
+      
+      console.log(`✅ Container criado com sucesso:`, result);
+      return result;
 
     } catch (error) {
       console.error('Error creating container:', error);
