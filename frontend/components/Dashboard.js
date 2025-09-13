@@ -442,24 +442,24 @@ const Dashboard = () => {
 
 const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
   const colorClasses = {
-    blue: 'bg-blue-500 text-blue-600',
-    green: 'bg-green-500 text-green-600',
-    purple: 'bg-purple-500 text-purple-600',
-    orange: 'bg-orange-500 text-orange-600'
+    blue: 'bg-blue-500 text-blue-700',
+    green: 'bg-green-500 text-green-700',
+    purple: 'bg-purple-500 text-purple-700',
+    orange: 'bg-orange-500 text-orange-700'
   };
 
   return (
-    <div className="bg-white rounded-lg shadow border p-6 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-200">
       <div className="flex items-center">
-        <div className={`w-12 h-12 rounded-lg ${colorClasses[color].split(' ')[0]} bg-opacity-10 flex items-center justify-center`}>
+        <div className={`w-12 h-12 rounded-lg ${colorClasses[color].split(' ')[0]} bg-opacity-15 flex items-center justify-center`}>
           <Icon className={`w-6 h-6 ${colorClasses[color].split(' ')[1]}`} />
         </div>
         <div className="ml-4">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-sm font-semibold text-gray-700">{title}</p>
           <div className="flex items-baseline">
             <p className="text-2xl font-bold text-gray-900">{value}</p>
           </div>
-          {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-gray-600 mt-1 font-medium">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -468,16 +468,16 @@ const StatsCard = ({ title, value, icon: Icon, color, subtitle }) => {
 
 const ResourceCard = ({ title, percentage, icon: Icon, color }) => {
   const colorClasses = {
-    blue: 'text-blue-600 bg-blue-600',
-    green: 'text-green-600 bg-green-600',
-    purple: 'text-purple-600 bg-purple-600'
+    blue: 'text-blue-700 bg-blue-600',
+    green: 'text-green-700 bg-green-600',
+    purple: 'text-purple-700 bg-purple-600'
   };
 
   return (
     <div className="text-center">
       <div className="flex items-center justify-center mb-3">
         <Icon className={`w-6 h-6 ${colorClasses[color].split(' ')[0]} mr-2`} />
-        <h4 className="text-sm font-medium text-gray-900">{title}</h4>
+        <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
       </div>
       
       {/* Circular Progress */}
@@ -490,7 +490,7 @@ const ResourceCard = ({ title, percentage, icon: Icon, color }) => {
             stroke="currentColor"
             strokeWidth="8"
             fill="none"
-            className="text-gray-200"
+            className="text-gray-300"
           />
           <circle
             cx="40"
@@ -504,13 +504,13 @@ const ResourceCard = ({ title, percentage, icon: Icon, color }) => {
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-bold text-gray-900">
             {percentage.toFixed(0)}%
           </span>
         </div>
       </div>
       
-      <div className="w-full bg-gray-200 rounded-full h-2">
+      <div className="w-full bg-gray-300 rounded-full h-2">
         <div 
           className={`h-2 rounded-full ${colorClasses[color].split(' ')[1]}`}
           style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -522,32 +522,32 @@ const ResourceCard = ({ title, percentage, icon: Icon, color }) => {
 
 const ContainerMiniCard = ({ container }) => {
   const statusColors = {
-    running: 'bg-green-100 text-green-800',
-    stopped: 'bg-gray-100 text-gray-800',
-    error: 'bg-red-100 text-red-800'
+    running: 'bg-green-100 text-green-800 border-green-200',
+    stopped: 'bg-gray-100 text-gray-800 border-gray-200',
+    error: 'bg-red-100 text-red-800 border-red-200'
   };
 
   return (
-    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-all duration-200">
       <div className="flex items-center">
         <div className="flex-shrink-0">
-          <Server className="w-8 h-8 text-gray-400" />
+          <Server className="w-8 h-8 text-gray-600" />
         </div>
         <div className="ml-3">
-          <p className="text-sm font-medium text-gray-900">{container.name}</p>
+          <p className="text-sm font-semibold text-gray-900">{container.name}</p>
           <div className="flex items-center mt-1">
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColors[container.status]}`}>
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${statusColors[container.status]}`}>
               {container.status}
             </span>
-            <span className="ml-2 text-xs text-gray-500 uppercase">{container.type}</span>
+            <span className="ml-2 text-xs text-gray-600 uppercase font-medium">{container.type}</span>
           </div>
         </div>
       </div>
       <div className="text-right">
         {container.port && (
-          <p className="text-xs text-gray-500">Porta {container.port}</p>
+          <p className="text-xs text-gray-600 font-medium">Porta {container.port}</p>
         )}
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-600">
           {new Date(container.created_at).toLocaleDateString()}
         </p>
       </div>

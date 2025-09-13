@@ -14,11 +14,14 @@ import {
   Bell,
   Search
 } from 'lucide-react';
+import NotificationsSystem from './NotificationsSystem';
 
 const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [notifications] = useState(3); // Mock notifications
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     // Carregar dados do usuário do localStorage
@@ -40,11 +43,12 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
     { name: 'Editor', href: '#files', icon: FileText, current: currentPage === 'files' },
     { name: 'Terminal', href: '#terminal', icon: Terminal, current: currentPage === 'terminal' },
     { name: 'Monitoramento', href: '#monitoring', icon: Activity, current: currentPage === 'monitoring' },
+    { name: 'Perfil', href: '#profile', icon: User, current: currentPage === 'profile' },
     { name: 'Configurações', href: '#settings', icon: Settings, current: currentPage === 'settings' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -92,7 +96,11 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               {/* Notifications */}
-              <button type="button" className="relative -m-2.5 p-2.5 text-gray-400 hover:text-gray-500">
+              <button 
+                type="button" 
+                onClick={() => setShowNotifications(true)}
+                className="relative -m-2.5 p-2.5 text-gray-400 hover:text-gray-500"
+              >
                 <Bell className="h-6 w-6" />
                 {notifications > 0 && (
                   <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
@@ -103,7 +111,10 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
 
               {/* Profile dropdown */}
               <div className="relative">
-                <div className="flex items-center gap-x-3">
+                <button
+                  onClick={() => setShowProfile(true)}
+                  className="flex items-center gap-x-3 hover:bg-gray-50 rounded-lg p-2 transition-colors"
+                >
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
                     <User className="h-5 w-5 text-white" />
                   </div>
@@ -112,7 +123,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                       {user?.username || 'Usuário'}
                     </span>
                   </span>
-                </div>
+                </button>
               </div>
             </div>
           </div>
@@ -156,12 +167,74 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
           </div>
         </footer>
       </div>
+
+      {/* Notifications Modal */}
+      <NotificationsSystem 
+        isOpen={showNotifications} 
+        onClose={() => setShowNotifications(false)} 
+      />
+
+      {/* Profile Modal - Simple version for now */}
+      {showProfile && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Perfil do Usuário</h3>
+              <button
+                onClick={() => setShowProfile(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="text-center">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+                  <User className="h-8 w-8 text-white" />
+                </div>
+                <h4 className="text-lg font-medium text-gray-900">{user?.username || 'Usuário'}</h4>
+                <p className="text-sm text-gray-500">{user?.email || 'email@exemplo.com'}</p>
+                <p className="text-xs text-gray-400 mt-2 capitalize">{user?.plan || 'free'} Plan</p>
+              </div>
+              <div className="mt-6 space-y-3">
+                <button
+                  onClick={() => {
+                    setShowProfile(false);
+                    window.location.hash = 'profile';
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurações da Conta
+                </button>
+                <button
+                  onClick={() => {
+                    setShowProfile(false);
+                    window.location.hash = 'notifications';
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center"
+                >
+                  <Bell className="w-4 h-4 mr-2" />
+                  Notificações
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md flex items-center"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sair da Conta
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 const SidebarContent = ({ navigation, user, onLogout }) => (
-  <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gradient-to-b from-slate-900 to-slate-800 px-6 pb-4">
+  <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gradient-to-b from-blue-900 to-indigo-900 px-6 pb-4">
     {/* Logo */}
     <div className="flex h-16 shrink-0 items-center">
       <div className="flex items-center">

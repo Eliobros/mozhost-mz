@@ -24,6 +24,7 @@ import {
   Globe
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
+import ContainerSettingsModal from './ContainerSettingsModal';
 
 const ContainersPage = () => {
   const [containers, setContainers] = useState([]);
@@ -31,6 +32,7 @@ const ContainersPage = () => {
   const [actionLoading, setActionLoading] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedContainer, setSelectedContainer] = useState(null);
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -195,41 +197,41 @@ const ContainersPage = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow border">
+          <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
             <div className="flex items-center">
-              <Server className="w-8 h-8 text-blue-500" />
+              <Server className="w-8 h-8 text-blue-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total</p>
+                <p className="text-sm font-semibold text-gray-700">Total</p>
                 <p className="text-2xl font-bold text-gray-900">{containerStats.total}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg shadow border">
+          <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
             <div className="flex items-center">
-              <Play className="w-8 h-8 text-green-500" />
+              <Play className="w-8 h-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Em Execução</p>
+                <p className="text-sm font-semibold text-gray-700">Em Execução</p>
                 <p className="text-2xl font-bold text-gray-900">{containerStats.running}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg shadow border">
+          <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
             <div className="flex items-center">
-              <Square className="w-8 h-8 text-gray-500" />
+              <Square className="w-8 h-8 text-gray-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Parados</p>
+                <p className="text-sm font-semibold text-gray-700">Parados</p>
                 <p className="text-2xl font-bold text-gray-900">{containerStats.stopped}</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg shadow border">
+          <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
             <div className="flex items-center">
-              <AlertCircle className="w-8 h-8 text-red-500" />
+              <AlertCircle className="w-8 h-8 text-red-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Com Erro</p>
+                <p className="text-sm font-semibold text-gray-700">Com Erro</p>
                 <p className="text-2xl font-bold text-gray-900">{containerStats.error}</p>
               </div>
             </div>
@@ -302,7 +304,7 @@ const ContainersPage = () => {
                 onDelete={() => handleDeleteContainer(container)}
                 onEdit={(container) => {
                   setSelectedContainer(container);
-                  setShowEditModal(true);
+                  setShowSettingsModal(true);
                 }}
               />
             ))}
@@ -318,6 +320,24 @@ const ContainersPage = () => {
             onClose={() => {
               setShowCreateModal(false);
               setCreateForm({ name: '', type: 'nodejs', environment: {} });
+            }}
+          />
+        )}
+
+        {/* Settings Modal */}
+        {showSettingsModal && selectedContainer && (
+          <ContainerSettingsModal
+            container={selectedContainer}
+            isOpen={showSettingsModal}
+            onClose={() => {
+              setShowSettingsModal(false);
+              setSelectedContainer(null);
+            }}
+            onUpdate={loadContainers}
+            onDelete={() => {
+              setShowSettingsModal(false);
+              setSelectedContainer(null);
+              loadContainers();
             }}
           />
         )}
@@ -337,7 +357,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
   const StatusIcon = status.icon;
 
   return (
-    <div className="bg-white rounded-lg shadow border hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
@@ -347,23 +367,23 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
               status.color === 'red' ? 'bg-red-500' : 'bg-gray-500'
             }`}></div>
             <div>
-              <h3 className="text-lg font-medium text-gray-900 truncate">{container.name}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 truncate">{container.name}</h3>
               <div className="flex items-center mt-1">
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                  status.color === 'green' ? 'bg-green-100 text-green-800' :
-                  status.color === 'red' ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
+                  status.color === 'green' ? 'bg-green-100 text-green-800 border-green-200' :
+                  status.color === 'red' ? 'bg-red-100 text-red-800 border-red-200' :
+                  'bg-gray-100 text-gray-800 border-gray-200'
                 }`}>
                   <StatusIcon className="w-3 h-3 mr-1" />
                   {status.text}
                 </span>
-                <span className="ml-2 text-xs text-gray-500 uppercase">{container.type}</span>
+                <span className="ml-2 text-xs text-gray-600 uppercase font-medium">{container.type}</span>
               </div>
             </div>
           </div>
           <button
             onClick={() => onEdit(container)}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-500 hover:text-blue-600 transition-colors"
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -371,40 +391,41 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
 
         {/* Info */}
         <div className="space-y-3 mb-6">
-          <div className="flex items-center text-sm text-gray-600">
-            <Server className="w-4 h-4 mr-2" />
-            <span>ID: {container.id.substring(0, 8)}</span>
+          <div className="flex items-center text-sm text-gray-700">
+            <Server className="w-4 h-4 mr-2 text-gray-600" />
+            <span className="font-medium">ID: {container.id.substring(0, 8)}</span>
           </div>
           
           {container.port && (
-            <div className="flex items-center text-sm text-gray-600">
-              <ExternalLink className="w-4 h-4 mr-2" />
-              <span>Porta: {container.port}</span>
+            <div className="flex items-center text-sm text-gray-700">
+              <ExternalLink className="w-4 h-4 mr-2 text-gray-600" />
+              <span className="font-medium">Porta: {container.port}</span>
             </div>
           )}
           
           {container.domain && (
-            <div className="flex items-center text-sm text-gray-600">
-              <Globe className="w-4 h-4 mr-2" />
+            <div className="flex items-center text-sm text-gray-700">
+              <Globe className="w-4 h-4 mr-2 text-gray-600" />
               <a 
                 href={`http://${container.domain}`} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 hover:underline"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium"
               >
                 {container.domain}
               </a>
             </div>
           )}
           
-          <div className="flex items-center text-sm text-gray-600">
-            <Calendar className="w-4 h-4 mr-2" />
-            <span>Criado: {new Date(container.created_at).toLocaleDateString()}</span>
+          
+          <div className="flex items-center text-sm text-gray-700">
+            <Calendar className="w-4 h-4 mr-2 text-gray-600" />
+            <span className="font-medium">Criado: {new Date(container.created_at).toLocaleDateString()}</span>
           </div>
           
-          <div className="flex items-center text-sm text-gray-600">
-            <Clock className="w-4 h-4 mr-2" />
-            <span>Atualizado: {new Date(container.updated_at).toLocaleString()}</span>
+          <div className="flex items-center text-sm text-gray-700">
+            <Clock className="w-4 h-4 mr-2 text-gray-600" />
+            <span className="font-medium">Atualizado: {new Date(container.updated_at).toLocaleString()}</span>
           </div>
         </div>
 

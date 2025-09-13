@@ -139,7 +139,7 @@ router.post('/', [
       environment: environment || {}
     });
 
-    res.status(201).json({
+    const responseData = {
       message: 'Container created successfully',
       container: {
         id: containerData.id,
@@ -147,9 +147,13 @@ router.post('/', [
         type,
         status: 'stopped',
         port: containerData.port,
+        domain: containerData.domain,
         dockerId: containerData.dockerId
       }
-    });
+    };
+    
+    console.log('📤 Resposta da API de criação:', responseData);
+    res.status(201).json(responseData);
 
   } catch (error) {
     console.error('Error creating container:', error);
