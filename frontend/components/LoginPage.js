@@ -386,14 +386,7 @@ const LoginPage = () => {
                 </button>
               </div>
 
-              {/* Demo Credentials */}
-              <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                <p className="text-blue-200 text-sm text-center">
-                  <strong>🚀 Para testar:</strong> Use "admin" e senha "123456"
-                  <br />
-                  <span className="text-xs opacity-75">Ou crie uma nova conta</span>
-                </p>
-              </div>
+              
 
               {/* Legal Links */}
               <div className="mt-6 text-center text-xs text-blue-300 space-x-4">
