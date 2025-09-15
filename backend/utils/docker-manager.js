@@ -101,39 +101,44 @@ class DockerManager {
     }
   }
 
-  async startContainer(containerId) {
-    try {
-      const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
-        [containerId]
-      );
-
-      if (!containerInfo.length) {
-        throw new Error('Container not found');
-      }
-
-      const container = this.docker.getContainer(containerInfo[0].docker_container_id);
-      await container.start();
-      
-      await database.query(
-        'UPDATE containers SET status = "running", updated_at = NOW() WHERE id = ?',
-        [containerId]
-      );
-
-      return { success: true, status: 'running' };
-    } catch (error) {
-      await database.query(
-        'UPDATE containers SET status = "error" WHERE id = ?',
-        [containerId]
-      );
-      throw error;
+async startContainer(containerId) {
+  try {
+    // Sincronizar status antes de tentar start
+    const currentStatus = await this.syncContainerStatus(containerId);
+    
+    if (currentStatus === 'running') {
+      return { success: true, status: 'running', message: 'Container already running' };
     }
+
+    const containerInfo = await database.query(
+      'SELECT docker_container_id FROM containers WHERE id = ?',
+      [containerId]
+    );
+
+    const container = this.docker.getContainer(containerInfo[0].docker_container_id);
+    await container.start();
+
+    await database.query(
+      "UPDATE containers SET status = 'running', updated_at = NOW() WHERE id = ?",
+      [containerId]
+    );
+
+    return { success: true, status: 'running' };
+  } catch (error) {
+    // resto do código de erro...
+    await database.query(
+      "UPDATE containers SET status = 'error' WHERE id = ?",
+      [containerId]
+    );
+    throw error;
+
   }
+}
 
   async stopContainer(containerId) {
     try {
       const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
+        "SELECT docker_container_id FROM containers WHERE id = ?",
         [containerId]
       );
 
@@ -145,7 +150,7 @@ class DockerManager {
       await container.stop();
       
       await database.query(
-        'UPDATE containers SET status = "stopped", updated_at = NOW() WHERE id = ?',
+        "UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = ?",
         [containerId]
       );
 
@@ -188,6 +193,55 @@ class DockerManager {
       throw error;
     }
   }
+
+  async syncContainerStatus(containerId) {
+  try {
+    const containerInfo = await database.query(
+      'SELECT docker_container_id FROM containers WHERE id = ?',
+      [containerId]
+    );
+
+    if (!containerInfo.length) {
+      throw new Error('Container not found in database');
+    }
+
+    const container = this.docker.getContainer(containerInfo[0].docker_container_id);
+    const inspect = await container.inspect();
+    
+    // Status real do Docker
+    const realStatus = inspect.State.Running ? 'running' : 'stopped';
+    
+    // Atualizar banco com status real
+    await database.query(
+      "UPDATE containers SET status = ? WHERE id = ?",
+      [realStatus, containerId]
+    );
+
+    return realStatus;
+  } catch (error) {
+    console.error('Error syncing container status:', error);
+    // Se container não existe no Docker, marcar como error
+    await database.query(
+      "UPDATE containers SET status = 'error' WHERE id = ?",
+      [containerId]
+    );
+    throw error;
+  }
+}
+
+// Método para sincronizar todos os containers
+async syncAllContainers() {
+  const containers = await database.query('SELECT id, docker_container_id FROM containers');
+  
+  for (const container of containers) {
+    try {
+      await this.syncContainerStatus(container.id);
+    } catch (error) {
+      console.error(`Failed to sync container ${container.id}:`, error);
+    }
+  }
+}
+
 
   async getContainerLogs(containerId, tail = 100) {
     try {

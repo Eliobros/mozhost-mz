@@ -111,6 +111,39 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Proxy dinâmico para containers (adicionar antes do 404)
+app.use('*', async (req, res, next) => {
+  const host = req.get('host');
+
+  // Se não for subdomínio do mozhost, pular
+  if (!host || !host.includes('.mozhost.topaziocoin.online')) {
+    return next();
+  }
+
+  try {
+    // Buscar container no banco pelo campo domain
+    const containers = await database.query(
+      'SELECT port FROM containers WHERE domain = ? AND status = ?',
+      [host, 'running']
+    );
+
+    if (containers.length === 0) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // Fazer proxy para o container
+    const { createProxyMiddleware } = require('http-proxy-middleware');
+    const proxy = createProxyMiddleware({
+      target: `http://localhost:${containers[0].port}`,
+      changeOrigin: true
+    });
+
+    return proxy(req, res, next);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    return res.status(500).json({ error: 'Proxy error' });
+  }
+});
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
