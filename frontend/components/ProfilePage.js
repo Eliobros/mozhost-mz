@@ -69,7 +69,7 @@ const ProfilePage = () => {
   const loadUserData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/auth/me', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -92,7 +92,7 @@ const ProfilePage = () => {
   const loadUserStats = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/containers', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -154,7 +154,7 @@ const ProfilePage = () => {
         preferences: formData.preferences
       };
 
-      const response = await fetch('http://50.116.46.130:3001/api/auth/profile', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
