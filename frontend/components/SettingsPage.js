@@ -58,7 +58,7 @@ const SettingsPage = () => {
   const loadUserData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/auth/verify', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -84,7 +84,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/user/profile', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -126,7 +126,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/user/password', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/password', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -159,7 +159,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/user/startup-commands', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/startup-commands', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -183,7 +183,7 @@ const SettingsPage = () => {
   const exportData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/user/export', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/export', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -216,7 +216,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/user/delete', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/delete', {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
