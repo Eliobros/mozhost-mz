@@ -69,7 +69,7 @@ const MonitoringPage = () => {
   const loadContainers = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/containers', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

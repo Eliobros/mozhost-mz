@@ -59,7 +59,7 @@ const WebTerminal = () => {
   const loadContainers = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('http://50.116.46.130:3001/api/containers', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -80,7 +80,7 @@ const WebTerminal = () => {
   const connectToTerminal = () => {
     const token = localStorage.getItem('mozhost_token');
     
-    const newSocket = io('http://50.116.46.130:3001', {
+    const newSocket = io('https://api.mozhost.topaziocoin.online', {
       auth: {
         token: token
       }

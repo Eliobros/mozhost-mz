@@ -73,7 +73,7 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
       };
 
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`http://50.116.46.130:3001/api/containers/${container.id}`, {
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${container.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -105,7 +105,7 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`http://50.116.46.130:3001/api/containers/${container.id}/${action}`, {
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${container.id}/${action}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -134,7 +134,7 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`http://50.116.46.130:3001/api/containers/${container.id}`, {
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${container.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
