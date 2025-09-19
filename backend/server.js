@@ -142,10 +142,16 @@ app.use((err, req, res, next) => {
 
 // Proxy dinâmico para containers (adicionar antes do 404)
 app.use('*', async (req, res, next) => {
-  const host = req.get('host');
+  const hostHeader = req.get('host') || '';
+  const host = hostHeader.split(':')[0];
 
-  // Se não for subdomínio do mozhost, pular
-  if (!host || !host.includes('.mozhost.topaziocoin.online')) {
+  // Não interceptar chamadas da própria API
+  if (req.path && req.path.startsWith('/api')) {
+    return next();
+  }
+
+  // Ignorar subdomínio de API
+  if (!host || !host.endsWith('.mozhost.topaziocoin.online') || host === 'api.mozhost.topaziocoin.online' || host.startsWith('api.')) {
     return next();
   }
 
