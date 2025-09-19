@@ -55,6 +55,57 @@ function getContainerPath(containerId) {
   return path.join(process.env.CONTAINERS_PATH || '/root/mozhost/user-data/containers', containerId);
 }
 
+// Helper: calcular uso atual do container
+async function calculateContainerUsageBytes(containerId) {
+  const containerPath = getContainerPath(containerId);
+  if (!await fs.pathExists(containerPath)) return 0;
+
+  async function walk(dir) {
+    let total = 0;
+    const items = await fs.readdir(dir);
+    for (const item of items) {
+      const itemPath = path.join(dir, item);
+      try {
+        const stats = await fs.stat(itemPath);
+        if (stats.isDirectory()) total += await walk(itemPath);
+        else total += stats.size;
+      } catch (_) {}
+    }
+    return total;
+  }
+
+  return walk(containerPath);
+}
+
+// Helper: garantir que não ultrapasse a cota ao adicionar bytes
+async function ensureStorageAllowance(containerId, userId, additionalBytes = 0) {
+  const userInfo = await database.query(
+    'SELECT max_storage_mb FROM users WHERE id = ?',
+    [userId]
+  );
+  const maxStorageMB = userInfo.length > 0 ? userInfo[0].max_storage_mb : 1024;
+  const limitBytes = maxStorageMB * 1024 * 1024;
+
+  const usedBytes = await calculateContainerUsageBytes(containerId);
+  if (usedBytes + additionalBytes > limitBytes) {
+    const remaining = Math.max(0, limitBytes - usedBytes);
+    const needed = (usedBytes + additionalBytes) - limitBytes;
+    const percent = (usedBytes / limitBytes) * 100;
+    const almostFull = percent >= 90;
+    const message = almostFull
+      ? 'Armazenamento quase cheio. Considere fazer upgrade.'
+      : 'Limite de armazenamento atingido.';
+    const errorMsg = additionalBytes > 0
+      ? `Operação excede o limite por ${Math.ceil(needed / (1024 * 1024))} MB`
+      : message;
+    const err = new Error(errorMsg);
+    err.status = 413;
+    err.details = { usedBytes, limitBytes, remainingBytes: remaining };
+    throw err;
+  }
+  return { usedBytes, limitBytes };
+}
+
 // Listar arquivos e pastas de um container
 router.get('/:containerId', async (req, res) => {
   try {
@@ -181,6 +232,8 @@ router.post('/:containerId', [
     } else {
       // Garantir que o diretório pai existe
       await fs.ensureDir(path.dirname(fullPath));
+      const contentBytes = Buffer.byteLength(content, 'utf8');
+      await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
       await fs.writeFile(fullPath, content, 'utf8');
     }
 
@@ -234,7 +287,9 @@ router.put('/:containerId/*', [
       return res.status(400).json({ error: 'Cannot edit directory' });
     }
 
-    // Salvar arquivo
+    // Verificar cota (considerar delta opcionalmente; aqui usamos tamanho novo)
+    const newBytes = Buffer.byteLength(content, 'utf8');
+    await ensureStorageAllowance(containerId, req.user.userId, newBytes);
     await fs.writeFile(fullPath, content, 'utf8');
 
     res.json({
@@ -376,6 +431,10 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
     await fs.ensureDir(uploadPath);
 
     const uploadedFiles = [];
+
+    // Checar cota total antes de gravar todos arquivos
+    const totalIncoming = req.files.reduce((sum, f) => sum + (f.size || 0), 0);
+    await ensureStorageAllowance(containerId, req.user.userId, totalIncoming);
 
     for (const file of req.files) {
       const filePath = path.join(uploadPath, file.originalname);

@@ -42,6 +42,7 @@ class Database {
           max_containers INT DEFAULT 2,
           max_ram_mb INT DEFAULT 512,
           max_storage_mb INT DEFAULT 1024,
+          coins INT DEFAULT 250,
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

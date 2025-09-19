@@ -53,8 +53,8 @@ router.post('/register', [
 
     // Criar usuário
     const result = await database.query(
-      `INSERT INTO users (username, email, password_hash, plan, max_containers, max_ram_mb, max_storage_mb)
-       VALUES (?, ?, ?, 'free', 2, 512, 1024)`,
+      `INSERT INTO users (username, email, password_hash, plan, max_containers, max_ram_mb, max_storage_mb, coins)
+       VALUES (?, ?, ?, 'free', 2, 512, 1024, 250)`,
       [username, email, passwordHash]
     );
 
@@ -74,7 +74,8 @@ router.post('/register', [
         username,
         email,
         plan: 'free',
-        maxContainers: 2
+        maxContainers: 2,
+        coins: 250
       },
       token
     });
@@ -173,7 +174,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb FROM users WHERE id = ?',
+      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb, coins FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -192,7 +193,8 @@ router.get('/verify', authMiddleware, async (req, res) => {
         plan: user[0].plan,
         maxContainers: user[0].max_containers,
         maxRamMb: user[0].max_ram_mb,
-        maxStorageMb: user[0].max_storage_mb
+        maxStorageMb: user[0].max_storage_mb,
+        coins: user[0].coins
       }
     });
 
@@ -250,3 +252,31 @@ router.post('/logout', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+// Admin coin top-up (senha simples, provisório)
+const expressAdmin = require('express');
+const adminRouter = expressAdmin.Router();
+
+adminRouter.post('/coins/add', async (req, res) => {
+  try {
+    const { username, amount, password } = req.body;
+    if (!username || !amount || !password) {
+      return res.status(400).json({ error: 'username, amount e password são obrigatórios' });
+    }
+    if (password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+    const users = await database.query('SELECT id FROM users WHERE username = ?', [username]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    const amt = Number(amount) || 0;
+    await database.query('UPDATE users SET coins = coins + ? WHERE id = ?', [amt, users[0].id]);
+    const updated = await database.query('SELECT id, username, coins FROM users WHERE id = ?', [users[0].id]);
+    res.json({ message: 'Coins adicionadas com sucesso', user: updated[0] });
+  } catch (error) {
+    console.error('Admin add coins error:', error);
+    res.status(500).json({ error: 'Falha ao adicionar coins' });
+  }
+});
+
+module.exports.adminRouter = adminRouter;

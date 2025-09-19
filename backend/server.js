@@ -11,6 +11,7 @@ require('dotenv').config();
 // Importar módulos
 const database = require('./models/database');
 const authRoutes = require('./routes/auth');
+const { adminRouter } = require('./routes/auth');
 const containerRoutes = require('./routes/containers');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
@@ -98,6 +99,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRouter);
 app.use('/api/containers', containerRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);
