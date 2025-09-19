@@ -23,7 +23,9 @@ import {
   Info,
   Crown,
   Zap,
-  Star
+  Star,
+  Coins,
+  Phone
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
 
@@ -60,6 +62,7 @@ const ProfilePage = () => {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [coins, setCoins] = useState(0);
 
   useEffect(() => {
     loadUserData();
@@ -99,6 +102,7 @@ const ProfilePage = () => {
       if (response.ok) {
         const data = await response.json();
         const containers = data.containers;
+        setCoins(data.coins || 0);
         
         setStats({
           totalContainers: containers.length,
@@ -452,6 +456,22 @@ const ProfilePage = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Estatísticas da Conta</h3>
               </div>
               <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Coins className="w-5 h-5 text-yellow-600 mr-2" />
+                <span className="text-sm font-semibold text-gray-700">Coins</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-lg font-bold text-gray-900 mr-3">{coins}</span>
+                <a
+                  href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins"
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-green-700 hover:text-green-800 hover:underline inline-flex items-center"
+                >
+                  <Phone className="w-3 h-3 mr-1" /> Comprar coins
+                </a>
+              </div>
+            </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Server className="w-5 h-5 text-blue-600 mr-2" />

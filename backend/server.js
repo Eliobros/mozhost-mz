@@ -11,6 +11,7 @@ require('dotenv').config();
 // Importar módulos
 const database = require('./models/database');
 const authRoutes = require('./routes/auth');
+const { adminRouter } = require('./routes/auth');
 const containerRoutes = require('./routes/containers');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
@@ -18,9 +19,24 @@ const terminalHandler = require('./controllers/terminal');
 
 const app = express();
 const server = createServer(app);
+const parseOrigins = (originsStr) => {
+  if (!originsStr) return [];
+  return originsStr
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+};
+
+const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGINS || '');
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST"]
   }
 });
@@ -32,7 +48,12 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: "*",
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -40,19 +61,26 @@ app.use(cors({
 
 // Adicione também este middleware para preflight requests:
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
+  const reqOrigin = req.headers.origin;
+  if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
+    res.header('Access-Control-Allow-Origin', reqOrigin || '');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(200);
+  }
+  return res.sendStatus(403);
 });
 // Rate limiting
+const RL_WINDOW_MIN = Number(process.env.RATE_LIMIT_WINDOW) || 15;
+const RL_MAX = Number(process.env.RATE_LIMIT_MAX) || 100;
+
 const limiter = rateLimit({
-  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
-  max: process.env.RATE_LIMIT_MAX || 100,
-  message: {
-    error: 'Too many requests, please try again later.'
-  }
+  windowMs: RL_WINDOW_MIN * 60 * 1000,
+  max: RL_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
 
@@ -71,6 +99,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRouter);
 app.use('/api/containers', containerRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);

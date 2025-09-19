@@ -23,9 +23,18 @@ router.get('/', async (req, res) => {
       ORDER BY created_at DESC
     `, [req.user.userId]);
 
+    // Notificação de armazenamento quase cheio (>90%)
+    const userInfo = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
+    const maxMB = userInfo.length ? userInfo[0].max_storage_mb : 1024;
+    const storageAlerts = containers
+      .filter(c => (c.storage_used_mb || 0) >= Math.floor(maxMB * 0.9))
+      .map(c => ({ id: c.id, name: c.name, usedMB: c.storage_used_mb, maxMB }));
+
     res.json({
       containers,
-      total: containers.length
+      total: containers.length,
+      storageAlerts,
+      coins: userInfo.length ? userInfo[0].coins : 0
     });
 
   } catch (error) {
@@ -33,6 +42,51 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       error: 'Failed to list containers'
     });
+  }
+});
+
+// Upgrade de armazenamento usando coins
+router.post('/:id/upgrade-storage', [
+  body('addMb').isInt({ min: 100, max: 10240 }).withMessage('addMb deve ser entre 100 e 10240')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { addMb } = req.body;
+
+    // Verifica usuário e container
+    const containers = await database.query(
+      'SELECT id FROM containers WHERE id = ? AND user_id = ?',
+      [id, req.user.userId]
+    );
+    if (!containers.length) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // Preço: 1 coin = 1 MB (exemplo simples)
+    const priceCoins = Number(addMb);
+    const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+    const coins = users.length ? users[0].coins : 0;
+    if (coins < priceCoins) {
+      return res.status(402).json({ error: 'Insufficient coins', needed: priceCoins, have: coins });
+    }
+
+    // Debitar coins e aumentar limite por usuário (global)
+    await database.query('UPDATE users SET coins = coins - ?, max_storage_mb = max_storage_mb + ? WHERE id = ?', [priceCoins, addMb, req.user.userId]);
+
+    const updated = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
+    res.json({
+      message: 'Armazenamento atualizado com sucesso',
+      maxStorageMb: updated[0].max_storage_mb,
+      coins: updated[0].coins
+    });
+  } catch (error) {
+    console.error('Upgrade storage error:', error);
+    res.status(500).json({ error: 'Failed to upgrade storage' });
   }
 });
 
@@ -109,7 +163,7 @@ router.post('/', [
     );
 
     const userInfo = await database.query(
-      'SELECT max_containers FROM users WHERE id = ?',
+      'SELECT max_containers, coins FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -132,12 +186,28 @@ router.post('/', [
       });
     }
 
+    // Verificar coins mínimos (somente para novos usuários, manter legados)
+    const MIN_COINS_TO_CREATE = Number(process.env.MIN_COINS_CREATE) || 500;
+    if ((userInfo[0].coins || 0) < MIN_COINS_TO_CREATE) {
+      return res.status(402).json({
+        error: 'Insufficient coins',
+        message: `Você precisa de ${MIN_COINS_TO_CREATE} coins para criar um container.`,
+        currentCoins: userInfo[0].coins || 0
+      });
+    }
+
     // Criar container
     const containerData = await dockerManager.createUserContainer(req.user.userId, {
       name,
       type,
       environment: environment || {}
     });
+
+    // Debitar coins
+    await database.query(
+      'UPDATE users SET coins = coins - ? WHERE id = ?',
+      [MIN_COINS_TO_CREATE, req.user.userId]
+    );
 
     const responseData = {
       message: 'Container created successfully',

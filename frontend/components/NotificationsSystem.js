@@ -15,7 +15,7 @@ import {
   Search
 } from 'lucide-react';
 
-const NotificationsSystem = ({ isOpen, onClose }) => {
+const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -33,54 +33,18 @@ const NotificationsSystem = ({ isOpen, onClose }) => {
       // Simular carregamento de notificações
       // Em produção, faria uma requisição para a API
       const mockNotifications = [
-        {
-          id: 1,
-          type: 'success',
-          title: 'Container criado com sucesso',
-          message: 'Seu container "meu-bot-whatsapp" foi criado e está pronto para uso.',
-          timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 min atrás
-          read: false,
-          category: 'container'
-        },
-        {
-          id: 2,
-          type: 'info',
-          title: 'Atualização do sistema',
-          message: 'Nova versão da plataforma MozHost disponível com melhorias de performance.',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2h atrás
-          read: false,
-          category: 'system'
-        },
-        {
-          id: 3,
-          type: 'warning',
-          title: 'Limite de containers próximo',
-          message: 'Você está usando 4 de 5 containers permitidos no seu plano gratuito.',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4h atrás
-          read: true,
-          category: 'billing'
-        },
-        {
-          id: 4,
-          type: 'error',
-          title: 'Container com erro',
-          message: 'O container "bot-discord" parou de funcionar devido a um erro interno.',
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6h atrás
-          read: true,
-          category: 'container'
-        },
-        {
-          id: 5,
-          type: 'info',
-          title: 'Bem-vindo ao MozHost!',
-          message: 'Obrigado por se registrar! Comece criando seu primeiro container.',
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 dia atrás
-          read: true,
-          category: 'welcome'
-        }
+        { id: 1, type: 'success', title: 'Container criado', message: 'Seu container "meu-bot" foi criado.', timestamp: new Date(Date.now() - 5 * 60 * 1000), read: false, category: 'container' },
+        { id: 2, type: 'info', title: 'Container iniciado', message: 'O container "meu-bot" foi iniciado.', timestamp: new Date(Date.now() - 30 * 60 * 1000), read: false, category: 'container' },
+        { id: 3, type: 'warning', title: 'Armazenamento quase cheio', message: 'Falta pouco para atingir o limite. Considere upgrade.', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), read: true, category: 'billing' },
+        { id: 4, type: 'info', title: 'Boas-vindas', message: 'Bem-vindo ao MozHost! Você começa com 250 coins.', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), read: true, category: 'welcome' },
+        { id: 5, type: 'info', title: 'Upgrade de armazenamento', message: 'Aumente armazenamento usando coins.', timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), read: true, category: 'system' }
       ];
       
       setNotifications(mockNotifications);
+      if (onUnreadChange) {
+        const unread = mockNotifications.filter(n => !n.read).length;
+        onUnreadChange(unread);
+      }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     } finally {
@@ -91,13 +55,9 @@ const NotificationsSystem = ({ isOpen, onClose }) => {
   const markAsRead = async (notificationId) => {
     try {
       // Em produção, faria uma requisição para marcar como lida
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, read: true }
-            : notif
-        )
-      );
+      const next = notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
+      setNotifications(next);
+      if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);
     } catch (error) {
       console.error('Erro ao marcar notificação como lida:', error);
     }
@@ -106,9 +66,9 @@ const NotificationsSystem = ({ isOpen, onClose }) => {
   const markAllAsRead = async () => {
     try {
       // Em produção, faria uma requisição para marcar todas como lidas
-      setNotifications(prev => 
-        prev.map(notif => ({ ...notif, read: true }))
-      );
+      const next = notifications.map(n => ({ ...n, read: true }));
+      setNotifications(next);
+      if (onUnreadChange) onUnreadChange(0);
     } catch (error) {
       console.error('Erro ao marcar todas como lidas:', error);
     }
@@ -117,9 +77,9 @@ const NotificationsSystem = ({ isOpen, onClose }) => {
   const deleteNotification = async (notificationId) => {
     try {
       // Em produção, faria uma requisição para deletar
-      setNotifications(prev => 
-        prev.filter(notif => notif.id !== notificationId)
-      );
+      const next = notifications.filter(n => n.id !== notificationId);
+      setNotifications(next);
+      if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);
     } catch (error) {
       console.error('Erro ao deletar notificação:', error);
     }

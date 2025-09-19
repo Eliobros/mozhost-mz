@@ -41,6 +41,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState(null);
+  const [coins, setCoins] = useState(0);
+  const [storageAlerts, setStorageAlerts] = useState([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -75,6 +77,8 @@ const Dashboard = () => {
       if (response.ok) {
         const data = await response.json();
         setContainers(data.containers);
+        setCoins(data.coins || 0);
+        setStorageAlerts(Array.isArray(data.storageAlerts) ? data.storageAlerts : []);
         
         // Calcular estatísticas
         const running = data.containers.filter(c => c.status === 'running').length;
@@ -199,6 +203,14 @@ const Dashboard = () => {
               <p className="mt-2 text-blue-100">
                 Aqui está um resumo da sua conta MozHost
               </p>
+              <div className="mt-3 inline-flex items-center bg-yellow-100 text-yellow-900 px-3 py-1 rounded-md">
+                <span className="text-sm font-semibold">Coins: {coins}</span>
+                <a
+                  href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins"
+                  target="_blank" rel="noopener noreferrer"
+                  className="ml-3 text-sm underline"
+                >Comprar coins</a>
+              </div>
             </div>
             <div className="mt-4 sm:mt-0">
               <div className="flex items-center bg-white/10 backdrop-blur rounded-lg px-4 py-2">
@@ -208,6 +220,19 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {storageAlerts.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-md p-4">
+            <div className="font-semibold mb-1">Armazenamento quase cheio</div>
+            <ul className="list-disc list-inside text-sm">
+              {storageAlerts.map(a => (
+                <li key={a.id}>
+                  {a.name}: {a.usedMB}MB de {a.maxMB}MB usados. Vá em Containers → Upgrade Storage.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-md bg-red-50 p-4">
