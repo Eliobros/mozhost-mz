@@ -21,7 +21,9 @@ import {
   CheckCircle,
   Loader,
   X,
-  Globe
+  Globe,
+  Coins,
+  Phone
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
 import ContainerSettingsModal from './ContainerSettingsModal';
@@ -41,6 +43,9 @@ const ContainersPage = () => {
   });
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [coins, setCoins] = useState(0);
+  const [storageAlerts, setStorageAlerts] = useState([]);
+  const REQUIRED_COINS = 500;
 
   useEffect(() => {
     loadContainers();
@@ -56,11 +61,44 @@ const ContainersPage = () => {
       if (response.ok) {
         const data = await response.json();
         setContainers(data.containers);
+        setCoins(data.coins || 0);
+        setStorageAlerts(Array.isArray(data.storageAlerts) ? data.storageAlerts : []);
       }
     } catch (error) {
       console.error('Erro ao carregar containers:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpgradeStorage = async (containerId) => {
+    const input = prompt('Adicionar quanto de armazenamento? (em MB, mínimo 100)');
+    if (!input) return;
+    const addMb = parseInt(input, 10);
+    if (isNaN(addMb) || addMb < 100) {
+      alert('Valor inválido. Informe um número em MB (>= 100).');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const resp = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${containerId}/upgrade-storage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ addMb })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        alert(`Armazenamento atualizado! Novo limite: ${data.maxStorageMb} MB. Coins restantes: ${data.coins}.`);
+        await loadContainers();
+      } else {
+        const err = await resp.json();
+        alert(`Falha no upgrade: ${err.error || 'erro'}`);
+      }
+    } catch (e) {
+      alert('Erro de conexão');
     }
   };
 
@@ -185,6 +223,18 @@ const ContainersPage = () => {
             <p className="mt-1 text-sm text-gray-500">
               Gerencie todos os seus containers em um só lugar
             </p>
+            <div className="mt-2 inline-flex items-center text-sm text-gray-700 bg-yellow-50 border border-yellow-200 rounded-md px-3 py-1">
+              <Coins className="w-4 h-4 text-yellow-600 mr-2" />
+              <span className="font-semibold">Coins:</span>
+              <span className="ml-1">{coins}</span>
+              <a
+                href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins"
+                target="_blank" rel="noopener noreferrer"
+                className="ml-3 inline-flex items-center text-green-700 hover:text-green-800 hover:underline"
+              >
+                <Phone className="w-3 h-3 mr-1" /> Comprar coins
+              </a>
+            </div>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -194,6 +244,20 @@ const ContainersPage = () => {
             Novo Container
           </button>
         </div>
+
+        {/* Storage Alerts */}
+        {storageAlerts.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-md p-4">
+            <div className="font-semibold mb-1">Armazenamento quase cheio</div>
+            <ul className="list-disc list-inside text-sm">
+              {storageAlerts.map(a => (
+                <li key={a.id}>
+                  {a.name}: {a.usedMB}MB de {a.maxMB}MB usados. Considere fazer upgrade.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -306,6 +370,8 @@ const ContainersPage = () => {
                   setSelectedContainer(container);
                   setShowSettingsModal(true);
                 }}
+                onUpgrade={handleUpgradeStorage}
+                isNearLimit={!!storageAlerts.find(a => a.id === container.id)}
               />
             ))}
           </div>
@@ -316,6 +382,8 @@ const ContainersPage = () => {
           <CreateContainerModal
             form={createForm}
             setForm={setCreateForm}
+            coins={coins}
+            requiredCoins={REQUIRED_COINS}
             onSubmit={handleCreateContainer}
             onClose={() => {
               setShowCreateModal(false);
@@ -346,7 +414,7 @@ const ContainersPage = () => {
   );
 };
 
-const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit }) => {
+const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit, onUpgrade, isNearLimit }) => {
   const statusConfig = {
     running: { color: 'green', icon: CheckCircle, text: 'Rodando' },
     stopped: { color: 'gray', icon: Square, text: 'Parado' },
@@ -429,6 +497,13 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
           </div>
         </div>
 
+        {/* Near-limit banner */}
+        {isNearLimit && (
+          <div className="mb-4 p-3 rounded-md bg-orange-50 border border-orange-200 text-orange-800 text-xs">
+            Armazenamento quase cheio. Considere fazer upgrade.
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-200">
           <div className="flex space-x-2">
@@ -488,25 +563,33 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit })
             )}
           </div>
 
-          <button
-            onClick={onDelete}
-            disabled={actionLoading === 'deleting'}
-            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-          >
-            {actionLoading === 'deleting' ? (
-              <Loader className="w-3 h-3 animate-spin mr-1" />
-            ) : (
-              <Trash2 className="w-3 h-3 mr-1" />
-            )}
-            Deletar
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => onUpgrade(container.id)}
+              className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700"
+            >
+              <HardDrive className="w-3 h-3 mr-1" /> Upgrade Storage
+            </button>
+            <button
+              onClick={onDelete}
+              disabled={actionLoading === 'deleting'}
+              className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+            >
+              {actionLoading === 'deleting' ? (
+                <Loader className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <Trash2 className="w-3 h-3 mr-1" />
+              )}
+              Deletar
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const CreateContainerModal = ({ form, setForm, onSubmit, onClose }) => (
+const CreateContainerModal = ({ form, setForm, onSubmit, onClose, coins, requiredCoins }) => (
   <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
       <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -517,6 +600,16 @@ const CreateContainerModal = ({ form, setForm, onSubmit, onClose }) => (
       </div>
       
       <div className="p-6 space-y-4">
+        <div className="text-sm">
+          <div className="inline-flex items-center bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md px-3 py-1">
+            <Coins className="w-4 h-4 mr-2" />
+            Coins disponíveis: <span className="font-semibold ml-1">{coins}</span>
+          </div>
+          <p className="mt-2 text-xs text-gray-600">É necessário <span className="font-semibold">{requiredCoins} coins</span> para criar um container.</p>
+          {coins < requiredCoins && (
+            <p className="mt-2 text-xs text-red-600">Você não possui coins suficientes. <a href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins" target="_blank" rel="noopener noreferrer" className="underline">Comprar coins</a></p>
+          )}
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Nome do Container
@@ -561,7 +654,8 @@ const CreateContainerModal = ({ form, setForm, onSubmit, onClose }) => (
           <button
             type="button"
             onClick={onSubmit}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium rounded-md hover:from-blue-700 hover:to-purple-700"
+            disabled={coins < requiredCoins}
+            className={`px-4 py-2 text-white text-sm font-medium rounded-md ${coins < requiredCoins ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'}`}
           >
             Criar Container
           </button>
