@@ -1,8 +1,8 @@
 // controllers/terminal.js
-const pty = require('node-pty');
 const jwt = require('jsonwebtoken');
 const database = require('../models/database');
 const path = require('path');
+const dockerManager = require('../utils/docker-manager');
 
 class TerminalController {
   constructor() {
@@ -84,29 +84,41 @@ class TerminalController {
           this.closeTerminal(socket.id);
         }
 
-        // Criar novo terminal
-        const containerPath = path.join(
-          process.env.CONTAINERS_PATH || '/root/mozhost/user-data/containers',
-          containerId
+        // Obter docker_container_id e criar sessão exec dentro do container
+        const rows = await database.query(
+          'SELECT docker_container_id FROM containers WHERE id = ? AND user_id = ?',
+          [containerId, user.userId]
         );
 
-        // Spawn terminal no diretório do container
-        const terminal = pty.spawn('bash', [], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 24,
-          cwd: containerPath,
-          env: {
-            ...process.env,
-            TERM: 'xterm-color',
-            COLORTERM: 'truecolor',
-            PS1: `\\[\\033[36m\\]mozhost:\\[\\033[33m\\]${containerId.substring(0, 8)}\\[\\033[0m\\]$ `
-          }
+        if (!rows.length || !rows[0].docker_container_id) {
+          socket.emit('terminal-error', { error: 'Container not available' });
+          return;
+        }
+
+        const dockerContainerId = rows[0].docker_container_id;
+        const container = dockerManager.docker.getContainer(dockerContainerId);
+
+        const exec = await container.exec({
+          AttachStdin: true,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: true,
+          WorkingDir: '/app/code',
+          Cmd: ['sh']
         });
 
-        // Armazenar referência do terminal
+        const stream = await new Promise((resolve, reject) => {
+          exec.start({ hijack: true, stdin: true }, (err, s) => {
+            if (err) return reject(err);
+            resolve(s);
+          });
+        });
+
+        // Armazenar referência da sessão
         this.terminals.set(socket.id, {
-          pty: terminal,
+          exec,
+          stream,
+          dockerContainerId,
           containerId,
           userId: user.userId,
           username: user.username
@@ -118,17 +130,19 @@ class TerminalController {
         }
         this.containerTerminals.get(containerId).add(socket.id);
 
-        // Event listener para dados do terminal
-        terminal.on('data', (data) => {
-          socket.emit('terminal-output', { data });
+        // Encaminhar dados do exec para o cliente
+        stream.on('data', (chunk) => {
+          try {
+            socket.emit('terminal-output', { data: chunk.toString('utf8') });
+          } catch (_) {}
         });
 
-        // Event listener para encerramento do terminal
-        terminal.on('exit', (code) => {
-          console.log(`Terminal exited with code: ${code}`);
-          socket.emit('terminal-exit', { code });
+        const onStreamEnd = () => {
+          try { socket.emit('terminal-exit', { code: 0 }); } catch (_) {}
           this.closeTerminal(socket.id);
-        });
+        };
+        stream.on('end', onStreamEnd);
+        stream.on('close', onStreamEnd);
 
         // Confirmar conexão
         socket.emit('terminal-connected', { 
