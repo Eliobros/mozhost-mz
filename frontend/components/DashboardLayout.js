@@ -19,7 +19,7 @@ import NotificationsSystem from './NotificationsSystem';
 const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [notifications] = useState(3); // Mock notifications
+  const [notifications, setNotifications] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
@@ -154,10 +154,11 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                   Política de Privacidade
                 </button>
                 <a 
-                  href="mailto:support@mozhost.com" 
-                  className="hover:text-gray-900 transition-colors"
+                  href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins" 
+                  target="_blank" rel="noopener noreferrer"
+                  className="hover:text-gray-900 transition-colors font-semibold text-green-600"
                 >
-                  Suporte
+                  Comprar coins no WhatsApp
                 </a>
               </div>
               <div className="mt-4 sm:mt-0 text-sm text-gray-500">
@@ -172,6 +173,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
       <NotificationsSystem 
         isOpen={showNotifications} 
         onClose={() => setShowNotifications(false)} 
+        onUnreadChange={(n) => setNotifications(n)}
       />
 
       {/* Profile Modal - Simple version for now */}

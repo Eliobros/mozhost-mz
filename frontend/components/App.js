@@ -14,6 +14,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     checkAuthentication();
@@ -53,6 +54,8 @@ const App = () => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        // Atualiza badge conforme eventos (mock simples por enquanto)
+        setUnreadNotifications(0);
         setIsAuthenticated(true);
       } else {
         // Token inválido, limpar dados
@@ -104,7 +107,7 @@ const App = () => {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard />;
+    return <Dashboard setUnreadNotifications={setUnreadNotifications} />;
       case 'files':
       case 'editor':
         return <CodeEditor />;
