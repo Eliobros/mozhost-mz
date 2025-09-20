@@ -28,7 +28,8 @@
     "archiver": "^5.3.2",
     "fs-extra": "^11.1.1",
     "uuid": "^9.0.0",
-    "http-proxy-middleware": "^2.0.6"
+    "http-proxy-middleware": "^2.0.6",
+    "@getbrevo/brevo": "^2.5.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
