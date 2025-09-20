@@ -12,8 +12,11 @@ const LoginPage = () => {
     username: '',
     email: '',
     password: '',
-    acceptTerms: false
+    acceptTerms: false,
+    verifyCode: ''
   });
+  const [showVerifyStep, setShowVerifyStep] = useState(false);
+  const [pendingToken, setPendingToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -75,6 +78,13 @@ const LoginPage = () => {
         localStorage.setItem('mozhost_token', data.token);
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
         
+        if (!isLogin && data.user && data.user.emailVerified === false) {
+          setShowVerifyStep(true);
+          setPendingToken(data.token);
+          setSuccess('Enviamos um código de verificação para o seu e-mail.');
+          return;
+        }
+
         if (isLogin) {
           setSuccess(`Bem-vindo de volta, ${data.user.username}! 🎉`);
         } else {
@@ -93,6 +103,9 @@ const LoginPage = () => {
           setError('Este usuário ou e-mail já está cadastrado. Tente fazer login.');
         } else if (response.status === 401) {
           setError('Usuário ou senha incorretos. Verifique suas credenciais.');
+        } else if (response.status === 403 && data.error === 'Email not verified') {
+          setError('Email não verificado. Clique em “Reenviar código” ou insira o código enviado.');
+          setShowVerifyStep(true);
         } else if (response.status === 400) {
           setError(data.details ? data.details.map(d => d.msg).join(', ') : data.message);
         } else {
@@ -102,6 +115,53 @@ const LoginPage = () => {
     } catch (err) {
       setError('Erro de conexão. Verifique se o backend está rodando na porta 3001.');
       console.error('Erro de conexão:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('mozhost_token') || pendingToken;
+      const resp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ code: formData.verifyCode.trim() })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setSuccess('Email verificado com sucesso! Redirecionando...');
+        setTimeout(() => {
+          window.location.hash = 'dashboard';
+          window.location.reload();
+        }, 800);
+      } else {
+        setError(data.error || 'Código inválido ou expirado');
+      }
+    } catch (e) {
+      setError('Erro ao verificar código');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('mozhost_token') || pendingToken;
+      const resp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/resend-code', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        setSuccess('Novo código enviado para o seu e-mail');
+      } else {
+        const data = await resp.json();
+        setError(data.error || 'Falha ao reenviar código');
+      }
+    } catch (e) {
+      setError('Erro de conexão');
     } finally {
       setIsLoading(false);
     }
@@ -235,6 +295,7 @@ const LoginPage = () => {
                 </div>
               )}
 
+              {!showVerifyStep ? (
               <div className="space-y-6">
                 {/* Campo Username (só no cadastro) */}
                 {!isLogin && (
@@ -355,6 +416,17 @@ const LoginPage = () => {
                   </div>
                 )}
 
+                {/* Forgot password link (login only) */}
+                {isLogin && (
+                  <div className="text-right -mt-2">
+                    <button
+                      type="button"
+                      onClick={() => window.location.hash = 'reset'}
+                      className="text-blue-300 hover:text-white text-sm underline"
+                    >Esqueci minha senha</button>
+                  </div>
+                )}
+
                 {/* Botão Submit */}
                 <button
                   type="button"
@@ -372,9 +444,40 @@ const LoginPage = () => {
                   )}
                 </button>
               </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">Código de Verificação</label>
+                    <input
+                      type="text"
+                      name="verifyCode"
+                      value={formData.verifyCode}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                      placeholder="Insira o código enviado ao seu e-mail"
+                    />
+                    <p className="text-blue-300 text-xs mt-1">Válido por 15 minutos.</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={isLoading}
+                      className="text-blue-300 hover:text-white underline"
+                    >Reenviar código</button>
+                    <button
+                      type="button"
+                      onClick={handleVerify}
+                      disabled={isLoading || !formData.verifyCode.trim()}
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                    >Verificar</button>
+                  </div>
+                </div>
+              )}
 
               {/* Toggle Login/Register */}
               <div className="mt-6 text-center">
+                {!showVerifyStep && (
                 <button
                   onClick={toggleMode}
                   className="text-blue-300 hover:text-white transition-colors"
@@ -384,6 +487,7 @@ const LoginPage = () => {
                     : 'Já tem conta? Fazer login'
                   }
                 </button>
+                )}
               </div>
 
               

@@ -43,6 +43,11 @@ class Database {
           max_ram_mb INT DEFAULT 512,
           max_storage_mb INT DEFAULT 1024,
           coins INT DEFAULT 250,
+          email_verified BOOLEAN DEFAULT false,
+          email_verification_code VARCHAR(10),
+          email_verification_expires TIMESTAMP NULL,
+          reset_token VARCHAR(64),
+          reset_expires TIMESTAMP NULL,
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
