@@ -131,7 +131,8 @@ const LoginPage = () => {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setSuccess('Email verificado com sucesso! Redirecionando...');
+        const bonus = data.bonusGranted ? ` (+${350} coins)` : '';
+        setSuccess(`Email verificado com sucesso${bonus}! Redirecionando...`);
         setTimeout(() => {
           window.location.hash = 'dashboard';
           window.location.reload();
