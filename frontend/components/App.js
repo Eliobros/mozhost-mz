@@ -7,6 +7,7 @@ import ContainersPage from './ContainersPage';
 import MonitoringPage from './MonitoringPage';
 import ProfilePage from './ProfilePage';
 import SettingsPage from './SettingsPage';
+import ResetPasswordPage from './ResetPasswordPage';
 import TermsConditionsPage from './TermsConditionsPage';
 import PrivacyPolicyPage from './PrivacyPolicyPage';
 const App = () => {
@@ -84,6 +85,10 @@ const App = () => {
   }
 
   // Páginas legais (acessíveis sem autenticação)
+  if (currentPage.startsWith('reset')) {
+    return <ResetPasswordPage />;
+  }
+
   if (currentPage === 'terms') {
     return <TermsConditionsPage onBack={() => {
       window.location.hash = isAuthenticated ? 'dashboard' : '';
