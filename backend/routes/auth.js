@@ -319,7 +319,7 @@ router.post('/verify-email', [
 ], authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
-    const users = await database.query('SELECT email_verification_code, email_verification_expires FROM users WHERE id = ?', [req.user.userId]);
+    const users = await database.query('SELECT id, username, email, coins, email_verification_code, email_verification_expires, email_verified, verification_bonus_awarded FROM users WHERE id = ?', [req.user.userId]);
     if (!users.length) return res.status(404).json({ error: 'User not found' });
     const row = users[0];
     if (!row.email_verification_code || !row.email_verification_expires) {
@@ -331,8 +331,17 @@ router.post('/verify-email', [
     if (String(row.email_verification_code) !== String(code)) {
       return res.status(400).json({ error: 'Invalid code' });
     }
+    // Marcar verificado
     await database.query('UPDATE users SET email_verified = true, email_verification_code = NULL, email_verification_expires = NULL WHERE id = ?', [req.user.userId]);
-    res.json({ message: 'Email verified successfully' });
+
+    // Bônus de 350 coins uma única vez
+    let bonusGranted = false;
+    if (!row.verification_bonus_awarded) {
+      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [req.user.userId]);
+      bonusGranted = true;
+    }
+    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+    res.json({ message: 'Email verified successfully', bonusGranted, coins: updated[0].coins });
   } catch (e) {
     console.error('verify-email error:', e);
     res.status(500).json({ error: 'Failed to verify email' });

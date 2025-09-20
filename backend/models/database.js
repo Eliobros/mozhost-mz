@@ -46,6 +46,7 @@ class Database {
           email_verified BOOLEAN DEFAULT false,
           email_verification_code VARCHAR(10),
           email_verification_expires TIMESTAMP NULL,
+          verification_bonus_awarded BOOLEAN DEFAULT false,
           reset_token VARCHAR(64),
           reset_expires TIMESTAMP NULL,
           is_active BOOLEAN DEFAULT true,
