@@ -7,6 +7,7 @@ const database = require('../models/database');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
+const { sendEmail, generateCode } = require('../utils/email');
 
 // Registro de usuário
 router.post('/register', [
@@ -60,6 +61,27 @@ router.post('/register', [
 
     const userId = result.insertId;
 
+    // Gerar e enviar código de verificação
+    try {
+      const code = generateCode(6);
+      const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+      await database.query(
+        'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
+        [code, expiresAt, userId]
+      );
+      if (process.env.BREVO_API_KEY) {
+        await sendEmail({
+          toEmail: email,
+          toName: username,
+          subject: 'MozHost - Código de verificação de email',
+          htmlContent: `<h2>Seu código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
+          textContent: `Seu código: ${code} (válido por 15 minutos)`
+        });
+      }
+    } catch (e) {
+      console.error('Erro ao enviar código de verificação:', e.message);
+    }
+
     // Gerar token JWT
     const token = jwt.sign(
       { userId, username, email },
@@ -75,7 +97,8 @@ router.post('/register', [
         email,
         plan: 'free',
         maxContainers: 2,
-        coins: 250
+        coins: 250,
+        emailVerified: false
       },
       token
     });
@@ -129,6 +152,14 @@ router.post('/login', [
       });
     }
 
+    // Bloquear se email não verificado
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        message: 'Verifique seu email para acessar sua conta.'
+      });
+    }
+
     // Gerar token JWT
     const token = jwt.sign(
       { 
@@ -174,7 +205,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb, coins FROM users WHERE id = ?',
+      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -194,7 +225,8 @@ router.get('/verify', authMiddleware, async (req, res) => {
         maxContainers: user[0].max_containers,
         maxRamMb: user[0].max_ram_mb,
         maxStorageMb: user[0].max_storage_mb,
-        coins: user[0].coins
+        coins: user[0].coins,
+        emailVerified: !!user[0].email_verified
       }
     });
 
@@ -280,3 +312,99 @@ adminRouter.post('/coins/add', async (req, res) => {
 });
 
 module.exports.adminRouter = adminRouter;
+
+// Email verification endpoints
+router.post('/verify-email', [
+  body('code').isLength({ min: 4, max: 10 }).withMessage('Código inválido')
+], authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const users = await database.query('SELECT email_verification_code, email_verification_expires FROM users WHERE id = ?', [req.user.userId]);
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
+    const row = users[0];
+    if (!row.email_verification_code || !row.email_verification_expires) {
+      return res.status(400).json({ error: 'No verification pending' });
+    }
+    if (new Date(row.email_verification_expires) < new Date()) {
+      return res.status(410).json({ error: 'Code expired' });
+    }
+    if (String(row.email_verification_code) !== String(code)) {
+      return res.status(400).json({ error: 'Invalid code' });
+    }
+    await database.query('UPDATE users SET email_verified = true, email_verification_code = NULL, email_verification_expires = NULL WHERE id = ?', [req.user.userId]);
+    res.json({ message: 'Email verified successfully' });
+  } catch (e) {
+    console.error('verify-email error:', e);
+    res.status(500).json({ error: 'Failed to verify email' });
+  }
+});
+
+router.post('/resend-code', authMiddleware, async (req, res) => {
+  try {
+    const info = await database.query('SELECT username, email, email_verified FROM users WHERE id = ?', [req.user.userId]);
+    if (!info.length) return res.status(404).json({ error: 'User not found' });
+    if (info[0].email_verified) return res.status(400).json({ error: 'Already verified' });
+    const code = generateCode(6);
+    const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+    await database.query('UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
+    if (process.env.BREVO_API_KEY) {
+      await sendEmail({
+        toEmail: info[0].email,
+        toName: info[0].username,
+        subject: 'MozHost - Novo código de verificação',
+        htmlContent: `<p>Seu novo código: <strong>${code}</strong></p>`,
+        textContent: `Seu novo código: ${code}`
+      });
+    }
+    res.json({ message: 'Verification code sent' });
+  } catch (e) {
+    console.error('resend-code error:', e);
+    res.status(500).json({ error: 'Failed to resend code' });
+  }
+});
+
+// Forgot/Reset password
+router.post('/forgot', [body('email').isEmail()], async (req, res) => {
+  try {
+    const { email } = req.body;
+    const users = await database.query('SELECT id, username FROM users WHERE email = ?', [email]);
+    if (!users.length) {
+      return res.json({ message: 'If this email exists, a reset link was sent' });
+    }
+    const token = require('crypto').randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + (Number(process.env.RESET_TTL_MIN) || 15) * 60 * 1000);
+    await database.query('UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?', [token, expiresAt, users[0].id]);
+    if (process.env.BREVO_API_KEY) {
+      const link = `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/#reset?token=${token}`;
+      await sendEmail({
+        toEmail: email,
+        toName: users[0].username,
+        subject: 'MozHost - Redefinição de senha',
+        htmlContent: `<p>Use este link para redefinir sua senha (válido por 15 minutos): <a href="${link}">${link}</a></p>`,
+        textContent: `Link de reset (15min): ${link}`
+      });
+    }
+    res.json({ message: 'If this email exists, a reset link was sent' });
+  } catch (e) {
+    console.error('forgot error:', e);
+    res.status(500).json({ error: 'Failed to process forgot password' });
+  }
+});
+
+router.post('/reset', [
+  body('token').isString(),
+  body('newPassword').isLength({ min: 6 })
+], async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const users = await database.query('SELECT id FROM users WHERE reset_token = ? AND reset_expires > NOW()', [token]);
+    if (!users.length) return res.status(400).json({ error: 'Invalid or expired token' });
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(newPassword, 12);
+    await database.query('UPDATE users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?', [hash, users[0].id]);
+    res.json({ message: 'Password reset successfully' });
+  } catch (e) {
+    console.error('reset error:', e);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
