@@ -16,6 +16,7 @@ const containerRoutes = require('./routes/containers');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
+const { startWhatsApp, disconnectWhatsApp } = require('./utils/whatsapp');
 
 const app = express();
 const server = createServer(app);
@@ -204,6 +205,10 @@ async function startServer() {
     console.log('🧹 Cleaning up orphaned containers...');
     await cleanupOrphanedContainers();
 
+    // Inicializar WhatsApp
+    console.log('📱 Initializing WhatsApp...');
+    startWhatsApp();
+
     // Iniciar servidor
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');
@@ -273,6 +278,7 @@ async function cleanupOrphanedContainers() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('📴 Received SIGTERM, shutting down gracefully...');
+  disconnectWhatsApp();
   server.close(() => {
     console.log('✅ Server closed');
     process.exit(0);
@@ -281,6 +287,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('📴 Received SIGINT, shutting down gracefully...');
+  disconnectWhatsApp();
   server.close(() => {
     console.log('✅ Server closed');
     process.exit(0);
