@@ -8,6 +8,7 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 const { sendEmail, generateCode } = require('../utils/email');
+const { sendWhatsAppMessage, formatVerificationMessage, checkWhatsAppConnection } = require('../utils/whatsapp');
 
 // Registro de usuário
 router.post('/register', [
@@ -21,7 +22,20 @@ router.post('/register', [
     .withMessage('Valid email is required'),
   body('password')
     .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters')
+    .withMessage('Password must be at least 6 characters'),
+  body('phone')
+    .optional()
+    .isLength({ min: 8, max: 15 })
+    .matches(/^[0-9]+$/)
+    .withMessage('Phone number must contain only numbers (8-15 digits)'),
+  body('countryCode')
+    .optional()
+    .isLength({ min: 1, max: 5 })
+    .withMessage('Valid country code is required'),
+  body('preferredVerificationMethod')
+    .optional()
+    .isIn(['email', 'whatsapp'])
+    .withMessage('Verification method must be email or whatsapp')
 ], async (req, res) => {
   try {
     // Validar input
@@ -33,7 +47,7 @@ router.post('/register', [
       });
     }
 
-    const { username, email, password } = req.body;
+    const { username, email, password, phone, countryCode, preferredVerificationMethod } = req.body;
 
     // Verificar se usuário já existe
     const existingUser = await database.query(
@@ -54,9 +68,9 @@ router.post('/register', [
 
     // Criar usuário
     const result = await database.query(
-      `INSERT INTO users (username, email, password_hash, plan, max_containers, max_ram_mb, max_storage_mb, coins)
-       VALUES (?, ?, ?, 'free', 2, 512, 1024, 250)`,
-      [username, email, passwordHash]
+      `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins)
+       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 512, 1024, 250)`,
+      [username, email, passwordHash, phone || null, countryCode || null, preferredVerificationMethod || 'email']
     );
 
     const userId = result.insertId;
@@ -65,18 +79,41 @@ router.post('/register', [
     try {
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
-      await database.query(
-        'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
-        [code, expiresAt, userId]
-      );
-      if (process.env.BREVO_API_KEY) {
-        await sendEmail({
-          toEmail: email,
-          toName: username,
-          subject: 'MozHost - Código de verificação de email',
-          htmlContent: `<h2>Seu código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
-          textContent: `Seu código: ${code} (válido por 15 minutos)`
+      
+      const verificationMethod = preferredVerificationMethod || 'email';
+      
+      if (verificationMethod === 'whatsapp' && phone && countryCode) {
+        // Verificação via WhatsApp
+        await database.query(
+          'UPDATE users SET whatsapp_verification_code = ?, whatsapp_verification_expires = ? WHERE id = ?',
+          [code, expiresAt, userId]
+        );
+        
+        const fullPhone = countryCode + phone;
+        const message = formatVerificationMessage(code);
+        await sendWhatsAppMessage({
+          phone: fullPhone,
+          message: message
         });
+        console.log(`📱 Código de verificação WhatsApp enviado para: ${fullPhone}`);
+        
+      } else {
+        // Verificação via Email (padrão)
+        await database.query(
+          'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
+          [code, expiresAt, userId]
+        );
+        
+        if (process.env.BREVO_API_KEY) {
+          await sendEmail({
+            toEmail: email,
+            toName: username,
+            subject: 'MozHost - Código de verificação de email',
+            htmlContent: `<h2>Seu código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
+            textContent: `Seu código: ${code} (válido por 15 minutos)`
+          });
+        }
+        console.log(`📧 Código de verificação email enviado para: ${email}`);
       }
     } catch (e) {
       console.error('Erro ao enviar código de verificação:', e.message);
@@ -95,10 +132,14 @@ router.post('/register', [
         id: userId,
         username,
         email,
+        phone: phone || null,
+        countryCode: countryCode || null,
         plan: 'free',
         maxContainers: 2,
         coins: 250,
-        emailVerified: false
+        emailVerified: false,
+        whatsappVerified: false,
+        preferredVerificationMethod: preferredVerificationMethod || 'email'
       },
       token
     });
@@ -152,12 +193,24 @@ router.post('/login', [
       });
     }
 
-    // Bloquear se email não verificado
-    if (!user.email_verified) {
+    // Verificar se pelo menos um método está verificado
+    const hasEmailVerified = user.email_verified;
+    const hasWhatsAppVerified = user.whatsapp_verified;
+    const preferredMethod = user.preferred_verification_method || 'email';
+    
+    if (!hasEmailVerified && !hasWhatsAppVerified) {
+      const method = preferredMethod === 'whatsapp' && user.phone ? 'WhatsApp' : 'email';
       return res.status(403).json({
-        error: 'Email not verified',
-        message: 'Verifique seu email para acessar sua conta.'
+        error: 'Account not verified',
+        message: `Verifique sua conta via ${method} para acessar.`,
+        preferredMethod: preferredMethod
       });
+    }
+    
+    // Se tem método preferido mas não verificado, sugerir verificação
+    if (preferredMethod === 'whatsapp' && user.phone && !hasWhatsAppVerified && hasEmailVerified) {
+      // Permite login mas sugere verificar WhatsApp
+      console.log(`ℹ️ User ${user.username} logged in with email but has unverified WhatsApp`);
     }
 
     // Gerar token JWT
@@ -205,7 +258,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, preferred_verification_method FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -221,12 +274,16 @@ router.get('/verify', authMiddleware, async (req, res) => {
         id: user[0].id,
         username: user[0].username,
         email: user[0].email,
+        phone: user[0].phone,
+        countryCode: user[0].country_code,
         plan: user[0].plan,
         maxContainers: user[0].max_containers,
         maxRamMb: user[0].max_ram_mb,
         maxStorageMb: user[0].max_storage_mb,
         coins: user[0].coins,
-        emailVerified: !!user[0].email_verified
+        emailVerified: !!user[0].email_verified,
+        whatsappVerified: !!user[0].whatsapp_verified,
+        preferredVerificationMethod: user[0].preferred_verification_method
       }
     });
 
@@ -348,27 +405,144 @@ router.post('/verify-email', [
   }
 });
 
-router.post('/resend-code', authMiddleware, async (req, res) => {
+// WhatsApp verification endpoints
+router.post('/verify-whatsapp', [
+  body('code').isLength({ min: 4, max: 10 }).withMessage('Código inválido')
+], authMiddleware, async (req, res) => {
   try {
-    const info = await database.query('SELECT username, email, email_verified FROM users WHERE id = ?', [req.user.userId]);
-    if (!info.length) return res.status(404).json({ error: 'User not found' });
-    if (info[0].email_verified) return res.status(400).json({ error: 'Already verified' });
-    const code = generateCode(6);
-    const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
-    await database.query('UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
-    if (process.env.BREVO_API_KEY) {
-      await sendEmail({
-        toEmail: info[0].email,
-        toName: info[0].username,
-        subject: 'MozHost - Novo código de verificação',
-        htmlContent: `<p>Seu novo código: <strong>${code}</strong></p>`,
-        textContent: `Seu novo código: ${code}`
-      });
+    const { code } = req.body;
+    const users = await database.query('SELECT id, username, phone, country_code, coins, whatsapp_verification_code, whatsapp_verification_expires, whatsapp_verified, verification_bonus_awarded FROM users WHERE id = ?', [req.user.userId]);
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
+    const row = users[0];
+    
+    if (!row.whatsapp_verification_code || !row.whatsapp_verification_expires) {
+      return res.status(400).json({ error: 'No WhatsApp verification pending' });
     }
-    res.json({ message: 'Verification code sent' });
+    if (new Date(row.whatsapp_verification_expires) < new Date()) {
+      return res.status(410).json({ error: 'Code expired' });
+    }
+    if (String(row.whatsapp_verification_code) !== String(code)) {
+      return res.status(400).json({ error: 'Invalid code' });
+    }
+    
+    // Marcar WhatsApp verificado
+    await database.query('UPDATE users SET whatsapp_verified = true, whatsapp_verification_code = NULL, whatsapp_verification_expires = NULL WHERE id = ?', [req.user.userId]);
+
+    // Bônus de 350 coins uma única vez
+    let bonusGranted = false;
+    if (!row.verification_bonus_awarded) {
+      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [req.user.userId]);
+      bonusGranted = true;
+    }
+    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+    res.json({ message: 'WhatsApp verified successfully', bonusGranted, coins: updated[0].coins });
+  } catch (e) {
+    console.error('verify-whatsapp error:', e);
+    res.status(500).json({ error: 'Failed to verify WhatsApp' });
+  }
+});
+
+router.post('/resend-code', [
+  body('method').optional().isIn(['email', 'whatsapp']).withMessage('Method must be email or whatsapp')
+], authMiddleware, async (req, res) => {
+  try {
+    const { method } = req.body;
+    const info = await database.query('SELECT username, email, phone, country_code, email_verified, whatsapp_verified, preferred_verification_method FROM users WHERE id = ?', [req.user.userId]);
+    if (!info.length) return res.status(404).json({ error: 'User not found' });
+    
+    const verificationMethod = method || info[0].preferred_verification_method || 'email';
+    
+    if (verificationMethod === 'whatsapp') {
+      if (!info[0].phone || !info[0].country_code) {
+        return res.status(400).json({ error: 'Phone number not configured' });
+      }
+      if (info[0].whatsapp_verified) {
+        return res.status(400).json({ error: 'WhatsApp already verified' });
+      }
+      
+      const code = generateCode(6);
+      const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+      await database.query('UPDATE users SET whatsapp_verification_code = ?, whatsapp_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
+      
+      const fullPhone = info[0].country_code + info[0].phone;
+      const message = formatVerificationMessage(code);
+      await sendWhatsAppMessage({
+        phone: fullPhone,
+        message: message
+      });
+      
+      res.json({ message: 'WhatsApp verification code sent' });
+    } else {
+      // Email (padrão)
+      if (info[0].email_verified) return res.status(400).json({ error: 'Email already verified' });
+      
+      const code = generateCode(6);
+      const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+      await database.query('UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
+      
+      if (process.env.BREVO_API_KEY) {
+        await sendEmail({
+          toEmail: info[0].email,
+          toName: info[0].username,
+          subject: 'MozHost - Novo código de verificação',
+          htmlContent: `<p>Seu novo código: <strong>${code}</strong></p>`,
+          textContent: `Seu novo código: ${code}`
+        });
+      }
+      
+      res.json({ message: 'Email verification code sent' });
+    }
   } catch (e) {
     console.error('resend-code error:', e);
     res.status(500).json({ error: 'Failed to resend code' });
+  }
+});
+
+// Atualizar dados de telefone/método de verificação
+router.post('/update-verification-method', [
+  body('phone').optional().isLength({ min: 8, max: 15 }).matches(/^[0-9]+$/).withMessage('Phone number must contain only numbers (8-15 digits)'),
+  body('countryCode').optional().isLength({ min: 1, max: 5 }).withMessage('Valid country code required'),
+  body('preferredMethod').isIn(['email', 'whatsapp']).withMessage('Method must be email or whatsapp')
+], authMiddleware, async (req, res) => {
+  try {
+    const { phone, countryCode, preferredMethod } = req.body;
+    
+    // Se escolheu WhatsApp, telefone é obrigatório
+    if (preferredMethod === 'whatsapp' && (!phone || !countryCode)) {
+      return res.status(400).json({ error: 'Phone and country code required for WhatsApp verification' });
+    }
+    
+    // Atualizar dados do usuário
+    if (preferredMethod === 'whatsapp') {
+      await database.query(
+        'UPDATE users SET phone = ?, country_code = ?, preferred_verification_method = ? WHERE id = ?',
+        [phone, countryCode, preferredMethod, req.user.userId]
+      );
+    } else {
+      await database.query(
+        'UPDATE users SET preferred_verification_method = ? WHERE id = ?',
+        [preferredMethod, req.user.userId]
+      );
+    }
+    
+    res.json({ message: 'Verification method updated successfully' });
+  } catch (e) {
+    console.error('update-verification-method error:', e);
+    res.status(500).json({ error: 'Failed to update verification method' });
+  }
+});
+
+// Status da conexão WhatsApp (para admin)
+router.get('/whatsapp-status', authMiddleware, async (req, res) => {
+  try {
+    const isConnected = checkWhatsAppConnection();
+    res.json({ 
+      connected: isConnected,
+      message: isConnected ? 'WhatsApp connected' : 'WhatsApp not connected'
+    });
+  } catch (e) {
+    console.error('whatsapp-status error:', e);
+    res.status(500).json({ error: 'Failed to check WhatsApp status' });
   }
 });
 
