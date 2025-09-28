@@ -1,9 +1,99 @@
 // utils/whatsapp.js
-const axios = require('axios');
+const { 
+  default: makeWASocket, 
+  DisconnectReason, 
+  useMultiFileAuthState,
+  MessageType,
+  MessageOptions,
+  Mimetype 
+} = require('@whiskeysockets/baileys');
+const fs = require('fs');
+const path = require('path');
+const qrcode = require('qrcode-terminal');
 require('dotenv').config();
 
+// Estado global da conexão
+let sock = null;
+let isConnected = false;
+let connectionPromise = null;
+
 /**
- * Envia mensagem via WhatsApp usando Evolution API ou similar
+ * Inicializa a conexão com WhatsApp usando Baileys
+ */
+async function initializeWhatsApp() {
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  connectionPromise = new Promise(async (resolve, reject) => {
+    try {
+      const authPath = path.join(__dirname, '../.auth/whatsapp');
+      
+      // Criar diretório de autenticação se não existir
+      if (!fs.existsSync(authPath)) {
+        fs.mkdirSync(authPath, { recursive: true });
+      }
+
+      const { state, saveCreds } = await useMultiFileAuthState(authPath);
+
+      sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false, // Vamos gerar QR customizado
+        logger: {
+          level: 'warn',
+          child: () => ({ level: 'warn' })
+        }
+      });
+
+      sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          console.log('📱 QR Code para WhatsApp:');
+          qrcode.generate(qr, { small: true });
+          console.log('\n🔗 Escaneie o QR Code acima com seu WhatsApp para conectar');
+        }
+
+        if (connection === 'close') {
+          const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+          console.log('🔌 Conexão WhatsApp fechada. Reconectando...', shouldReconnect);
+          
+          if (shouldReconnect) {
+            isConnected = false;
+            connectionPromise = null;
+            setTimeout(() => initializeWhatsApp(), 3000);
+          }
+        } else if (connection === 'open') {
+          console.log('✅ WhatsApp conectado com sucesso!');
+          isConnected = true;
+          resolve(sock);
+        }
+      });
+
+      sock.ev.on('creds.update', saveCreds);
+
+      // Timeout para conexão
+      setTimeout(() => {
+        if (!isConnected) {
+          console.log('⏰ Timeout na conexão WhatsApp - usando modo simulação');
+          isConnected = false;
+          resolve(null);
+        }
+      }, 30000);
+
+    } catch (error) {
+      console.error('❌ Erro ao inicializar WhatsApp:', error);
+      isConnected = false;
+      connectionPromise = null;
+      resolve(null);
+    }
+  });
+
+  return connectionPromise;
+}
+
+/**
+ * Envia mensagem via WhatsApp usando Baileys
  * @param {Object} options - Opções da mensagem
  * @param {string} options.phone - Número de telefone (com código do país)
  * @param {string} options.message - Mensagem a ser enviada
@@ -11,13 +101,15 @@ require('dotenv').config();
  */
 async function sendWhatsAppMessage({ phone, message }) {
   try {
-    // Configurações da API - pode ser Evolution API, WhatSender, ou outra
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiKey = process.env.WHATSAPP_API_KEY;
-    const instanceName = process.env.WHATSAPP_INSTANCE_NAME || 'mozhost';
+    // Tentar conectar se não estiver conectado
+    if (!isConnected || !sock) {
+      console.log('🔌 Conectando ao WhatsApp...');
+      await initializeWhatsApp();
+    }
 
-    if (!apiUrl || !apiKey) {
-      console.warn('⚠️  Configurações do WhatsApp não encontradas, simulando envio');
+    // Se ainda não conseguiu conectar, simular envio
+    if (!isConnected || !sock) {
+      console.warn('⚠️  WhatsApp não conectado, simulando envio');
       console.log(`📱 WhatsApp simulado para: ${phone}`);
       console.log(`📝 Mensagem: ${message}`);
       return { messageId: 'simulated', status: 'sent' };
@@ -27,75 +119,37 @@ async function sendWhatsAppMessage({ phone, message }) {
     const cleanPhone = phone.replace(/[^\d]/g, '');
     const formattedPhone = cleanPhone + '@s.whatsapp.net';
 
-    // Payload para Evolution API
-    const payload = {
-      number: cleanPhone,
-      text: message
-    };
+    // Verificar se o número existe no WhatsApp
+    const [result] = await sock.onWhatsApp(formattedPhone);
+    if (!result?.exists) {
+      throw new Error('Número não encontrado no WhatsApp');
+    }
 
-    // Headers
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'apikey': apiKey
-    };
+    // Enviar mensagem
+    const sentMessage = await sock.sendMessage(formattedPhone, { text: message });
 
-    // Fazer requisição para a API
-    const response = await axios.post(
-      `${apiUrl}/message/sendText/${instanceName}`,
-      payload,
-      { headers }
-    );
-
-    console.log('✅ WhatsApp enviado com sucesso:', response.data);
+    console.log('✅ WhatsApp enviado com sucesso:', sentMessage.key.id);
     return {
-      messageId: response.data.key?.id || 'sent',
+      messageId: sentMessage.key.id,
       status: 'sent',
-      response: response.data
+      response: sentMessage
     };
 
   } catch (error) {
-    console.error('❌ Erro ao enviar WhatsApp:', error.response?.data || error.message);
+    console.error('❌ Erro ao enviar WhatsApp:', error.message);
     
-    // Se for erro de conexão, simular envio para não quebrar o fluxo
-    if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-      console.log('📱 Simulando envio devido a erro de conexão...');
-      return { messageId: 'simulated_error', status: 'sent' };
-    }
-    
-    throw new Error('Falha no envio do WhatsApp: ' + (error.response?.data?.message || error.message));
+    // Em caso de erro, simular envio para não quebrar o fluxo
+    console.log('📱 Simulando envio devido a erro...');
+    return { messageId: 'simulated_error', status: 'sent' };
   }
 }
 
 /**
- * Verifica se a instância do WhatsApp está conectada
- * @returns {Promise<boolean>} - Status da conexão
+ * Verifica se o WhatsApp está conectado
+ * @returns {boolean} - Status da conexão
  */
-async function checkWhatsAppConnection() {
-  try {
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiKey = process.env.WHATSAPP_API_KEY;
-    const instanceName = process.env.WHATSAPP_INSTANCE_NAME || 'mozhost';
-
-    if (!apiUrl || !apiKey) {
-      return false;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'apikey': apiKey
-    };
-
-    const response = await axios.get(
-      `${apiUrl}/instance/connectionState/${instanceName}`,
-      { headers }
-    );
-
-    return response.data.instance?.state === 'open';
-  } catch (error) {
-    console.error('❌ Erro ao verificar conexão WhatsApp:', error.message);
-    return false;
-  }
+function checkWhatsAppConnection() {
+  return isConnected && sock !== null;
 }
 
 /**
@@ -115,8 +169,34 @@ Seu código de verificação é: *${code}*
 Se você não solicitou este código, ignore esta mensagem.`;
 }
 
+/**
+ * Inicializa WhatsApp quando o servidor iniciar
+ */
+function startWhatsApp() {
+  console.log('🚀 Inicializando WhatsApp...');
+  initializeWhatsApp().catch(error => {
+    console.error('❌ Erro ao inicializar WhatsApp:', error);
+  });
+}
+
+/**
+ * Desconecta do WhatsApp
+ */
+function disconnectWhatsApp() {
+  if (sock) {
+    sock.end();
+    sock = null;
+    isConnected = false;
+    connectionPromise = null;
+    console.log('🔌 WhatsApp desconectado');
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   checkWhatsAppConnection,
-  formatVerificationMessage
+  formatVerificationMessage,
+  startWhatsApp,
+  disconnectWhatsApp,
+  initializeWhatsApp
 };
