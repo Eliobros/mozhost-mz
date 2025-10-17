@@ -91,13 +91,21 @@ const LoginPage = () => {
         localStorage.setItem('mozhost_token', data.token);
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
         
-        if (!isLogin && data.user && (data.user.emailVerified === false || data.user.whatsappVerified === false)) {
-          setShowVerifyStep(true);
-          setPendingToken(data.token);
-          const method = data.user.preferredVerificationMethod || 'email';
-          const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
-          setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
-          return;
+        // Verificar se é um registro e se precisa de verificação
+        if (!isLogin && data.user) {
+          const needsEmailVerification = data.user.emailVerified === false;
+          const needsWhatsAppVerification = data.user.whatsappVerified === false;
+          
+          console.log('🔍 Verificação necessária:', { needsEmailVerification, needsWhatsAppVerification });
+          
+          if (needsEmailVerification || needsWhatsAppVerification) {
+            setShowVerifyStep(true);
+            setPendingToken(data.token);
+            const method = data.user.preferredVerificationMethod || 'email';
+            const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
+            setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
+            return;
+          }
         }
 
         if (isLogin) {
