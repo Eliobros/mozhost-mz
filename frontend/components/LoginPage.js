@@ -372,47 +372,11 @@ const LoginPage = () => {
                   </div>
                 )}
 
-                {/* Campo Email (só no cadastro) */}
-                {!isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">
-                      E-mail *
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
-                      placeholder="seu@email.com"
-                      required={!isLogin}
-                    />
-                  </div>
-                )}
-
-                {/* Campo Login (só no login) */}
-                {isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">
-                      Usuário ou E-mail *
-                    </label>
-                    <input
-                      type="text"
-                      name="login"
-                      value={formData.login}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
-                      placeholder="Nome de usuário ou e-mail"
-                      required={isLogin}
-                    />
-                  </div>
-                )}
-
                 {/* Método de Verificação (só no cadastro) */}
                 {!isLogin && (
-                  <div>
+                  <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
                     <label className="block text-sm font-medium text-blue-100 mb-3">
-                      Como você quer receber o código de verificação? *
+                      🔐 Como você quer receber o código de verificação? *
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
@@ -452,7 +416,7 @@ const LoginPage = () => {
 
                 {/* Campos de WhatsApp (só quando WhatsApp estiver selecionado) */}
                 {!isLogin && formData.preferredVerificationMethod === 'whatsapp' && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
                     <div>
                       <label className="block text-sm font-medium text-blue-100 mb-2">
                         Código do País *
@@ -482,6 +446,43 @@ const LoginPage = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Campo Email (só no cadastro) */}
+                {!isLogin && (
+                  <div>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">
+                      E-mail *
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                      placeholder="seu@email.com"
+                      required={!isLogin}
+                    />
+                  </div>
+                )}
+
+                {/* Campo Login (só no login) */}
+                {isLogin && (
+                  <div>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">
+                      Usuário ou E-mail *
+                    </label>
+                    <input
+                      type="text"
+                      name="login"
+                      value={formData.login}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                      placeholder="Nome de usuário ou e-mail"
+                      required={isLogin}
+                    />
+                  </div>
+                )}
+
 
                 {/* Campo Senha */}
                 <div>
