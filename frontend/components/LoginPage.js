@@ -1,8 +1,8 @@
 // components/LoginPage.js
 'use client';
 
-import { useState } from 'react';
-import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle, ArrowLeft, Check, X } from 'lucide-react';
 import CountrySelector from './CountrySelector';
 
 const LoginPage = () => {
@@ -20,10 +20,68 @@ const LoginPage = () => {
     preferredVerificationMethod: 'email'
   });
   const [showVerifyStep, setShowVerifyStep] = useState(false);
+  const [showPhoneConfirmation, setShowPhoneConfirmation] = useState(false);
   const [pendingToken, setPendingToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [verificationState, setVerificationState] = useState(null); // 'phone_input', 'phone_confirm', 'code_input'
+
+  // Verificar se há sessão de verificação pendente ao carregar
+  useEffect(() => {
+    const checkPendingVerification = async () => {
+      const token = localStorage.getItem('mozhost_token');
+      const user = localStorage.getItem('mozhost_user');
+      
+      if (token && user) {
+        try {
+          const userData = JSON.parse(user);
+          const needsEmailVerification = userData.emailVerified === false;
+          const needsWhatsAppVerification = userData.whatsappVerified === false;
+          
+          if (needsEmailVerification || needsWhatsAppVerification) {
+            // Verificar se o token ainda é válido
+            const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              setIsLogin(false); // Mostrar como registro
+              setShowVerifyStep(true);
+              setPendingToken(token);
+              setVerificationState('code_input');
+              
+              // Restaurar dados do usuário
+              setFormData(prev => ({
+                ...prev,
+                username: userData.username || '',
+                email: userData.email || '',
+                phone: userData.phone || '',
+                countryCode: userData.countryCode || '+55',
+                preferredVerificationMethod: userData.preferredVerificationMethod || 'email'
+              }));
+              
+              const method = userData.preferredVerificationMethod || 'email';
+              const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
+              setSuccess(`Você tem uma verificação pendente. Insira o código enviado para o seu ${destination}.`);
+            } else {
+              // Token inválido, limpar localStorage
+              localStorage.removeItem('mozhost_token');
+              localStorage.removeItem('mozhost_user');
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao verificar sessão pendente:', error);
+          // Em caso de erro, limpar localStorage
+          localStorage.removeItem('mozhost_token');
+          localStorage.removeItem('mozhost_user');
+        }
+      }
+    };
+    
+    checkPendingVerification();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,6 +116,13 @@ const LoginPage = () => {
 
     if (!isLogin && formData.preferredVerificationMethod === 'whatsapp' && !formData.phone.trim()) {
       setError('Número de WhatsApp é obrigatório quando escolher verificação via WhatsApp');
+      setIsLoading(false);
+      return;
+    }
+
+    // Se for WhatsApp e ainda não confirmou o número, mostrar confirmação
+    if (!isLogin && formData.preferredVerificationMethod === 'whatsapp' && verificationState !== 'phone_confirmed') {
+      setVerificationState('phone_confirm');
       setIsLoading(false);
       return;
     }
@@ -101,6 +166,7 @@ const LoginPage = () => {
           if (needsEmailVerification || needsWhatsAppVerification) {
             setShowVerifyStep(true);
             setPendingToken(data.token);
+            setVerificationState('code_input');
             const method = data.user.preferredVerificationMethod || 'email';
             const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
             setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
@@ -222,11 +288,41 @@ const LoginPage = () => {
     });
   };
 
+  const handlePhoneConfirmation = (confirmed) => {
+    if (confirmed) {
+      setVerificationState('phone_confirmed');
+      setShowPhoneConfirmation(false);
+      // Continuar com o registro
+      handleSubmit({ preventDefault: () => {} });
+    } else {
+      setVerificationState('phone_input');
+      setShowPhoneConfirmation(false);
+      setError('');
+      setSuccess('');
+    }
+  };
+
+  const handleEditPhone = () => {
+    setShowVerifyStep(false);
+    setVerificationState('phone_input');
+    setError('');
+    setSuccess('');
+  };
+
+  const handleBackToPhoneInput = () => {
+    setVerificationState('phone_input');
+    setShowPhoneConfirmation(false);
+    setError('');
+    setSuccess('');
+  };
+
   const toggleMode = () => {
     setIsLogin(!isLogin);
     setError('');
     setSuccess('');
     setShowVerifyStep(false);
+    setShowPhoneConfirmation(false);
+    setVerificationState(null);
     setFormData({ 
       login: '', 
       username: '', 
@@ -351,7 +447,56 @@ const LoginPage = () => {
                 </div>
               )}
 
-              {!showVerifyStep ? (
+              {/* Dialog de confirmação do número */}
+              {verificationState === 'phone_confirm' && (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <MessageCircle className="w-8 h-8 text-green-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Confirme seu número</h3>
+                    <p className="text-blue-200 mb-6">
+                      Verifique se o número está correto antes de enviarmos o código de verificação.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/10 border border-white/20 rounded-lg p-4">
+                    <div className="flex items-center justify-center space-x-2 text-lg">
+                      <span className="text-blue-300 font-medium">{formData.countryCode}</span>
+                      <span className="text-white font-semibold">{formData.phone}</span>
+                    </div>
+                    <p className="text-center text-blue-200 text-sm mt-2">
+                      Número completo: {formData.countryCode} {formData.phone}
+                    </p>
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => handlePhoneConfirmation(false)}
+                      className="flex-1 bg-white/10 hover:bg-white/20 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Alterar número
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePhoneConfirmation(true)}
+                      disabled={isLoading}
+                      className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      ) : (
+                        <Check className="w-4 h-4 mr-2" />
+                      )}
+                      Confirmar e enviar código
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!showVerifyStep && verificationState !== 'phone_confirm' ? (
               <div className="space-y-6">
                 {/* Campo Username (só no cadastro) */}
                 {!isLogin && (
@@ -578,33 +723,83 @@ const LoginPage = () => {
               </div>
               ) : (
                 <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      {formData.preferredVerificationMethod === 'whatsapp' ? (
+                        <MessageCircle className="w-8 h-8 text-green-400" />
+                      ) : (
+                        <Mail className="w-8 h-8 text-blue-400" />
+                      )}
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Código de Verificação</h3>
+                    <p className="text-blue-200 text-sm">
+                      Enviamos um código para o seu {formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : 'e-mail'}
+                    </p>
+                    {formData.preferredVerificationMethod === 'whatsapp' && (
+                      <p className="text-blue-300 text-xs mt-1">
+                        {formData.countryCode} {formData.phone}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">Código de Verificação</label>
                     <input
                       type="text"
                       name="verifyCode"
                       value={formData.verifyCode}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
-                      placeholder={`Insira o código enviado ao seu ${formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : 'e-mail'}`}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm text-center text-lg tracking-wider"
+                      placeholder="Digite o código aqui"
+                      maxLength="6"
                     />
-                    <p className="text-blue-300 text-xs mt-1">Válido por 15 minutos.</p>
+                    <p className="text-blue-300 text-xs mt-1 text-center">Válido por 15 minutos.</p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      disabled={isLoading}
-                      className="text-blue-300 hover:text-white underline"
-                    >
-                      Reenviar código {formData.preferredVerificationMethod === 'whatsapp' ? 'no WhatsApp' : 'por e-mail'}
-                    </button>
+
+                  <div className="space-y-3">
                     <button
                       type="button"
                       onClick={handleVerify}
                       disabled={isLoading || !formData.verifyCode.trim()}
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
-                    >Verificar</button>
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Verificando...
+                        </div>
+                      ) : (
+                        'Verificar Código'
+                      )}
+                    </button>
+
+                    <div className="flex items-center justify-between text-sm">
+                      <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={isLoading}
+                        className="text-blue-300 hover:text-white underline disabled:opacity-50"
+                      >
+                        Reenviar código
+                      </button>
+                      
+                      {formData.preferredVerificationMethod === 'whatsapp' && (
+                        <button
+                          type="button"
+                          onClick={handleEditPhone}
+                          className="text-blue-300 hover:text-white underline flex items-center"
+                        >
+                          <ArrowLeft className="w-3 h-3 mr-1" />
+                          Alterar número
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mensagem de ajuda se código não chegou */}
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                    <p className="text-yellow-200 text-xs text-center">
+                      💡 Não recebeu o código? Verifique sua {formData.preferredVerificationMethod === 'whatsapp' ? 'caixa de mensagens do WhatsApp' : 'caixa de entrada e spam'} ou clique em "Reenviar código".
+                    </p>
                   </div>
                 </div>
               )}
