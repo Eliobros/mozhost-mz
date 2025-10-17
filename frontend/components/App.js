@@ -57,11 +57,25 @@ const App = () => {
         setUser(data.user);
         // Atualiza badge conforme eventos (mock simples por enquanto)
         setUnreadNotifications(0);
-        setIsAuthenticated(true);
+
+        // Se nenhum método de verificação foi concluído ainda, forçar fluxo de verificação
+        const emailVerified = data.user?.emailVerified;
+        const whatsappVerified = data.user?.whatsappVerified;
+        const pendingVerification = emailVerified === false && whatsappVerified === false;
+
+        if (pendingVerification) {
+          // Garantir que o frontend retome na etapa de verificação
+          localStorage.setItem('mozhost_pending_verification', '1');
+          localStorage.setItem('mozhost_user', JSON.stringify(data.user));
+          setIsAuthenticated(false);
+        } else {
+          localStorage.removeItem('mozhost_pending_verification');
+          setIsAuthenticated(true);
+        }
       } else {
         // Token inválido, limpar dados
         localStorage.removeItem('mozhost_token');
-        localStorage.removeUser('mozhost_user');
+        localStorage.removeItem('mozhost_user');
       }
     } catch (error) {
       console.error('Erro ao verificar autenticação:', error);

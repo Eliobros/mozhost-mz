@@ -1,7 +1,7 @@
 // components/LoginPage.js
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle } from 'lucide-react';
 import CountrySelector from './CountrySelector';
 
@@ -24,6 +24,39 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showConfirmPhone, setShowConfirmPhone] = useState(false);
+  const [hasConfirmedPhone, setHasConfirmedPhone] = useState(false);
+  const [showEditVerificationModal, setShowEditVerificationModal] = useState(false);
+  const [editPreferredMethod, setEditPreferredMethod] = useState('email');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCountryCode, setEditCountryCode] = useState('+55');
+
+  // Se o usuário fechou o navegador durante a verificação, retomar automaticamente
+  useEffect(() => {
+    try {
+      const pending = localStorage.getItem('mozhost_pending_verification') === '1';
+      const userRaw = localStorage.getItem('mozhost_user');
+      const userStored = userRaw ? JSON.parse(userRaw) : null;
+      const isPendingByFlags = userStored && userStored.emailVerified === false && userStored.whatsappVerified === false;
+      if (pending || isPendingByFlags) {
+        setShowVerifyStep(true);
+        const method = userStored?.preferredVerificationMethod || formData.preferredVerificationMethod || 'email';
+        setFormData(prev => ({
+          ...prev,
+          preferredVerificationMethod: method,
+          phone: userStored?.phone || prev.phone,
+          countryCode: userStored?.countryCode || prev.countryCode,
+        }));
+      }
+    } catch (e) {
+      // Ignorar erros de parsing
+    }
+  }, []);
+
+  // Se o usuário alterar o número/código do país, exigir nova confirmação
+  useEffect(() => {
+    setHasConfirmedPhone(false);
+  }, [formData.phone, formData.countryCode, formData.preferredVerificationMethod]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,6 +95,13 @@ const LoginPage = () => {
       return;
     }
     
+    // Confirmar número antes de enviar código via WhatsApp (cadastro)
+    if (!isLogin && formData.preferredVerificationMethod === 'whatsapp' && !hasConfirmedPhone) {
+      setIsLoading(false);
+      setShowConfirmPhone(true);
+      return;
+    }
+
     try {
       const url = isLogin 
         ? 'https://api.mozhost.topaziocoin.online/api/auth/login' 
@@ -104,6 +144,7 @@ const LoginPage = () => {
             const method = data.user.preferredVerificationMethod || 'email';
             const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
             setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
+            localStorage.setItem('mozhost_pending_verification', '1');
             return;
           }
         }
@@ -126,8 +167,8 @@ const LoginPage = () => {
           setError('Este usuário ou e-mail já está cadastrado. Tente fazer login.');
         } else if (response.status === 401) {
           setError('Usuário ou senha incorretos. Verifique suas credenciais.');
-        } else if (response.status === 403 && data.error === 'Email not verified') {
-          setError('Email não verificado. Clique em “Reenviar código” ou insira o código enviado.');
+        } else if (response.status === 403 && (data.error === 'Email not verified' || data.error === 'Account not verified')) {
+          setError('Conta não verificada. Clique em “Reenviar código”, altere o método ou insira o código.');
           setShowVerifyStep(true);
         } else if (response.status === 400) {
           setError(data.details ? data.details.map(d => d.msg).join(', ') : data.message);
@@ -141,6 +182,13 @@ const LoginPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const proceedAfterPhoneConfirm = () => {
+    setHasConfirmedPhone(true);
+    setShowConfirmPhone(false);
+    // Reexecuta o submit agora que foi confirmado
+    handleSubmit({ preventDefault: () => {} });
   };
 
   const handleVerify = async () => {
@@ -200,6 +248,95 @@ const LoginPage = () => {
       }
     } catch (e) {
       setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openEditVerificationModal = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
+      const method = (user && user.preferredVerificationMethod) || formData.preferredVerificationMethod || 'email';
+      setEditPreferredMethod(method);
+      setEditPhone(user?.phone || formData.phone || '');
+      setEditCountryCode(user?.countryCode || formData.countryCode || '+55');
+      setShowEditVerificationModal(true);
+      setError('');
+      setSuccess('');
+    } catch (_e) {
+      setShowEditVerificationModal(true);
+    }
+  };
+
+  const handleSaveVerificationChanges = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const token = localStorage.getItem('mozhost_token') || pendingToken;
+      if (!token) {
+        setError('Sessão expirada. Faça login novamente.');
+        return;
+      }
+      const payload = { preferredMethod: editPreferredMethod };
+      if (editPreferredMethod === 'whatsapp') {
+        if (!editPhone.trim()) {
+          setError('Informe o número do WhatsApp');
+          return;
+        }
+        payload.phone = editPhone.trim();
+        payload.countryCode = editCountryCode;
+      }
+
+      const updateResp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/update-verification-method', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const updateData = await updateResp.json();
+      if (!updateResp.ok) {
+        setError(updateData.error || 'Falha ao atualizar método de verificação');
+        return;
+      }
+
+      // Atualizar dados locais e formulário
+      const user = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
+      const updatedUser = {
+        ...user,
+        preferredVerificationMethod: editPreferredMethod,
+        phone: editPreferredMethod === 'whatsapp' ? editPhone.trim() : user.phone,
+        countryCode: editPreferredMethod === 'whatsapp' ? editCountryCode : user.countryCode,
+      };
+      localStorage.setItem('mozhost_user', JSON.stringify(updatedUser));
+      setFormData(prev => ({
+        ...prev,
+        preferredVerificationMethod: editPreferredMethod,
+        phone: updatedUser.phone || '',
+        countryCode: updatedUser.countryCode || prev.countryCode,
+      }));
+
+      // Reenviar código conforme método escolhido
+      const resendResp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/resend-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ method: editPreferredMethod })
+      });
+      const resendData = await resendResp.json().catch(() => ({}));
+      if (!resendResp.ok) {
+        setError(resendData.error || 'Falha ao reenviar o código');
+        return;
+      }
+
+      const destination = editPreferredMethod === 'whatsapp' ? 'WhatsApp' : 'e-mail';
+      setSuccess(`Novo código enviado para o seu ${destination}.`);
+      setShowEditVerificationModal(false);
+    } catch (e) {
+      setError('Erro ao atualizar método de verificação');
     } finally {
       setIsLoading(false);
     }
@@ -606,6 +743,13 @@ const LoginPage = () => {
                       className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
                     >Verificar</button>
                   </div>
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={openEditVerificationModal}
+                      className="text-blue-300 hover:text-white text-sm underline"
+                    >Alterar número ou método</button>
+                  </div>
                 </div>
               )}
 
@@ -664,6 +808,88 @@ const LoginPage = () => {
           </div>
         </div>
       </footer>
+    
+    {/* Modal de confirmação do número (antes de enviar código via WhatsApp) */}
+    {showConfirmPhone && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar número de WhatsApp</h3>
+          <p className="text-sm text-gray-700 mb-4">
+            Enviaremos o código para: <span className="font-semibold">{formData.countryCode} {formData.phone}</span>
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              onClick={() => setShowConfirmPhone(false)}
+            >Alterar</button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              onClick={proceedAfterPhoneConfirm}
+            >Está correto</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Modal para editar número/método durante a verificação */}
+    {showEditVerificationModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Alterar como receber o código</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setEditPreferredMethod('email')}
+                className={`p-3 rounded-lg border text-sm font-medium ${editPreferredMethod === 'email' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}
+              >E-mail</button>
+              <button
+                type="button"
+                onClick={() => setEditPreferredMethod('whatsapp')}
+                className={`p-3 rounded-lg border text-sm font-medium ${editPreferredMethod === 'whatsapp' ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-300 text-gray-700'}`}
+              >WhatsApp</button>
+            </div>
+
+            {editPreferredMethod === 'whatsapp' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Código do País</label>
+                  <CountrySelector
+                    selectedCountry={editCountryCode}
+                    onCountryChange={(c) => setEditCountryCode(c.code)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Número do WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md"
+                    placeholder="Número sem código do país"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              onClick={() => setShowEditVerificationModal(false)}
+            >Cancelar</button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              onClick={handleSaveVerificationChanges}
+              disabled={isLoading}
+            >Salvar e reenviar código</button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };
