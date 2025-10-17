@@ -61,7 +61,7 @@ const App = () => {
       } else {
         // Token inválido, limpar dados
         localStorage.removeItem('mozhost_token');
-        localStorage.removeUser('mozhost_user');
+        localStorage.removeItem('mozhost_user');
       }
     } catch (error) {
       console.error('Erro ao verificar autenticação:', error);

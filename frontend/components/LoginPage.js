@@ -91,7 +91,12 @@ const LoginPage = () => {
         localStorage.setItem('mozhost_token', data.token);
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
         
-        if (!isLogin && data.user && (data.user.emailVerified === false || data.user.whatsappVerified === false)) {
+        // Exibir etapa de verificação logo após cadastro quando a conta ainda não estiver verificada
+        if (
+          !isLogin &&
+          data.user &&
+          ((data.user.emailVerified !== true) || (data.user.whatsappVerified !== true))
+        ) {
           setShowVerifyStep(true);
           setPendingToken(data.token);
           const method = data.user.preferredVerificationMethod || 'email';
@@ -118,9 +123,22 @@ const LoginPage = () => {
           setError('Este usuário ou e-mail já está cadastrado. Tente fazer login.');
         } else if (response.status === 401) {
           setError('Usuário ou senha incorretos. Verifique suas credenciais.');
-        } else if (response.status === 403 && data.error === 'Email not verified') {
-          setError('Email não verificado. Clique em “Reenviar código” ou insira o código enviado.');
-          setShowVerifyStep(true);
+        } else if (response.status === 403) {
+          // Tratar conta não verificada (email ou WhatsApp)
+          const notVerified = data?.error === 'Account not verified' || data?.error === 'Email not verified';
+          if (notVerified) {
+            // Ajustar método preferido vindo da API (quando disponível)
+            if (data?.preferredMethod) {
+              setFormData((prev) => ({
+                ...prev,
+                preferredVerificationMethod: data.preferredMethod
+              }));
+            }
+            setError('Conta não verificada. Confira seu e-mail/WhatsApp ou clique em “Reenviar código”.');
+            setShowVerifyStep(true);
+          } else {
+            setError(data.message || data.error || 'Acesso negado');
+          }
         } else if (response.status === 400) {
           setError(data.details ? data.details.map(d => d.msg).join(', ') : data.message);
         } else {
