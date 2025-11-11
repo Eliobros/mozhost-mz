@@ -52,13 +52,13 @@ const MonitoringPage = () => {
   useEffect(() => {
     loadContainers();
     generateInitialData();
-    
+
     let interval;
     if (isLiveMode) {
       interval = setInterval(() => {
         updateRealTimeData();
         updateSystemMetrics();
-      }, 3000); // Atualizar a cada 3 segundos
+      }, 3000);
     }
 
     return () => {
@@ -99,7 +99,7 @@ const MonitoringPage = () => {
         memory: Math.random() * 70 + 15,
         storage: Math.random() * 40 + 10,
         network: Math.random() * 200 + 50,
-        containers: containers.filter(c => c.status === 'running').length + Math.floor(Math.random() * 3)
+        containers: Math.floor(Math.random() * 3)
       });
     }
 
@@ -108,23 +108,24 @@ const MonitoringPage = () => {
 
   const updateRealTimeData = () => {
     setRealTimeData(prevData => {
+      if (!prevData || prevData.length === 0) return prevData;
+      
       const newData = [...prevData];
       const now = new Date();
-      
-      // Remover dados antigos
+
       const maxPoints = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
       if (newData.length >= maxPoints) {
         newData.shift();
       }
 
-      // Adicionar novo ponto
+      const lastData = prevData[prevData.length - 1];
       newData.push({
         time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         timestamp: now,
-        cpu: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.cpu + (Math.random() - 0.5) * 10)),
-        memory: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.memory + (Math.random() - 0.5) * 8)),
-        storage: Math.max(0, Math.min(100, prevData[prevData.length - 1]?.storage + (Math.random() - 0.5) * 5)),
-        network: Math.max(0, prevData[prevData.length - 1]?.network + (Math.random() - 0.5) * 20),
+        cpu: Math.max(0, Math.min(100, (lastData?.cpu || 50) + (Math.random() - 0.5) * 10)),
+        memory: Math.max(0, Math.min(100, (lastData?.memory || 50) + (Math.random() - 0.5) * 8)),
+        storage: Math.max(0, Math.min(100, (lastData?.storage || 30) + (Math.random() - 0.5) * 5)),
+        network: Math.max(0, (lastData?.network || 100) + (Math.random() - 0.5) * 20),
         containers: containers.filter(c => c.status === 'running').length
       });
 
@@ -194,7 +195,6 @@ const MonitoringPage = () => {
   return (
     <DashboardLayout currentPage="monitoring">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold leading-7 text-gray-900">
@@ -243,7 +243,6 @@ const MonitoringPage = () => {
           </div>
         </div>
 
-        {/* System Metrics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
             title="CPU"
@@ -283,7 +282,6 @@ const MonitoringPage = () => {
           />
         </div>
 
-        {/* Alerts */}
         {resourceAlerts.some(alert => alert.type !== 'ok') && (
           <div className="bg-white rounded-lg shadow border p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Alertas do Sistema</h3>
@@ -308,65 +306,72 @@ const MonitoringPage = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Chart */}
           <div className="lg:col-span-2 bg-white rounded-lg shadow border">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Uso de Recursos</h3>
             </div>
             <div className="p-6">
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={realTimeData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="time" 
-                      tick={{ fontSize: 12 }}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      domain={[0, 100]}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: '#f9fafb',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px'
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="cpu"
-                      stackId="1"
-                      stroke="#3B82F6"
-                      fill="#3B82F6"
-                      fillOpacity={0.2}
-                      name="CPU (%)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="memory"
-                      stackId="2"
-                      stroke="#10B981"
-                      fill="#10B981"
-                      fillOpacity={0.2}
-                      name="Memória (%)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="storage"
-                      stackId="3"
-                      stroke="#8B5CF6"
-                      fill="#8B5CF6"
-                      fillOpacity={0.2}
-                      name="Storage (%)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {realTimeData && realTimeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={realTimeData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="time" 
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        domain={[0, 100]}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#f9fafb',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="cpu"
+                        stackId="1"
+                        stroke="#3B82F6"
+                        fill="#3B82F6"
+                        fillOpacity={0.2}
+                        name="CPU (%)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="memory"
+                        stackId="2"
+                        stroke="#10B981"
+                        fill="#10B981"
+                        fillOpacity={0.2}
+                        name="Memória (%)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="storage"
+                        stackId="3"
+                        stroke="#8B5CF6"
+                        fill="#8B5CF6"
+                        fillOpacity={0.2}
+                        name="Storage (%)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-sm text-gray-500">Carregando dados...</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Container Status Pie Chart */}
           <div className="bg-white rounded-lg shadow border">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Status dos Containers</h3>
@@ -395,46 +400,50 @@ const MonitoringPage = () => {
           </div>
         </div>
 
-        {/* Network Usage Chart */}
         <div className="bg-white rounded-lg shadow border">
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">Uso de Rede</h3>
           </div>
           <div className="p-6">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={realTimeData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="time" 
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12 }}
-                    label={{ value: 'MB/s', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#f9fafb',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="network"
-                    stroke="#F59E0B"
-                    strokeWidth={3}
-                    dot={{ fill: '#F59E0B', strokeWidth: 2, r: 4 }}
-                    name="Rede (MB/s)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {realTimeData && realTimeData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={realTimeData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="time" 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      label={{ value: 'MB/s', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#f9fafb',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="network"
+                      stroke="#F59E0B"
+                      strokeWidth={3}
+                      dot={{ fill: '#F59E0B', strokeWidth: 2, r: 4 }}
+                      name="Rede (MB/s)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-gray-500">Carregando dados de rede...</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Container Details */}
         {containers.length > 0 && (
           <div className="bg-white rounded-lg shadow border">
             <div className="p-6 border-b border-gray-200">
@@ -495,17 +504,48 @@ const MetricCard = ({ title, value, unit, icon: Icon, color, trend, trendValue }
 };
 
 const ContainerMetricCard = ({ container }) => {
+  const [metrics, setMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (container.status !== 'running') {
+      setLoading(false);
+      return;
+    }
+
+    const fetchMetrics = async () => {
+      try {
+        const token = localStorage.getItem('mozhost_token');
+        const response = await fetch(
+          `https://api.mozhost.topaziocoin.online/api/containers/${container.id}/stats`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (!data.error) {
+            setMetrics(data);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao buscar métricas:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 3000);
+
+    return () => clearInterval(interval);
+  }, [container.id, container.status]);
+
   const statusColors = {
     running: 'bg-green-100 text-green-800 border-green-200',
     stopped: 'bg-gray-100 text-gray-800 border-gray-200',
     error: 'bg-red-100 text-red-800 border-red-200'
-  };
-
-  // Mock metrics
-  const metrics = {
-    cpu: Math.random() * 80 + 10,
-    memory: Math.random() * 70 + 20,
-    uptime: `${Math.floor(Math.random() * 24)}h ${Math.floor(Math.random() * 60)}m`
   };
 
   return (
@@ -521,34 +561,49 @@ const ContainerMetricCard = ({ container }) => {
       </div>
 
       {container.status === 'running' && (
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">CPU:</span>
-            <span className="font-medium">{metrics.cpu.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-600 h-2 rounded-full" 
-              style={{ width: `${Math.min(metrics.cpu, 100)}%` }}
-            />
-          </div>
+        <>
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="text-xs text-gray-400 mt-2">Carregando métricas...</p>
+            </div>
+          ) : metrics ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">CPU:</span>
+                <span className="font-medium">{metrics.cpu.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${Math.min(metrics.cpu, 100)}%` }}
+                />
+              </div>
 
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Memória:</span>
-            <span className="font-medium">{metrics.memory.toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-green-600 h-2 rounded-full" 
-              style={{ width: `${Math.min(metrics.memory, 100)}%` }}
-            />
-          </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Memória:</span>
+                <span className="font-medium">{metrics.memory.percent.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${Math.min(metrics.memory.percent, 100)}%` }}
+                />
+              </div>
 
-          <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
-            <span className="text-gray-600">Uptime:</span>
-            <span className="font-medium">{metrics.uptime}</span>
-          </div>
-        </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+                <span className="text-gray-600">Uso:</span>
+                <span className="font-medium text-xs">
+                  {metrics.memory.usedMB} / {metrics.memory.limitMB} MB
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-gray-500">Métricas indisponíveis</p>
+            </div>
+          )}
+        </>
       )}
 
       {container.status === 'stopped' && (
@@ -557,8 +612,15 @@ const ContainerMetricCard = ({ container }) => {
           <p className="text-xs text-gray-400 mt-1">Nenhuma métrica disponível</p>
         </div>
       )}
+
+      {container.status === 'error' && (
+        <div className="text-center py-4">
+          <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+          <p className="text-sm text-red-600">Erro no container</p>
+        </div>
+      )}
     </div>
   );
 };
 
-export default MonitoringPage;
+export default  MonitoringPage;

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle } from 'lucide-react';
+import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle, MessageSquare } from 'lucide-react';
 import CountrySelector from './CountrySelector';
 
 const LoginPage = () => {
@@ -30,8 +30,7 @@ const LoginPage = () => {
     setIsLoading(true);
     setError('');
     setSuccess('');
-    
-    // Validações básicas
+
     if (!isLogin && formData.password.length < 6) {
       setError('A senha deve ter pelo menos 6 caracteres');
       setIsLoading(false);
@@ -56,25 +55,26 @@ const LoginPage = () => {
       return;
     }
 
-    if (!isLogin && formData.preferredVerificationMethod === 'whatsapp' && !formData.phone.trim()) {
-      setError('Número de WhatsApp é obrigatório quando escolher verificação via WhatsApp');
+    if (!isLogin && (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') && !formData.phone.trim()) {
+      const method = formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : 'SMS';
+      setError(`Número de telefone é obrigatório quando escolher verificação via ${method}`);
       setIsLoading(false);
       return;
     }
-    
+
     try {
       const url = isLogin 
         ? 'https://api.mozhost.topaziocoin.online/api/auth/login' 
         : 'https://api.mozhost.topaziocoin.online/api/auth/register';
-      
+
       const body = isLogin 
         ? { login: formData.login, password: formData.password }
         : { 
             username: formData.username, 
             email: formData.email, 
             password: formData.password,
-            phone: formData.preferredVerificationMethod === 'whatsapp' ? formData.phone : null,
-            countryCode: formData.preferredVerificationMethod === 'whatsapp' ? formData.countryCode : null,
+            phone: (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') ? formData.phone : null,
+            countryCode: (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') ? formData.countryCode : null,
             preferredVerificationMethod: formData.preferredVerificationMethod
           };
 
@@ -85,19 +85,24 @@ const LoginPage = () => {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
-        // Salvar dados do usuário
         localStorage.setItem('mozhost_token', data.token);
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
-        
-        if (!isLogin && data.user && (data.user.emailVerified === false || data.user.whatsappVerified === false)) {
-          setShowVerifyStep(true);
-          setPendingToken(data.token);
-          const method = data.user.preferredVerificationMethod || 'email';
-          const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
-          setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
-          return;
+
+        if (!isLogin && data.user) {
+          const needsEmailVerification = data.user.emailVerified === false;
+          const needsWhatsAppVerification = data.user.whatsappVerified === false;
+          const needsSMSVerification = data.user.smsVerified === false;
+
+          if (needsEmailVerification || needsWhatsAppVerification || needsSMSVerification) {
+            setShowVerifyStep(true);
+            setPendingToken(data.token);
+            const method = data.user.preferredVerificationMethod || 'email';
+            const destination = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'e-mail';
+            setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
+            return;
+          }
         }
 
         if (isLogin) {
@@ -106,21 +111,23 @@ const LoginPage = () => {
           setSuccess(`Conta criada com sucesso! Bem-vindo à MozHost, ${data.user.username}! 🎉`);
         }
 
-        // Redirecionar automaticamente após 1 segundo
         setTimeout(() => {
           window.location.hash = 'dashboard';
-          window.location.reload(); // Força o reload para aplicar a autenticação
+          window.location.reload();
         }, 1000);
-        
+
       } else {
-        // Tratar diferentes tipos de erro
         if (response.status === 409) {
           setError('Este usuário ou e-mail já está cadastrado. Tente fazer login.');
         } else if (response.status === 401) {
           setError('Usuário ou senha incorretos. Verifique suas credenciais.');
-        } else if (response.status === 403 && data.error === 'Email not verified') {
-          setError('Email não verificado. Clique em “Reenviar código” ou insira o código enviado.');
-          setShowVerifyStep(true);
+        } else if (response.status === 403) {
+          if (data.error === 'Account not verified') {
+            setError(data.message || 'Conta não verificada. Clique em "Reenviar código" ou insira o código enviado.');
+            setShowVerifyStep(true);
+          } else {
+            setError(data.message || 'Acesso negado');
+          }
         } else if (response.status === 400) {
           setError(data.details ? data.details.map(d => d.msg).join(', ') : data.message);
         } else {
@@ -141,9 +148,11 @@ const LoginPage = () => {
       const token = localStorage.getItem('mozhost_token') || pendingToken;
       const user = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
       const method = user.preferredVerificationMethod || 'email';
-      
-      const endpoint = method === 'whatsapp' ? 'verify-whatsapp' : 'verify-email';
-      
+
+      const endpoint = method === 'whatsapp' ? 'verify-whatsapp' : 
+                       method === 'sms' ? 'verify-sms' : 
+                       'verify-email';
+
       const resp = await fetch(`https://api.mozhost.topaziocoin.online/api/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -151,8 +160,8 @@ const LoginPage = () => {
       });
       const data = await resp.json();
       if (resp.ok) {
-        const bonus = data.bonusGranted ? ` (+${350} coins)` : '';
-        const methodName = method === 'whatsapp' ? 'WhatsApp' : 'Email';
+        const bonus = data.bonusGranted ? ` (+350 coins)` : '';
+        const methodName = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'Email';
         setSuccess(`${methodName} verificado com sucesso${bonus}! Redirecionando...`);
         setTimeout(() => {
           window.location.hash = 'dashboard';
@@ -174,7 +183,7 @@ const LoginPage = () => {
       const token = localStorage.getItem('mozhost_token') || pendingToken;
       const user = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
       const method = user.preferredVerificationMethod || 'email';
-      
+
       const resp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/resend-code', {
         method: 'POST',
         headers: { 
@@ -184,7 +193,7 @@ const LoginPage = () => {
         body: JSON.stringify({ method })
       });
       if (resp.ok) {
-        const destination = method === 'whatsapp' ? 'WhatsApp' : 'e-mail';
+        const destination = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'e-mail';
         setSuccess(`Novo código enviado para o seu ${destination}`);
       } else {
         const data = await resp.json();
@@ -202,7 +211,6 @@ const LoginPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    // Limpar erros quando usuário digita
     if (error) setError('');
     if (success) setSuccess('');
   };
@@ -241,11 +249,9 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-      {/* Background Pattern */}
       <div className="absolute inset-0 bg-[url('/pattern.svg')] opacity-20"></div>
-      
+
       <div className="relative z-10 flex min-h-screen">
-        {/* Left Side - Features */}
         <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-12 py-12">
           <div className="max-w-lg">
             <div className="flex items-center mb-8">
@@ -257,19 +263,19 @@ const LoginPage = () => {
                 <p className="text-blue-200">Professional Bot Hosting</p>
               </div>
             </div>
-            
+
             <h2 className="text-4xl font-bold text-white mb-6 leading-tight">
               Hospede seus bots<br />
               <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 com facilidade
               </span>
             </h2>
-            
+
             <p className="text-blue-100 text-lg mb-8 leading-relaxed">
               Plataforma profissional para hospedar bots de WhatsApp, APIs e aplicações Node.js/Python 
               com containers Docker isolados e interface intuitiva.
             </p>
-            
+
             <div className="grid grid-cols-1 gap-4">
               {features.map((feature, index) => (
                 <div key={index} className="flex items-center p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
@@ -284,7 +290,6 @@ const LoginPage = () => {
               ))}
             </div>
 
-            {/* Estatísticas fake para impressionar */}
             <div className="mt-8 grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">500+</div>
@@ -302,10 +307,8 @@ const LoginPage = () => {
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
         <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
-            {/* Mobile Logo */}
             <div className="lg:hidden flex items-center justify-center mb-8">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
                 <Server className="w-8 h-8 text-white" />
@@ -316,21 +319,16 @@ const LoginPage = () => {
               </div>
             </div>
 
-            {/* Form Container */}
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-8 shadow-2xl">
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">
                   {isLogin ? 'Fazer Login' : 'Criar Conta'}
                 </h2>
                 <p className="text-blue-200">
-                  {isLogin 
-                    ? 'Acesse sua conta MozHost' 
-                    : 'Comece a hospedar seus bots hoje'
-                  }
+                  {isLogin ? 'Acesse sua conta MozHost' : 'Comece a hospedar seus bots hoje'}
                 </p>
               </div>
 
-              {/* Mensagens de erro e sucesso */}
               {error && (
                 <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
                   <p className="text-red-200 text-sm">{error}</p>
@@ -345,12 +343,9 @@ const LoginPage = () => {
 
               {!showVerifyStep ? (
               <div className="space-y-6">
-                {/* Campo Username (só no cadastro) */}
                 {!isLogin && (
                   <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">
-                      Nome de usuário *
-                    </label>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">Nome de usuário *</label>
                     <input
                       type="text"
                       name="username"
@@ -364,12 +359,97 @@ const LoginPage = () => {
                   </div>
                 )}
 
-                {/* Campo Email (só no cadastro) */}
+                {!isLogin && (
+                  <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
+                    <label className="block text-sm font-medium text-blue-100 mb-3">
+                      🔐 Como você quer receber o código de verificação? *
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'email'})}
+                        className={`p-3 rounded-lg border transition-all ${
+                          formData.preferredVerificationMethod === 'email' 
+                            ? 'border-blue-500 bg-blue-500/20' 
+                            : 'border-white/20 bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-2">
+                          <Mail className="w-5 h-5 text-blue-300" />
+                        </div>
+                        <div className="text-white text-xs font-medium">E-mail</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'whatsapp'})}
+                        className={`p-3 rounded-lg border transition-all ${
+                          formData.preferredVerificationMethod === 'whatsapp' 
+                            ? 'border-green-500 bg-green-500/20' 
+                            : 'border-white/20 bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-2">
+                          <MessageCircle className="w-5 h-5 text-green-300" />
+                        </div>
+                        <div className="text-white text-xs font-medium">WhatsApp</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'sms'})}
+                        className={`p-3 rounded-lg border transition-all ${
+                          formData.preferredVerificationMethod === 'sms' 
+                            ? 'border-purple-500 bg-purple-500/20' 
+                            : 'border-white/20 bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-2">
+                          <MessageSquare className="w-5 h-5 text-purple-300" />
+                        </div>
+                        <div className="text-white text-xs font-medium">SMS</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!isLogin && (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') && (
+                  <div className={`space-y-4 p-4 border rounded-lg ${
+                    formData.preferredVerificationMethod === 'whatsapp' 
+                      ? 'bg-green-500/10 border-green-500/30' 
+                      : 'bg-purple-500/10 border-purple-500/30'
+                  }`}>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-100 mb-2">Código do País *</label>
+                      <CountrySelector
+                        selectedCountry={formData.countryCode}
+                        onCountryChange={handleCountryChange}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-blue-100 mb-2">Número de Telefone *</label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        className={`w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:border-transparent backdrop-blur-sm ${
+                          formData.preferredVerificationMethod === 'whatsapp' ? 'focus:ring-green-500' : 'focus:ring-purple-500'
+                        }`}
+                        placeholder="Número do telefone (sem o código do país)"
+                        required
+                      />
+                      <p className="text-blue-300 text-xs mt-1">
+                        Exemplo: Para {formData.countryCode} 11 99999-9999, digite apenas: 11999999999
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {!isLogin && (
                   <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">
-                      E-mail *
-                    </label>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">E-mail *</label>
                     <input
                       type="email"
                       name="email"
@@ -382,12 +462,9 @@ const LoginPage = () => {
                   </div>
                 )}
 
-                {/* Campo Login (só no login) */}
                 {isLogin && (
                   <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-2">
-                      Usuário ou E-mail *
-                    </label>
+                    <label className="block text-sm font-medium text-blue-100 mb-2">Usuário ou E-mail *</label>
                     <input
                       type="text"
                       name="login"
@@ -400,86 +477,8 @@ const LoginPage = () => {
                   </div>
                 )}
 
-                {/* Método de Verificação (só no cadastro) */}
-                {!isLogin && (
-                  <div>
-                    <label className="block text-sm font-medium text-blue-100 mb-3">
-                      Como você quer receber o código de verificação? *
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'email'})}
-                        className={`p-3 rounded-lg border transition-all ${
-                          formData.preferredVerificationMethod === 'email' 
-                            ? 'border-blue-500 bg-blue-500/20' 
-                            : 'border-white/20 bg-white/10'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center mb-2">
-                          <Mail className="w-6 h-6 text-blue-300" />
-                        </div>
-                        <div className="text-white text-sm font-medium">E-mail</div>
-                        <div className="text-blue-200 text-xs">Usar o e-mail cadastrado</div>
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'whatsapp'})}
-                        className={`p-3 rounded-lg border transition-all ${
-                          formData.preferredVerificationMethod === 'whatsapp' 
-                            ? 'border-green-500 bg-green-500/20' 
-                            : 'border-white/20 bg-white/10'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center mb-2">
-                          <MessageCircle className="w-6 h-6 text-green-300" />
-                        </div>
-                        <div className="text-white text-sm font-medium">WhatsApp</div>
-                        <div className="text-blue-200 text-xs">Informar número</div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Campos de WhatsApp (só quando WhatsApp estiver selecionado) */}
-                {!isLogin && formData.preferredVerificationMethod === 'whatsapp' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-blue-100 mb-2">
-                        Código do País *
-                      </label>
-                      <CountrySelector
-                        selectedCountry={formData.countryCode}
-                        onCountryChange={handleCountryChange}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-blue-100 mb-2">
-                        Número do WhatsApp *
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent backdrop-blur-sm"
-                        placeholder="Número do WhatsApp (sem o código do país)"
-                        required
-                      />
-                      <p className="text-blue-300 text-xs mt-1">
-                        Exemplo: Para {formData.countryCode} 11 99999-9999, digite apenas: 11999999999
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Campo Senha */}
                 <div>
-                  <label className="block text-sm font-medium text-blue-100 mb-2">
-                    Senha *
-                  </label>
+                  <label className="block text-sm font-medium text-blue-100 mb-2">Senha *</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -498,12 +497,9 @@ const LoginPage = () => {
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
-                  {!isLogin && (
-                    <p className="text-blue-300 text-xs mt-1">Mínimo 6 caracteres</p>
-                  )}
+                  {!isLogin && <p className="text-blue-300 text-xs mt-1">Mínimo 6 caracteres</p>}
                 </div>
 
-                {/* Aceite de Termos (só no cadastro) */}
                 {!isLogin && (
                   <div className="flex items-start">
                     <div className="flex items-center h-5">
@@ -512,26 +508,18 @@ const LoginPage = () => {
                         name="acceptTerms"
                         type="checkbox"
                         checked={formData.acceptTerms}
-                        onChange={handleInputChange}
+                        onChange={(e) => setFormData({...formData, acceptTerms: e.target.checked})}
                         className="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500 focus:ring-2"
                       />
                     </div>
                     <div className="ml-3 text-sm">
                       <label htmlFor="acceptTerms" className="text-blue-200">
                         Eu concordo com os{' '}
-                        <button
-                          type="button"
-                          onClick={() => window.location.hash = 'terms'}
-                          className="text-blue-300 hover:text-white underline"
-                        >
+                        <button type="button" onClick={() => window.location.hash = 'terms'} className="text-blue-300 hover:text-white underline">
                           Termos e Condições
                         </button>
                         {' '}e a{' '}
-                        <button
-                          type="button"
-                          onClick={() => window.location.hash = 'privacy'}
-                          className="text-blue-300 hover:text-white underline"
-                        >
+                        <button type="button" onClick={() => window.location.hash = 'privacy'} className="text-blue-300 hover:text-white underline">
                           Política de Privacidade
                         </button>
                       </label>
@@ -539,18 +527,14 @@ const LoginPage = () => {
                   </div>
                 )}
 
-                {/* Forgot password link (login only) */}
                 {isLogin && (
                   <div className="text-right -mt-2">
-                    <button
-                      type="button"
-                      onClick={() => window.location.hash = 'reset'}
-                      className="text-blue-300 hover:text-white text-sm underline"
-                    >Esqueci minha senha</button>
+                    <button type="button" onClick={() => window.location.hash = 'reset'} className="text-blue-300 hover:text-white text-sm underline">
+                      Esqueci minha senha
+                    </button>
                   </div>
                 )}
 
-                {/* Botão Submit */}
                 <button
                   type="button"
                   onClick={handleSubmit}
@@ -577,7 +561,10 @@ const LoginPage = () => {
                       value={formData.verifyCode}
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
-                      placeholder={`Insira o código enviado ao seu ${formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : 'e-mail'}`}
+                      placeholder={`Insira o código enviado ao seu ${
+                        formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : 
+                        formData.preferredVerificationMethod === 'sms' ? 'SMS' : 'e-mail'
+                      }`}
                     />
                     <p className="text-blue-300 text-xs mt-1">Válido por 15 minutos.</p>
                   </div>
@@ -586,50 +573,36 @@ const LoginPage = () => {
                       type="button"
                       onClick={handleResend}
                       disabled={isLoading}
-                      className="text-blue-300 hover:text-white underline"
+                      className="text-blue-300 hover:text-white underline text-sm"
                     >
-                      Reenviar código {formData.preferredVerificationMethod === 'whatsapp' ? 'no WhatsApp' : 'por e-mail'}
+                      Reenviar {formData.preferredVerificationMethod === 'whatsapp' ? 'WhatsApp' : formData.preferredVerificationMethod === 'sms' ? 'SMS' : 'E-mail'}
                     </button>
                     <button
                       type="button"
                       onClick={handleVerify}
                       disabled={isLoading || !formData.verifyCode.trim()}
                       className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
-                    >Verificar</button>
+                    >
+                      Verificar
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Toggle Login/Register */}
               <div className="mt-6 text-center">
                 {!showVerifyStep && (
-                <button
-                  onClick={toggleMode}
-                  className="text-blue-300 hover:text-white transition-colors"
-                >
-                  {isLogin 
-                    ? 'Não tem conta? Criar uma nova conta'
-                    : 'Já tem conta? Fazer login'
-                  }
-                </button>
+                  <button onClick={toggleMode} className="text-blue-300 hover:text-white transition-colors">
+                    {isLogin ? 'Não tem conta? Criar uma nova conta' : 'Já tem conta? Fazer login'}
+                  </button>
                 )}
               </div>
 
-              
-
-              {/* Legal Links */}
               <div className="mt-6 text-center text-xs text-blue-300 space-x-4">
-                <button 
-                  onClick={() => window.location.hash = 'terms'}
-                  className="hover:text-white transition-colors underline"
-                >
+                <button onClick={() => window.location.hash = 'terms'} className="hover:text-white transition-colors underline">
                   Termos e Condições
                 </button>
                 <span>•</span>
-                <button 
-                  onClick={() => window.location.hash = 'privacy'}
-                  className="hover:text-white transition-colors underline"
-                >
+                <button onClick={() => window.location.hash = 'privacy'} className="hover:text-white transition-colors underline">
                   Política de Privacidade
                 </button>
               </div>
@@ -637,16 +610,13 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
-      
-      {/* Footer */}
+
       <footer className="relative z-10 bg-black/20 backdrop-blur-sm border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-blue-200">
             <div className="flex items-center space-x-6">
               <span>© 2025 Eliobros Tech</span>
-              <a href="mailto:contact@mozhost.com" className="hover:text-white transition-colors">
-                Contato
-              </a>
+              <a href="mailto:contact@mozhost.com" className="hover:text-white transition-colors">Contato</a>
               <span>Maputo, Moçambique</span>
             </div>
             <div className="mt-4 sm:mt-0">

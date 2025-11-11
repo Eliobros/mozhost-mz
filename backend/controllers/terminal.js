@@ -1,8 +1,8 @@
 // controllers/terminal.js
 const jwt = require('jsonwebtoken');
 const database = require('../models/database');
-const path = require('path');
-const dockerManager = require('../utils/docker-manager');
+const pty = require('node-pty');
+const os = require('os');
 
 class TerminalController {
   constructor() {
@@ -14,13 +14,13 @@ class TerminalController {
   async authenticateSocket(socket) {
     try {
       const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
-      
+
       if (!token) {
         throw new Error('No token provided');
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
+
       // Verificar se usuário existe
       const user = await database.query(
         'SELECT id, username FROM users WHERE id = ? AND is_active = true',
@@ -84,7 +84,7 @@ class TerminalController {
           this.closeTerminal(socket.id);
         }
 
-        // Obter docker_container_id e criar sessão exec dentro do container
+        // Obter docker_container_id
         const rows = await database.query(
           'SELECT docker_container_id FROM containers WHERE id = ? AND user_id = ?',
           [containerId, user.userId]
@@ -96,28 +96,24 @@ class TerminalController {
         }
 
         const dockerContainerId = rows[0].docker_container_id;
-        const container = dockerManager.docker.getContainer(dockerContainerId);
 
-        const exec = await container.exec({
-          AttachStdin: true,
-          AttachStdout: true,
-          AttachStderr: true,
-          Tty: true,
-          WorkingDir: '/app/code',
-          Cmd: ['sh']
+        // 🔥 SOLUÇÃO: Criar PTY persistente que executa docker exec
+        const shell = pty.spawn('docker', [
+          'exec',
+          '-it',
+          dockerContainerId,
+          '/bin/sh'
+        ], {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 30,
+          cwd: process.env.HOME || os.homedir(),
+          env: process.env
         });
 
-        const stream = await new Promise((resolve, reject) => {
-          exec.start({ hijack: true, stdin: true }, (err, s) => {
-            if (err) return reject(err);
-            resolve(s);
-          });
-        });
-
-        // Armazenar referência da sessão
+        // Armazenar referência da sessão PTY
         this.terminals.set(socket.id, {
-          exec,
-          stream,
+          pty: shell,  // ✅ Agora sim temos um PTY real!
           dockerContainerId,
           containerId,
           userId: user.userId,
@@ -130,19 +126,24 @@ class TerminalController {
         }
         this.containerTerminals.get(containerId).add(socket.id);
 
-        // Encaminhar dados do exec para o cliente
-        stream.on('data', (chunk) => {
+        // 🔥 Encaminhar output do PTY para o cliente
+        shell.on('data', (data) => {
           try {
-            socket.emit('terminal-output', { data: chunk.toString('utf8') });
-          } catch (_) {}
+            socket.emit('terminal-output', { data: data });
+          } catch (error) {
+            console.error('Error emitting terminal output:', error);
+          }
         });
 
-        const onStreamEnd = () => {
-          try { socket.emit('terminal-exit', { code: 0 }); } catch (_) {}
+        // Handle de saída do PTY
+        shell.on('exit', (code) => {
+          try {
+            socket.emit('terminal-exit', { code });
+          } catch (error) {
+            console.error('Error emitting terminal exit:', error);
+          }
           this.closeTerminal(socket.id);
-        };
-        stream.on('end', onStreamEnd);
-        stream.on('close', onStreamEnd);
+        });
 
         // Confirmar conexão
         socket.emit('terminal-connected', { 
@@ -150,7 +151,7 @@ class TerminalController {
           message: `Connected to container ${containerId.substring(0, 8)}`
         });
 
-        console.log(`Terminal connected: user ${user.username} -> container ${containerId}`);
+        console.log(`✅ Terminal connected: user ${user.username} -> container ${containerId}`);
 
       } catch (error) {
         console.error('Terminal connection error:', error);
@@ -169,7 +170,7 @@ class TerminalController {
           return;
         }
 
-        // Enviar input para o terminal
+        // 🔥 Agora sim funciona! PTY.write() existe
         terminal.pty.write(input);
 
       } catch (error) {
@@ -253,8 +254,6 @@ class TerminalController {
           return;
         }
 
-        // TODO: Implementar stream de logs em tempo real
-        // Isso requereria uma conexão contínua com os logs do Docker
         socket.emit('log-stream-started', { containerId });
 
       } catch (error) {
@@ -268,17 +267,21 @@ class TerminalController {
   closeTerminal(socketId) {
     try {
       const terminal = this.terminals.get(socketId);
-      
+
       if (terminal) {
-        // Matar processo PTY
-        terminal.pty.kill();
-        
+        // 🔥 Matar processo PTY corretamente
+        try {
+          terminal.pty.kill();
+        } catch (error) {
+          console.error('Error killing PTY:', error);
+        }
+
         // Remover das listas
         this.terminals.delete(socketId);
-        
+
         if (this.containerTerminals.has(terminal.containerId)) {
           this.containerTerminals.get(terminal.containerId).delete(socketId);
-          
+
           // Se não há mais terminais para o container, limpar
           if (this.containerTerminals.get(terminal.containerId).size === 0) {
             this.containerTerminals.delete(terminal.containerId);
@@ -323,7 +326,7 @@ class TerminalController {
   // Cleanup: fechar todos os terminais
   cleanup() {
     console.log('Cleaning up terminals...');
-    
+
     this.terminals.forEach((terminal, socketId) => {
       try {
         terminal.pty.kill();

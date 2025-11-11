@@ -10,6 +10,9 @@ import SettingsPage from './SettingsPage';
 import ResetPasswordPage from './ResetPasswordPage';
 import TermsConditionsPage from './TermsConditionsPage';
 import PrivacyPolicyPage from './PrivacyPolicyPage';
+import WhatsAppLink from './WhatsAppLink'; // 👈 ADICIONA ISSO
+//import CoinsPage from './CoinsPage'; // 👈 SE TIVER PÁGINA DE COINS
+
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -55,13 +58,12 @@ const App = () => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
-        // Atualiza badge conforme eventos (mock simples por enquanto)
         setUnreadNotifications(0);
         setIsAuthenticated(true);
       } else {
         // Token inválido, limpar dados
         localStorage.removeItem('mozhost_token');
-        localStorage.removeUser('mozhost_user');
+        localStorage.removeItem('mozhost_user');
       }
     } catch (error) {
       console.error('Erro ao verificar autenticação:', error);
@@ -112,7 +114,7 @@ const App = () => {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'dashboard':
-    return <Dashboard setUnreadNotifications={setUnreadNotifications} />;
+        return <Dashboard setUnreadNotifications={setUnreadNotifications} />;
       case 'files':
       case 'editor':
         return <CodeEditor />;
@@ -125,7 +127,11 @@ const App = () => {
       case 'profile':
         return <ProfilePage />;
       case 'settings':
-        return <SettingsPage />; // Implementaremos depois se necessário
+        return <SettingsPage />;
+      case 'whatsapp': // 👈 ADICIONA ISSO
+        return <WhatsAppLink />;
+  //    case 'coins': // 👈 ADICIONA SE TIVER
+    //    return <CoinsPage />;
       default:
         return <Dashboard />;
     }

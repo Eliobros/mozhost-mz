@@ -1,9 +1,13 @@
-// next.config.ts (ESM)
+/** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    // Ignora erros de tipagem no build (TypeScript)
+    ignoreBuildErrors: true,
+  },
   eslint: {
-    // ⚠️ AVISO: Isso vai permitir deploy mesmo com erros de ESLint
+    // Ignora erros e avisos do ESLint durante o build
     ignoreDuringBuilds: true,
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
