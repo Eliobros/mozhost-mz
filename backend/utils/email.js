@@ -1,9 +1,6 @@
 // utils/email.js
-const { ApiApi } = require('@getbrevo/brevo');
+const brevo = require('@getbrevo/brevo');
 require('dotenv').config();
-
-const apiInstance = new ApiApi();
-apiInstance.setApiKey(process.env.BREVO_API_KEY || '');
 
 /**
  * Gera um código numérico aleatório
@@ -36,22 +33,22 @@ async function sendEmail({ toEmail, toName, subject, htmlContent, textContent })
       return { messageId: 'simulated' };
     }
 
-    const { SendinblueApi } = require('@getbrevo/brevo');
-    const api = new SendinblueApi();
-    api.setApiKey(process.env.BREVO_API_KEY);
+    const apiInstance = new brevo.TransactionalEmailsApi();
+    
+    // Configurar API key
+    apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
-    const sendSmtpEmail = {
-      to: [{ email: toEmail, name: toName }],
-      sender: { 
-        email: process.env.FROM_EMAIL || 'noreply@mozhost.topaziocoin.online', 
-        name: process.env.FROM_NAME || 'MozHost' 
-      },
-      subject: subject,
-      htmlContent: htmlContent,
-      textContent: textContent
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: toEmail, name: toName }];
+    sendSmtpEmail.sender = {
+      email: process.env.FROM_EMAIL || 'noreply@mozhost.topaziocoin.online',
+      name: process.env.FROM_NAME || 'MozHost'
     };
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
 
-    const result = await api.sendTransacEmail(sendSmtpEmail);
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
     console.log('✅ Email enviado com sucesso:', result);
     return result;
 

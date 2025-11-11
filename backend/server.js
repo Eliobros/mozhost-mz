@@ -11,13 +11,14 @@ require('dotenv').config();
 // Importar módulos
 const database = require('./models/database');
 const authRoutes = require('./routes/auth');
+const whatsappLinkRoutes = require('./routes/whatsapp-link');
 const { adminRouter } = require('./routes/auth');
 const containerRoutes = require('./routes/containers');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
 const { startWhatsApp, disconnectWhatsApp } = require('./utils/whatsapp');
-
+const paymentRoutes = require('./routes/payment');
 const app = express();
 const server = createServer(app);
 const parseOrigins = (originsStr) => {
@@ -102,8 +103,10 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRouter);
 app.use('/api/containers', containerRoutes);
+app.use('/api/whatsapp-link', whatsappLinkRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Socket.IO para terminal e logs em tempo real
 io.on('connection', (socket) => {

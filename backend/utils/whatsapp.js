@@ -1,16 +1,27 @@
 // utils/whatsapp.js
-const { 
-  default: makeWASocket, 
-  DisconnectReason, 
-  useMultiFileAuthState,
-  MessageType,
-  MessageOptions,
-  Mimetype 
-} = require('@whiskeysockets/baileys');
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState
+} = require('baileys');
 const fs = require('fs');
 const path = require('path');
 const qrcode = require('qrcode-terminal');
+const pino = require('pino');
 require('dotenv').config();
+
+// 🔥 Logger profissional com timestamps e cores
+const logger = pino({
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname'
+    }
+  },
+  level: 'info'
+});
 
 // Estado global da conexão
 let sock = null;
@@ -25,10 +36,10 @@ async function initializeWhatsApp() {
     return connectionPromise;
   }
 
-  connectionPromise = new Promise(async (resolve, reject) => {
+  connectionPromise = new Promise(async (resolve) => {
     try {
       const authPath = path.join(__dirname, '../.auth/whatsapp');
-      
+
       // Criar diretório de autenticação se não existir
       if (!fs.existsSync(authPath)) {
         fs.mkdirSync(authPath, { recursive: true });
@@ -38,11 +49,8 @@ async function initializeWhatsApp() {
 
       sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // Vamos gerar QR customizado
-        logger: {
-          level: 'warn',
-          child: () => ({ level: 'warn' })
-        }
+        printQRInTerminal: false,
+        logger // 👈 Usa o logger do pino
       });
 
       sock.ev.on('connection.update', (update) => {
@@ -57,7 +65,7 @@ async function initializeWhatsApp() {
         if (connection === 'close') {
           const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
           console.log('🔌 Conexão WhatsApp fechada. Reconectando...', shouldReconnect);
-          
+
           if (shouldReconnect) {
             isConnected = false;
             connectionPromise = null;
@@ -94,10 +102,6 @@ async function initializeWhatsApp() {
 
 /**
  * Envia mensagem via WhatsApp usando Baileys
- * @param {Object} options - Opções da mensagem
- * @param {string} options.phone - Número de telefone (com código do país)
- * @param {string} options.message - Mensagem a ser enviada
- * @returns {Promise} - Resultado do envio
  */
 async function sendWhatsAppMessage({ phone, message }) {
   try {
@@ -115,7 +119,7 @@ async function sendWhatsAppMessage({ phone, message }) {
       return { messageId: 'simulated', status: 'sent' };
     }
 
-    // Formatar número (remover caracteres especiais e garantir formato correto)
+    // Formatar número
     const cleanPhone = phone.replace(/[^\d]/g, '');
     const formattedPhone = cleanPhone + '@s.whatsapp.net';
 
@@ -137,8 +141,6 @@ async function sendWhatsAppMessage({ phone, message }) {
 
   } catch (error) {
     console.error('❌ Erro ao enviar WhatsApp:', error.message);
-    
-    // Em caso de erro, simular envio para não quebrar o fluxo
     console.log('📱 Simulando envio devido a erro...');
     return { messageId: 'simulated_error', status: 'sent' };
   }
@@ -146,7 +148,6 @@ async function sendWhatsAppMessage({ phone, message }) {
 
 /**
  * Verifica se o WhatsApp está conectado
- * @returns {boolean} - Status da conexão
  */
 function checkWhatsAppConnection() {
   return isConnected && sock !== null;
@@ -154,9 +155,6 @@ function checkWhatsAppConnection() {
 
 /**
  * Formata código de verificação para WhatsApp
- * @param {string} code - Código numérico
- * @param {string} serviceName - Nome do serviço
- * @returns {string} - Mensagem formatada
  */
 function formatVerificationMessage(code, serviceName = 'MozHost') {
   return `🔐 *${serviceName} - Código de Verificação*

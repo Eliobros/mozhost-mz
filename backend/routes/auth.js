@@ -9,6 +9,7 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 const { sendEmail, generateCode } = require('../utils/email');
 const { sendWhatsAppMessage, formatVerificationMessage, checkWhatsAppConnection } = require('../utils/whatsapp');
+const { sendSMS, formatSMSVerificationMessage } = require('../utils/sms');
 
 // Registro de usuário
 router.post('/register', [
@@ -34,8 +35,8 @@ router.post('/register', [
     .withMessage('Valid country code is required'),
   body('preferredVerificationMethod')
     .optional()
-    .isIn(['email', 'whatsapp'])
-    .withMessage('Verification method must be email or whatsapp')
+    .isIn(['email', 'whatsapp', 'sms'])
+    .withMessage('Verification method must be email, whatsapp or sms')
 ], async (req, res) => {
   try {
     // Validar input
@@ -79,16 +80,16 @@ router.post('/register', [
     try {
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
-      
+
       const verificationMethod = preferredVerificationMethod || 'email';
-      
+
       if (verificationMethod === 'whatsapp' && phone && countryCode) {
         // Verificação via WhatsApp
         await database.query(
           'UPDATE users SET whatsapp_verification_code = ?, whatsapp_verification_expires = ? WHERE id = ?',
           [code, expiresAt, userId]
         );
-        
+
         const fullPhone = countryCode + phone;
         const message = formatVerificationMessage(code);
         await sendWhatsAppMessage({
@@ -96,14 +97,29 @@ router.post('/register', [
           message: message
         });
         console.log(`📱 Código de verificação WhatsApp enviado para: ${fullPhone}`);
-        
+
+      } else if (verificationMethod === 'sms' && phone && countryCode) {
+        // Verificação via SMS
+        await database.query(
+          'UPDATE users SET sms_verification_code = ?, sms_verification_expires = ? WHERE id = ?',
+          [code, expiresAt, userId]
+        );
+
+        const fullPhone = countryCode + phone;
+        const message = formatSMSVerificationMessage(code);
+        await sendSMS({
+          phone: fullPhone,
+          message: message
+        });
+        console.log(`📨 Código de verificação SMS enviado para: ${fullPhone}`);
+
       } else {
         // Verificação via Email (padrão)
         await database.query(
           'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
           [code, expiresAt, userId]
         );
-        
+
         if (process.env.BREVO_API_KEY) {
           await sendEmail({
             toEmail: email,
@@ -139,6 +155,7 @@ router.post('/register', [
         coins: 250,
         emailVerified: false,
         whatsappVerified: false,
+        smsVerified: false,
         preferredVerificationMethod: preferredVerificationMethod || 'email'
       },
       token
@@ -196,21 +213,25 @@ router.post('/login', [
     // Verificar se pelo menos um método está verificado
     const hasEmailVerified = user.email_verified;
     const hasWhatsAppVerified = user.whatsapp_verified;
+    const hasSMSVerified = user.sms_verified;
     const preferredMethod = user.preferred_verification_method || 'email';
-    
-    if (!hasEmailVerified && !hasWhatsAppVerified) {
-      const method = preferredMethod === 'whatsapp' && user.phone ? 'WhatsApp' : 'email';
+
+    if (!hasEmailVerified && !hasWhatsAppVerified && !hasSMSVerified) {
+      const method = preferredMethod === 'whatsapp' && user.phone ? 'WhatsApp' : 
+                     preferredMethod === 'sms' && user.phone ? 'SMS' : 'email';
       return res.status(403).json({
         error: 'Account not verified',
         message: `Verifique sua conta via ${method} para acessar.`,
         preferredMethod: preferredMethod
       });
     }
-    
+
     // Se tem método preferido mas não verificado, sugerir verificação
-    if (preferredMethod === 'whatsapp' && user.phone && !hasWhatsAppVerified && hasEmailVerified) {
-      // Permite login mas sugere verificar WhatsApp
-      console.log(`ℹ️ User ${user.username} logged in with email but has unverified WhatsApp`);
+    if (preferredMethod === 'whatsapp' && user.phone && !hasWhatsAppVerified && (hasEmailVerified || hasSMSVerified)) {
+      console.log(`ℹ️ User ${user.username} logged in but has unverified WhatsApp`);
+    }
+    if (preferredMethod === 'sms' && user.phone && !hasSMSVerified && (hasEmailVerified || hasWhatsAppVerified)) {
+      console.log(`ℹ️ User ${user.username} logged in but has unverified SMS`);
     }
 
     // Gerar token JWT
@@ -258,7 +279,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, preferred_verification_method FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -283,6 +304,7 @@ router.get('/verify', authMiddleware, async (req, res) => {
         coins: user[0].coins,
         emailVerified: !!user[0].email_verified,
         whatsappVerified: !!user[0].whatsapp_verified,
+        smsVerified: !!user[0].sms_verified,
         preferredVerificationMethod: user[0].preferred_verification_method
       }
     });
@@ -299,7 +321,7 @@ router.get('/verify', authMiddleware, async (req, res) => {
 router.post('/refresh', authMiddleware, async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Gerar novo token
     const newToken = jwt.sign(
       { 
@@ -341,6 +363,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
 // Admin coin top-up (senha simples, provisório)
 const expressAdmin = require('express');
 const adminRouter = expressAdmin.Router();
@@ -414,7 +437,7 @@ router.post('/verify-whatsapp', [
     const users = await database.query('SELECT id, username, phone, country_code, coins, whatsapp_verification_code, whatsapp_verification_expires, whatsapp_verified, verification_bonus_awarded FROM users WHERE id = ?', [req.user.userId]);
     if (!users.length) return res.status(404).json({ error: 'User not found' });
     const row = users[0];
-    
+
     if (!row.whatsapp_verification_code || !row.whatsapp_verification_expires) {
       return res.status(400).json({ error: 'No WhatsApp verification pending' });
     }
@@ -424,7 +447,7 @@ router.post('/verify-whatsapp', [
     if (String(row.whatsapp_verification_code) !== String(code)) {
       return res.status(400).json({ error: 'Invalid code' });
     }
-    
+
     // Marcar WhatsApp verificado
     await database.query('UPDATE users SET whatsapp_verified = true, whatsapp_verification_code = NULL, whatsapp_verification_expires = NULL WHERE id = ?', [req.user.userId]);
 
@@ -442,44 +465,116 @@ router.post('/verify-whatsapp', [
   }
 });
 
+// SMS verification endpoint
+router.post('/verify-sms', [
+  body('code').isLength({ min: 4, max: 10 }).withMessage('Código inválido')
+], authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const users = await database.query(
+      'SELECT id, username, phone, country_code, coins, sms_verification_code, sms_verification_expires, sms_verified, verification_bonus_awarded FROM users WHERE id = ?', 
+      [req.user.userId]
+    );
+    
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
+    const row = users[0];
+
+    if (!row.sms_verification_code || !row.sms_verification_expires) {
+      return res.status(400).json({ error: 'No SMS verification pending' });
+    }
+    if (new Date(row.sms_verification_expires) < new Date()) {
+      return res.status(410).json({ error: 'Code expired' });
+    }
+    if (String(row.sms_verification_code) !== String(code)) {
+      return res.status(400).json({ error: 'Invalid code' });
+    }
+
+    // Marcar SMS verificado
+    await database.query(
+      'UPDATE users SET sms_verified = true, sms_verification_code = NULL, sms_verification_expires = NULL WHERE id = ?', 
+      [req.user.userId]
+    );
+
+    // Bônus de 350 coins uma única vez
+    let bonusGranted = false;
+    if (!row.verification_bonus_awarded) {
+      await database.query(
+        'UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', 
+        [req.user.userId]
+      );
+      bonusGranted = true;
+    }
+    
+    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+    res.json({ message: 'SMS verified successfully', bonusGranted, coins: updated[0].coins });
+  } catch (e) {
+    console.error('verify-sms error:', e);
+    res.status(500).json({ error: 'Failed to verify SMS' });
+  }
+});
+
 router.post('/resend-code', [
-  body('method').optional().isIn(['email', 'whatsapp']).withMessage('Method must be email or whatsapp')
+  body('method').optional().isIn(['email', 'whatsapp', 'sms']).withMessage('Method must be email, whatsapp or sms')
 ], authMiddleware, async (req, res) => {
   try {
     const { method } = req.body;
-    const info = await database.query('SELECT username, email, phone, country_code, email_verified, whatsapp_verified, preferred_verification_method FROM users WHERE id = ?', [req.user.userId]);
+    const info = await database.query('SELECT username, email, phone, country_code, email_verified, whatsapp_verified, sms_verified, preferred_verification_method FROM users WHERE id = ?', [req.user.userId]);
     if (!info.length) return res.status(404).json({ error: 'User not found' });
-    
+
     const verificationMethod = method || info[0].preferred_verification_method || 'email';
-    
-    if (verificationMethod === 'whatsapp') {
+
+    if (verificationMethod === 'sms') {
+      if (!info[0].phone || !info[0].country_code) {
+        return res.status(400).json({ error: 'Phone number not configured' });
+      }
+      if (info[0].sms_verified) {
+        return res.status(400).json({ error: 'SMS already verified' });
+      }
+
+      const code = generateCode(6);
+      const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+      await database.query(
+        'UPDATE users SET sms_verification_code = ?, sms_verification_expires = ? WHERE id = ?', 
+        [code, expiresAt, req.user.userId]
+      );
+
+      const fullPhone = info[0].country_code + info[0].phone;
+      const message = formatSMSVerificationMessage(code);
+      await sendSMS({
+        phone: fullPhone,
+        message: message
+      });
+
+      res.json({ message: 'SMS verification code sent' });
+      
+    } else if (verificationMethod === 'whatsapp') {
       if (!info[0].phone || !info[0].country_code) {
         return res.status(400).json({ error: 'Phone number not configured' });
       }
       if (info[0].whatsapp_verified) {
         return res.status(400).json({ error: 'WhatsApp already verified' });
       }
-      
+
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
       await database.query('UPDATE users SET whatsapp_verification_code = ?, whatsapp_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
-      
+
       const fullPhone = info[0].country_code + info[0].phone;
       const message = formatVerificationMessage(code);
       await sendWhatsAppMessage({
         phone: fullPhone,
         message: message
       });
-      
+
       res.json({ message: 'WhatsApp verification code sent' });
     } else {
       // Email (padrão)
       if (info[0].email_verified) return res.status(400).json({ error: 'Email already verified' });
-      
+
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
       await database.query('UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
-      
+
       if (process.env.BREVO_API_KEY) {
         await sendEmail({
           toEmail: info[0].email,
@@ -489,7 +584,7 @@ router.post('/resend-code', [
           textContent: `Seu novo código: ${code}`
         });
       }
-      
+
       res.json({ message: 'Email verification code sent' });
     }
   } catch (e) {
@@ -502,18 +597,18 @@ router.post('/resend-code', [
 router.post('/update-verification-method', [
   body('phone').optional().isLength({ min: 8, max: 15 }).matches(/^[0-9]+$/).withMessage('Phone number must contain only numbers (8-15 digits)'),
   body('countryCode').optional().isLength({ min: 1, max: 5 }).withMessage('Valid country code required'),
-  body('preferredMethod').isIn(['email', 'whatsapp']).withMessage('Method must be email or whatsapp')
+  body('preferredMethod').isIn(['email', 'whatsapp', 'sms']).withMessage('Method must be email, whatsapp or sms')
 ], authMiddleware, async (req, res) => {
   try {
     const { phone, countryCode, preferredMethod } = req.body;
-    
-    // Se escolheu WhatsApp, telefone é obrigatório
-    if (preferredMethod === 'whatsapp' && (!phone || !countryCode)) {
-      return res.status(400).json({ error: 'Phone and country code required for WhatsApp verification' });
+
+    // Se escolheu WhatsApp ou SMS, telefone é obrigatório
+    if ((preferredMethod === 'whatsapp' || preferredMethod === 'sms') && (!phone || !countryCode)) {
+      return res.status(400).json({ error: 'Phone and country code required for WhatsApp/SMS verification' });
     }
-    
+
     // Atualizar dados do usuário
-    if (preferredMethod === 'whatsapp') {
+    if (preferredMethod === 'whatsapp' || preferredMethod === 'sms') {
       await database.query(
         'UPDATE users SET phone = ?, country_code = ?, preferred_verification_method = ? WHERE id = ?',
         [phone, countryCode, preferredMethod, req.user.userId]
@@ -524,7 +619,7 @@ router.post('/update-verification-method', [
         [preferredMethod, req.user.userId]
       );
     }
-    
+
     res.json({ message: 'Verification method updated successfully' });
   } catch (e) {
     console.error('update-verification-method error:', e);
@@ -574,6 +669,459 @@ router.post('/forgot', [body('email').isEmail()], async (req, res) => {
   }
 });
 
+// ========================================
+// ADMIN ENDPOINTS - Adicionar antes da rota /reset
+// ========================================
+
+// Middleware de autenticação admin (validação simples)
+const adminAuth = async (req, res, next) => {
+  try {
+    const { password } = req.body || req.query;
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Erro na autenticação admin' });
+  }
+};
+
+// GET /api/admin/stats - Dashboard stats
+adminRouter.get('/stats', async (req, res) => {
+  try {
+    const { password } = req.query;
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    // Total de usuários
+    const totalUsers = await database.query('SELECT COUNT(*) as count FROM users');
+    
+    // Total de coins no sistema
+    const totalCoins = await database.query('SELECT SUM(coins) as total FROM users');
+    
+    // Usuários ativos
+    const activeUsers = await database.query('SELECT COUNT(*) as count FROM users WHERE is_active = 1');
+    
+    // Total de containers
+    const totalContainers = await database.query('SELECT COUNT(*) as count FROM containers');
+    
+    // Containers por status
+    const containersByStatus = await database.query(
+      'SELECT status, COUNT(*) as count FROM containers GROUP BY status'
+    );
+    
+    // Containers rodando
+    const runningContainers = await database.query(
+      'SELECT COUNT(*) as count FROM containers WHERE status = "running"'
+    );
+    
+    // Usuários por plano
+    const usersByPlan = await database.query(
+      'SELECT plan, COUNT(*) as count FROM users GROUP BY plan'
+    );
+    
+    // Usuários verificados
+    const verifiedUsers = await database.query(
+      'SELECT COUNT(*) as count FROM users WHERE email_verified = 1 OR whatsapp_verified = 1 OR sms_verified = 1'
+    );
+
+    // Recursos em uso
+    const resourceUsage = await database.query(
+      'SELECT SUM(cpu_limit) as totalCpu, SUM(memory_limit_mb) as totalRam, SUM(storage_used_mb) as totalStorage FROM containers WHERE status = "running"'
+    );
+
+    res.json({
+      users: {
+        total: totalUsers[0].count,
+        active: activeUsers[0].count,
+        verified: verifiedUsers[0].count,
+        byPlan: usersByPlan
+      },
+      containers: {
+        total: totalContainers[0].count,
+        running: runningContainers[0].count,
+        byStatus: containersByStatus
+      },
+      coins: {
+        total: parseFloat(totalCoins[0].total || 0)
+      },
+      resources: {
+        cpu: parseFloat(resourceUsage[0].totalCpu || 0),
+        ram: parseInt(resourceUsage[0].totalRam || 0),
+        storage: parseInt(resourceUsage[0].totalStorage || 0)
+      }
+    });
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ error: 'Falha ao buscar estatísticas' });
+  }
+});
+
+// GET /api/admin/users - Lista todos os usuários
+adminRouter.get('/users', async (req, res) => {
+  try {
+    const { password, search, plan, verified } = req.query;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    let query = `
+      SELECT 
+        u.id, u.username, u.email, u.phone, u.country_code,
+        u.plan, u.coins, u.max_containers, u.max_ram_mb, u.max_storage_mb,
+        u.is_active, u.email_verified, u.whatsapp_verified, u.sms_verified,
+        u.created_at, u.updated_at,
+        COUNT(c.id) as container_count
+      FROM users u
+      LEFT JOIN containers c ON c.user_id = u.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+
+    // Filtro de busca
+    if (search) {
+      query += ' AND (u.username LIKE ? OR u.email LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    // Filtro por plano
+    if (plan && ['free', 'basic', 'pro'].includes(plan)) {
+      query += ' AND u.plan = ?';
+      params.push(plan);
+    }
+
+    // Filtro por verificação
+    if (verified === 'true') {
+      query += ' AND (u.email_verified = 1 OR u.whatsapp_verified = 1 OR u.sms_verified = 1)';
+    } else if (verified === 'false') {
+      query += ' AND u.email_verified = 0 AND u.whatsapp_verified = 0 AND u.sms_verified = 0';
+    }
+
+    query += ' GROUP BY u.id ORDER BY u.created_at DESC';
+
+    const users = await database.query(query, params);
+
+    res.json({
+      total: users.length,
+      users: users.map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        phone: u.phone,
+        countryCode: u.country_code,
+        plan: u.plan,
+        coins: parseFloat(u.coins),
+        maxContainers: u.max_containers,
+        maxRamMb: u.max_ram_mb,
+        maxStorageMb: u.max_storage_mb,
+        isActive: !!u.is_active,
+        emailVerified: !!u.email_verified,
+        whatsappVerified: !!u.whatsapp_verified,
+        smsVerified: !!u.sms_verified,
+        containerCount: u.container_count,
+        createdAt: u.created_at,
+        updatedAt: u.updated_at
+      }))
+    });
+  } catch (error) {
+    console.error('Admin users list error:', error);
+    res.status(500).json({ error: 'Falha ao listar usuários' });
+  }
+});
+
+// GET /api/admin/users/:id - Buscar usuário específico
+adminRouter.get('/users/:id', async (req, res) => {
+  try {
+    const { password } = req.query;
+    const { id } = req.params;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    const users = await database.query(
+      'SELECT * FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const containers = await database.query(
+      'SELECT id, name, type, status, cpu_limit, memory_limit_mb, storage_used_mb, domain, created_at FROM containers WHERE user_id = ?',
+      [id]
+    );
+
+    const user = users[0];
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      countryCode: user.country_code,
+      plan: user.plan,
+      coins: parseFloat(user.coins),
+      maxContainers: user.max_containers,
+      maxRamMb: user.max_ram_mb,
+      maxStorageMb: user.max_storage_mb,
+      isActive: !!user.is_active,
+      emailVerified: !!user.email_verified,
+      whatsappVerified: !!user.whatsapp_verified,
+      smsVerified: !!user.sms_verified,
+      verificationBonusAwarded: !!user.verification_bonus_awarded,
+      preferredVerificationMethod: user.preferred_verification_method,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      containers: containers
+    });
+  } catch (error) {
+    console.error('Admin user detail error:', error);
+    res.status(500).json({ error: 'Falha ao buscar usuário' });
+  }
+});
+
+// GET /api/admin/containers - Lista todos os containers
+adminRouter.get('/containers', async (req, res) => {
+  try {
+    const { password, status, type, userId } = req.query;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    let query = `
+      SELECT 
+        c.*,
+        u.username, u.email, u.plan
+      FROM containers c
+      JOIN users u ON c.user_id = u.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+
+    // Filtro por status
+    if (status && ['stopped', 'running', 'error', 'building'].includes(status)) {
+      query += ' AND c.status = ?';
+      params.push(status);
+    }
+
+    // Filtro por tipo
+    if (type && ['nodejs', 'python'].includes(type)) {
+      query += ' AND c.type = ?';
+      params.push(type);
+    }
+
+    // Filtro por usuário
+    if (userId) {
+      query += ' AND c.user_id = ?';
+      params.push(userId);
+    }
+
+    query += ' ORDER BY c.created_at DESC';
+
+    const containers = await database.query(query, params);
+
+    res.json({
+      total: containers.length,
+      containers: containers.map(c => ({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+        status: c.status,
+        dockerContainerId: c.docker_container_id,
+        port: c.port,
+        domain: c.domain,
+        cpuLimit: parseFloat(c.cpu_limit),
+        memoryLimitMb: c.memory_limit_mb,
+        storageUsedMb: c.storage_used_mb,
+        autoRestart: !!c.auto_restart,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        user: {
+          id: c.user_id,
+          username: c.username,
+          email: c.email,
+          plan: c.plan
+        }
+      }))
+    });
+  } catch (error) {
+    console.error('Admin containers list error:', error);
+    res.status(500).json({ error: 'Falha ao listar containers' });
+  }
+});
+
+// PATCH /api/admin/users/:id/plan - Atualizar plano do usuário
+adminRouter.patch('/users/:id/plan', async (req, res) => {
+  try {
+    const { password, plan } = req.body;
+    const { id } = req.params;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    if (!plan || !['free', 'basic', 'pro'].includes(plan)) {
+      return res.status(400).json({ error: 'Plano inválido. Use: free, basic ou pro' });
+    }
+
+    const users = await database.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Define limites por plano
+    const planLimits = {
+      free: { maxContainers: 2, maxRamMb: 512, maxStorageMb: 1024 },
+      basic: { maxContainers: 5, maxRamMb: 1024, maxStorageMb: 5120 },
+      pro: { maxContainers: 10, maxRamMb: 2048, maxStorageMb: 10240 }
+    };
+
+    const limits = planLimits[plan];
+
+    await database.query(
+      'UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ? WHERE id = ?',
+      [plan, limits.maxContainers, limits.maxRamMb, limits.maxStorageMb, id]
+    );
+
+    const updated = await database.query(
+      'SELECT id, username, email, plan, max_containers, max_ram_mb, max_storage_mb FROM users WHERE id = ?',
+      [id]
+    );
+
+    res.json({
+      message: 'Plano atualizado com sucesso',
+      user: updated[0]
+    });
+  } catch (error) {
+    console.error('Admin update plan error:', error);
+    res.status(500).json({ error: 'Falha ao atualizar plano' });
+  }
+});
+
+// PATCH /api/admin/users/:id/status - Ativar/desativar usuário
+adminRouter.patch('/users/:id/status', async (req, res) => {
+  try {
+    const { password, isActive } = req.body;
+    const { id } = req.params;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive deve ser true ou false' });
+    }
+
+    const users = await database.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    await database.query(
+      'UPDATE users SET is_active = ? WHERE id = ?',
+      [isActive ? 1 : 0, id]
+    );
+
+    const updated = await database.query(
+      'SELECT id, username, email, is_active FROM users WHERE id = ?',
+      [id]
+    );
+
+    res.json({
+      message: `Usuário ${isActive ? 'ativado' : 'desativado'} com sucesso`,
+      user: updated[0]
+    });
+  } catch (error) {
+    console.error('Admin update status error:', error);
+    res.status(500).json({ error: 'Falha ao atualizar status' });
+  }
+});
+
+// POST /api/admin/coins/remove - Remover coins
+adminRouter.post('/coins/remove', async (req, res) => {
+  try {
+    const { username, amount, password } = req.body;
+    
+    if (!username || !amount || !password) {
+      return res.status(400).json({ error: 'username, amount e password são obrigatórios' });
+    }
+    
+    if (password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    const users = await database.query('SELECT id, coins FROM users WHERE username = ?', [username]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const amt = Number(amount) || 0;
+    const currentCoins = parseFloat(users[0].coins);
+    
+    if (currentCoins < amt) {
+      return res.status(400).json({ 
+        error: 'Coins insuficientes',
+        message: `Usuário possui apenas ${currentCoins} coins`
+      });
+    }
+
+    await database.query(
+      'UPDATE users SET coins = coins - ? WHERE id = ?',
+      [amt, users[0].id]
+    );
+
+    const updated = await database.query(
+      'SELECT id, username, coins FROM users WHERE id = ?',
+      [users[0].id]
+    );
+
+    res.json({
+      message: 'Coins removidas com sucesso',
+      user: updated[0]
+    });
+  } catch (error) {
+    console.error('Admin remove coins error:', error);
+    res.status(500).json({ error: 'Falha ao remover coins' });
+  }
+});
+
+// DELETE /api/admin/users/:id - Deletar usuário (cuidado!)
+adminRouter.delete('/users/:id', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const { id } = req.params;
+    
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    const users = await database.query('SELECT id, username FROM users WHERE id = ?', [id]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Deletar containers primeiro (cascade)
+    await database.query('DELETE FROM containers WHERE user_id = ?', [id]);
+    
+    // Deletar usuário
+    await database.query('DELETE FROM users WHERE id = ?', [id]);
+
+    res.json({
+      message: 'Usuário deletado com sucesso',
+      username: users[0].username
+    });
+  } catch (error) {
+    console.error('Admin delete user error:', error);
+    res.status(500).json({ error: 'Falha ao deletar usuário' });
+  }
+});
+
 router.post('/reset', [
   body('token').isString(),
   body('newPassword').isLength({ min: 6 })
@@ -589,5 +1137,36 @@ router.post('/reset', [
   } catch (e) {
     console.error('reset error:', e);
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Gerar token temporário para WhatsApp Bot
+router.post('/whatsapp-token', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+    
+    const users = await database.query('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = users[0];
+    
+    // Gerar token JWT
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' } // Token expira em 1 hora
+    );
+    
+    res.json({ token });
+    
+  } catch (error) {
+    console.error('WhatsApp token error:', error);
+    res.status(500).json({ error: 'Failed to generate token' });
   }
 });
