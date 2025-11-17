@@ -637,9 +637,12 @@ const CreateContainerModal = ({ form, setForm, onSubmit, onClose, coins, require
           >
             <option value="nodejs">Node.js</option>
             <option value="python">Python</option>
+            <option value="php">PHP</option>
           </select>
           <p className="mt-1 text-xs text-gray-500">
-            {form.type === 'nodejs' ? 'Para bots em JavaScript/TypeScript' : 'Para bots em Python'}
+            {form.type === 'nodejs' ? 'Para bots em JavaScript/TypeScript' : 
+             form.type === 'python' ? 'Para bots em Python' : 
+             'Para aplicações PHP'}
           </p>
         </div>
 
