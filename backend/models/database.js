@@ -57,7 +57,6 @@ class Database {
 
       // Verificar e corrigir a tabela de containers
       try {
-        // Primeiro, tentar criar a tabela se não existir
         await this.query(`
           CREATE TABLE IF NOT EXISTS containers (
             id VARCHAR(36) PRIMARY KEY,
@@ -72,7 +71,7 @@ class Database {
             memory_limit_mb INT DEFAULT 512,
             storage_used_mb INT DEFAULT 0,
             auto_restart BOOLEAN DEFAULT true,
-            environment TEXT, -- JSON string
+            environment TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -80,16 +79,14 @@ class Database {
             INDEX idx_container_status (status)
           )
         `);
-        
-        // Tentar atualizar o ENUM status caso a tabela já exista
+
         try {
           await this.query(`
-            ALTER TABLE containers 
+            ALTER TABLE containers
             MODIFY COLUMN status ENUM('stopped', 'running', 'error', 'building') DEFAULT 'stopped'
           `);
           console.log('✅ ENUM status da tabela containers atualizado');
         } catch (alterError) {
-          // Se der erro, provavelmente já está correto ou é uma tabela nova
           console.log('ℹ️  ENUM status já estava correto ou tabela é nova');
         }
       } catch (containerError) {
@@ -138,6 +135,23 @@ class Database {
           FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE,
           INDEX idx_usage_time (recorded_at),
           INDEX idx_usage_user (user_id, recorded_at)
+        )
+      `);
+
+      // Tabela de databases dos usuários (MySQL/phpMyAdmin)
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS user_databases (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          host VARCHAR(255) NOT NULL DEFAULT 'mysql-shared',
+          port INT NOT NULL DEFAULT 3306,
+          database_name VARCHAR(100) NOT NULL,
+          username VARCHAR(100) NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_user_database (user_id)
         )
       `);
 

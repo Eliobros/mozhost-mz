@@ -20,6 +20,7 @@ const terminalHandler = require('./controllers/terminal');
 const { startWhatsApp, disconnectWhatsApp } = require('./utils/whatsapp');
 const paymentRoutes = require('./routes/payment');
 const app = express();
+app.set('trust proxy', 1);
 const server = createServer(app);
 const parseOrigins = (originsStr) => {
   if (!originsStr) return [];

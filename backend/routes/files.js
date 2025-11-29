@@ -12,6 +12,70 @@ const router = express.Router();
 // Aplicar middleware de auth
 router.use(authMiddleware);
 
+// Upload simples para CLI (não conflita com a interface web)
+router.post('/:containerId/cli-upload', [
+  body('path').notEmpty().withMessage('Path is required'),
+  body('content').isString().withMessage('Content must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const { containerId } = req.params;
+    const { path: filePath, content } = req.body;
+
+    if (!await verifyContainerOwnership(containerId, req.user.userId)) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    const containerPath = getContainerPath(containerId);
+    const fullPath = path.join(containerPath, filePath);
+
+    // Verificar segurança do caminho
+    if (!fullPath.startsWith(containerPath)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Garantir que o diretório pai existe
+    await fs.ensureDir(path.dirname(fullPath));
+
+    // Verificar cota de armazenamento
+    const contentBytes = Buffer.byteLength(content, 'utf8');
+    await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
+
+    // Escrever/sobrescrever arquivo
+    await fs.writeFile(fullPath, content, 'utf8');
+
+    res.json({
+      message: 'File uploaded successfully',
+      path: filePath,
+      size: contentBytes
+    });
+
+  } catch (error) {
+    console.error('Error uploading file (CLI):', error);
+    
+    if (error.status === 413) {
+      return res.status(413).json({
+        error: 'Storage limit exceeded',
+        message: error.message,
+        details: error.details
+      });
+    }
+
+    res.status(500).json({ 
+      error: 'Failed to upload file',
+      message: error.message 
+    });
+  }
+});
+
+
 // Configurar multer para upload de arquivos
 const upload = multer({
   limits: {
@@ -106,6 +170,71 @@ async function ensureStorageAllowance(containerId, userId, additionalBytes = 0) 
   return { usedBytes, limitBytes };
 }
 
+/*
+//deploy route
+// Upload simples para CLI (não conflita com a interface web)
+router.post('/:containerId/cli-upload', [
+  body('path').notEmpty().withMessage('Path is required'),
+  body('content').isString().withMessage('Content must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const { containerId } = req.params;
+    const { path: filePath, content } = req.body;
+
+    if (!await verifyContainerOwnership(containerId, req.user.userId)) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    const containerPath = getContainerPath(containerId);
+    const fullPath = path.join(containerPath, filePath);
+
+    // Verificar segurança do caminho
+    if (!fullPath.startsWith(containerPath)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Garantir que o diretório pai existe
+    await fs.ensureDir(path.dirname(fullPath));
+
+    // Verificar cota de armazenamento
+    const contentBytes = Buffer.byteLength(content, 'utf8');
+    await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
+
+    // Escrever/sobrescrever arquivo
+    await fs.writeFile(fullPath, content, 'utf8');
+
+    res.json({
+      message: 'File uploaded successfully',
+      path: filePath,
+      size: contentBytes
+    });
+
+  } catch (error) {
+    console.error('Error uploading file (CLI):', error);
+    
+    if (error.status === 413) {
+      return res.status(413).json({
+        error: 'Storage limit exceeded',
+        message: error.message,
+        details: error.details
+      });
+    }
+
+    res.status(500).json({ 
+      error: 'Failed to upload file',
+      message: error.message 
+    });
+  }
+});
+*/
 // Listar arquivos e pastas de um container
 router.get('/:containerId', async (req, res) => {
   try {
