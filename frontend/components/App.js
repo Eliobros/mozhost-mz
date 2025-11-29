@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
 import CodeEditor from './CodeEditor';
-import WebTerminal from './WebTerminal';
+import WebTerminal from './WebTerminal/WebTerminal';
 import ContainersPage from './ContainersPage';
 import MonitoringPage from './MonitoringPage';
 import ProfilePage from './ProfilePage';

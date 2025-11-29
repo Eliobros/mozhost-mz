@@ -3,7 +3,12 @@ const Docker = require('dockerode');
 const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const yaml = require('js-yaml');
 const database = require('../models/database');
+
+const execAsync = promisify(exec);
 
 class DockerManager {
   constructor() {
@@ -11,9 +16,94 @@ class DockerManager {
     this.userDataPath = process.env.USER_DATA_PATH || '/root/mozhost/user-data';
     this.containersPath = path.join(this.userDataPath, 'containers');
 
-    // Porta inicial para containers
     this.basePort = 4000;
     this.portRange = { min: 4000, max: 5000 };
+  }
+
+  // 👇 NOVA FUNÇÃO HELPER PARA CRIAR DIRETÓRIOS COM PERMISSÕES CORRETAS
+  async createContainerDir(dirPath) {
+    await fs.ensureDir(dirPath);
+    await fs.chmod(dirPath, 0o775); // Permissão 775 (rwxrwxr-x)
+    return dirPath;
+  }
+
+  async createDockerCompose(containerPath, containerId, port, type) {
+    if (type !== 'php') return null;
+
+    const dbPassword = require('crypto').randomBytes(16).toString('hex');
+    const dbName = 'mozhost_db';
+    const dbUser = 'mozhost_user';
+
+    const compose = {
+      version: '3.8',
+      services: {
+        php: {
+          image: 'php:8.3-apache',
+          container_name: `mozhost_php_${containerId}`,
+          ports: [`${port}:80`],
+          volumes: ['./php:/var/www/html'],
+          environment: {
+            DB_HOST: 'mysql',
+            DB_NAME: dbName,
+            DB_USER: dbUser,
+            DB_PASSWORD: dbPassword
+          },
+          depends_on: ['mysql'],
+          restart: 'unless-stopped',
+          networks: [`mozhost_${containerId}`],
+          mem_limit: '512m',
+          cpus: '0.5'
+        },
+        mysql: {
+          image: 'mysql:8.0',
+          container_name: `mozhost_mysql_${containerId}`,
+          environment: {
+            MYSQL_ROOT_PASSWORD: dbPassword,
+            MYSQL_DATABASE: dbName,
+            MYSQL_USER: dbUser,
+            MYSQL_PASSWORD: dbPassword
+          },
+          volumes: ['./mysql/data:/var/lib/mysql'],
+          restart: 'unless-stopped',
+          networks: [`mozhost_${containerId}`],
+          mem_limit: '512m',
+          cpus: '0.3'
+        },
+        phpmyadmin: {
+          image: 'phpmyadmin:latest',
+          container_name: `mozhost_pma_${containerId}`,
+          ports: [`${port + 1000}:80`],
+          environment: {
+            PMA_HOST: 'mysql',
+            PMA_USER: dbUser,
+            PMA_PASSWORD: dbPassword
+          },
+          depends_on: ['mysql'],
+          restart: 'unless-stopped',
+          networks: [`mozhost_${containerId}`],
+          mem_limit: '256m',
+          cpus: '0.2'
+        }
+      },
+      networks: {
+        [`mozhost_${containerId}`]: {
+          driver: 'bridge'
+        }
+      }
+    };
+
+    const composeYml = yaml.dump(compose);
+    await fs.writeFile(
+      path.join(containerPath, 'docker-compose.yml'),
+      composeYml
+    );
+
+    return {
+      dbName,
+      dbUser,
+      dbPassword,
+      pmaPort: port + 1000
+    };
   }
 
   async createUserContainer(userId, containerData) {
@@ -21,85 +111,123 @@ class DockerManager {
     const containerId = uuidv4();
 
     try {
-      // Criar diretório do usuário
       const containerPath = path.join(this.containersPath, containerId);
-      await fs.ensureDir(containerPath);
+      
+      // 👇 USAR A NOVA FUNÇÃO COM PERMISSÕES CORRETAS
+      await this.createContainerDir(containerPath);
 
-      // Porta disponível
       const port = await this.findAvailablePort();
 
-      // Configurar imagem baseada no tipo
-      const imageConfig = this.getImageConfig(type);
-
-      // Ajuste especial para PHP (Apache precisa de /var/www/html)
-      const workingDir = type === 'php' ? '/var/www/html' : '/app';
-      const volumeMount = type === 'php' 
-        ? [`${containerPath}:/var/www/html:rw`]
-        : [`${containerPath}:/app/code:rw`];
-
-      // Configurações do container
-      const containerConfig = {
-        Image: imageConfig.image,
-        name: `mozhost_${containerId}`,
-        ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
-        HostConfig: {
-          PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
-          Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
-          CpuQuota: parseInt(parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000),
-          CpuPeriod: 100000,
-          RestartPolicy: { Name: 'unless-stopped' },
-          Binds: volumeMount,
-          NetworkMode: 'bridge'
-        },
-        Env: [
-          `NODE_ENV=production`,
-          `PORT=${imageConfig.internalPort}`,
-          ...Object.entries(environment).map(([k, v]) => `${k}=${v}`)
-        ],
-        WorkingDir: workingDir,
-        Cmd: imageConfig.cmd
-      };
-
-      // Criar container no Docker
-      const container = await this.docker.createContainer(containerConfig);
-
-      // Buscar username para gerar subdomínio
+      // Buscar username
       const userInfo = await database.query(
         'SELECT username FROM users WHERE id = ?',
         [userId]
       );
       const username = userInfo[0]?.username || 'user';
-      console.log(`🔍 Username encontrado: ${username} para user_id: ${userId}`);
 
-      // Gerar subdomínio automático: username-containername
       const subdomain = `${username}-${name}`.toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')  // Substituir caracteres especiais por hífen
-        .replace(/-+/g, '-')          // Remover hífens duplos
-        .replace(/^-|-$/g, '');       // Remover hífens no início/fim
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
 
       const domain = `${subdomain}.mozhost.topaziocoin.online`;
-      console.log(`🌐 Domínio gerado: ${domain}`);
 
-      // Salvar no banco
-      await database.query(`
-        INSERT INTO containers (id, user_id, name, type, docker_container_id, port, domain, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'stopped')
-      `, [containerId, userId, name, type, container.id, port, domain]);
+      // PHP com MySQL
+      if (type === 'php') {
+        // 👇 CRIAR SUBPASTAS COM PERMISSÕES CORRETAS
+        await this.createContainerDir(path.join(containerPath, 'php'));
+        await this.createContainerDir(path.join(containerPath, 'mysql'));
+        await this.createContainerDir(path.join(containerPath, 'mysql', 'data'));
 
-      // Criar arquivos iniciais
-      await this.createInitialFiles(containerPath, type);
+        const dbInfo = await this.createDockerCompose(containerPath, containerId, port, type);
+        const pmaDomain = `pma-${subdomain}.mozhost.topaziocoin.online`;
 
-      const result = {
-        id: containerId,
-        dockerId: container.id,
-        port,
-        domain,
-        path: containerPath,
-        status: 'stopped'
-      };
+        // Criar arquivos PHP
+        await this.createInitialFiles(path.join(containerPath, 'php'), type);
 
-      console.log(`✅ Container criado com sucesso:`, result);
-      return result;
+        // Iniciar com docker-compose
+        console.log(`🐳 Starting docker-compose for ${containerId}...`);
+        await execAsync(`cd ${containerPath} && docker-compose up -d`);
+
+        // Salvar no banco
+        await database.query(`
+          INSERT INTO containers
+          (id, user_id, name, type, docker_container_id, port, domain, status,
+           db_name, db_user, db_password, pma_port, pma_domain)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)
+        `, [
+          containerId, userId, name, type, `mozhost_php_${containerId}`,
+          port, domain,
+          dbInfo.dbName, dbInfo.dbUser, dbInfo.dbPassword,
+          dbInfo.pmaPort, pmaDomain
+        ]);
+
+        console.log(`✅ PHP+MySQL container created:`, {
+          id: containerId,
+          domain,
+          pmaDomain,
+          port,
+          pmaPort: dbInfo.pmaPort
+        });
+
+        return {
+          id: containerId,
+          dockerId: `mozhost_php_${containerId}`,
+          port,
+          domain,
+          pmaDomain,
+          pmaPort: dbInfo.pmaPort,
+          dbInfo,
+          path: containerPath,
+          status: 'running'
+        };
+
+      } else {
+        // Node.js / Python (código antigo mantido)
+        const imageConfig = this.getImageConfig(type);
+        const workingDir = '/app';
+        const volumeMount = [`${containerPath}:/app/code:rw`];
+
+        const containerConfig = {
+          Image: imageConfig.image,
+          name: `mozhost_${containerId}`,
+          ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
+          HostConfig: {
+            PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+            Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
+            CpuQuota: parseInt(parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000),
+            CpuPeriod: 100000,
+            RestartPolicy: { Name: 'unless-stopped' },
+            Binds: volumeMount,
+            NetworkMode: 'bridge'
+          },
+          Env: [
+            `NODE_ENV=production`,
+            `PORT=${imageConfig.internalPort}`,
+            ...Object.entries(environment).map(([k, v]) => `${k}=${v}`)
+          ],
+          WorkingDir: workingDir,
+          Cmd: imageConfig.cmd
+        };
+
+        const container = await this.docker.createContainer(containerConfig);
+
+        await database.query(`
+          INSERT INTO containers (id, user_id, name, type, docker_container_id, port, domain, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'stopped')
+        `, [containerId, userId, name, type, container.id, port, domain]);
+
+        await this.createInitialFiles(containerPath, type);
+
+        return {
+          id: containerId,
+          dockerId: container.id,
+          port,
+          domain,
+          path: containerPath,
+          status: 'stopped'
+        };
+      }
 
     } catch (error) {
       console.error('Error creating container:', error);
@@ -110,7 +238,7 @@ class DockerManager {
   async startContainer(containerId) {
     try {
       const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
+        'SELECT docker_container_id, type FROM containers WHERE id = ?',
         [containerId]
       );
 
@@ -118,8 +246,17 @@ class DockerManager {
         throw new Error('Container not found');
       }
 
-      const container = this.docker.getContainer(containerInfo[0].docker_container_id);
-      await container.start();
+      const { docker_container_id, type } = containerInfo[0];
+
+      if (type === 'php') {
+        // PHP usa docker-compose
+        const containerPath = path.join(this.containersPath, containerId);
+        await execAsync(`cd ${containerPath} && docker-compose start`);
+      } else {
+        // Node/Python usa docker direto
+        const container = this.docker.getContainer(docker_container_id);
+        await container.start();
+      }
 
       await database.query(
         'UPDATE containers SET status = "running", updated_at = NOW() WHERE id = ?',
@@ -139,7 +276,7 @@ class DockerManager {
   async stopContainer(containerId) {
     try {
       const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
+        'SELECT docker_container_id, type FROM containers WHERE id = ?',
         [containerId]
       );
 
@@ -147,8 +284,15 @@ class DockerManager {
         throw new Error('Container not found');
       }
 
-      const container = this.docker.getContainer(containerInfo[0].docker_container_id);
-      await container.stop();
+      const { docker_container_id, type } = containerInfo[0];
+
+      if (type === 'php') {
+        const containerPath = path.join(this.containersPath, containerId);
+        await execAsync(`cd ${containerPath} && docker-compose stop`);
+      } else {
+        const container = this.docker.getContainer(docker_container_id);
+        await container.stop();
+      }
 
       await database.query(
         'UPDATE containers SET status = "stopped", updated_at = NOW() WHERE id = ?',
@@ -165,28 +309,53 @@ class DockerManager {
   async deleteContainer(containerId) {
     try {
       const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
+        'SELECT docker_container_id, type FROM containers WHERE id = ?',
         [containerId]
       );
 
       if (containerInfo.length) {
-        const container = this.docker.getContainer(containerInfo[0].docker_container_id);
+        const { docker_container_id, type } = containerInfo[0];
 
-        try {
-          await container.stop();
-        } catch (e) {
-          // Container já parado
+        if (type === 'php') {
+          const containerPath = path.join(this.containersPath, containerId);
+          try {
+            // Parar docker-compose
+            await execAsync(`cd ${containerPath} && docker-compose down -v`);
+            // Aguardar containers pararem
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (e) {
+            console.log('Docker-compose down error:', e.message);
+          }
+        } else {
+          const container = this.docker.getContainer(docker_container_id);
+          try {
+            await container.stop();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (e) {}
+          await container.remove();
         }
-
-        await container.remove();
       }
 
       // Remover do banco
       await database.query('DELETE FROM containers WHERE id = ?', [containerId]);
 
-      // Remover arquivos
       const containerPath = path.join(this.containersPath, containerId);
-      await fs.remove(containerPath);
+
+      // 👇 TRATAMENTO DE PERMISSÃO APRIMORADO
+      try {
+        // Tentar deletar normalmente primeiro
+        await fs.remove(containerPath);
+        console.log(`✅ Container ${containerId} deletado`);
+      } catch (error) {
+        // Se falhar por permissão, usar sudo
+        if (error.code === 'EACCES' || error.code === 'EPERM') {
+          console.log(`⚠️  Usando sudo para deletar ${containerId}...`);
+          await execAsync(`sudo rm -rf ${containerPath}`);
+          console.log(`✅ Container ${containerId} deletado com sudo`);
+        } else {
+          throw error; // Outro tipo de erro
+        }
+      }
 
       return { success: true };
     } catch (error) {
@@ -198,7 +367,7 @@ class DockerManager {
   async getContainerLogs(containerId, tail = 100) {
     try {
       const containerInfo = await database.query(
-        'SELECT docker_container_id FROM containers WHERE id = ?',
+        'SELECT docker_container_id, type FROM containers WHERE id = ?',
         [containerId]
       );
 
@@ -206,15 +375,22 @@ class DockerManager {
         throw new Error('Container not found');
       }
 
-      const container = this.docker.getContainer(containerInfo[0].docker_container_id);
-      const logs = await container.logs({
-        stdout: true,
-        stderr: true,
-        tail,
-        timestamps: true
-      });
+      const { docker_container_id, type } = containerInfo[0];
 
-      return logs.toString();
+      if (type === 'php') {
+        const containerPath = path.join(this.containersPath, containerId);
+        const { stdout } = await execAsync(`cd ${containerPath} && docker-compose logs --tail=${tail}`);
+        return stdout;
+      } else {
+        const container = this.docker.getContainer(docker_container_id);
+        const logs = await container.logs({
+          stdout: true,
+          stderr: true,
+          tail,
+          timestamps: true
+        });
+        return logs.toString();
+      }
     } catch (error) {
       console.error('Error getting logs:', error);
       throw error;
@@ -223,7 +399,7 @@ class DockerManager {
 
   async findAvailablePort() {
     for (let port = this.portRange.min; port <= this.portRange.max; port++) {
-      const isUsed = await database.query('SELECT id FROM containers WHERE port = ?', [port]);
+      const isUsed = await database.query('SELECT id FROM containers WHERE port = ? OR pma_port = ?', [port, port]);
       if (!isUsed.length) {
         return port;
       }
@@ -268,9 +444,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Hello from MozHost!', 
-    timestamp: new Date().toISOString() 
+  res.json({
+    message: 'Hello from MozHost!',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -300,32 +476,60 @@ if __name__ == '__main__':
       php: {
         'index.php': `<?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
 
-$response = [
+// Configuração MySQL
+$host = getenv('DB_HOST') ?: 'mysql';
+$dbname = getenv('DB_NAME') ?: 'mozhost_db';
+$user = getenv('DB_USER') ?: 'mozhost_user';
+$pass = getenv('DB_PASSWORD');
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Cria tabela de exemplo
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS visits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            ip VARCHAR(45)
+        )
+    ");
+
+    // Registra visita
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $stmt = $pdo->prepare("INSERT INTO visits (ip) VALUES (?)");
+    $stmt->execute([$ip]);
+
+    // Conta visitas
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM visits");
+    $visits = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+    $dbStatus = "✅ Connected to MySQL";
+
+} catch (PDOException $e) {
+    $dbStatus = "❌ Database Error";
+    $visits = 0;
+}
+
+echo json_encode([
     'success' => true,
-    'message' => 'Hello from MozHost!',
+    'message' => 'Hello from MozHost with MySQL!',
     'language' => 'PHP',
     'version' => PHP_VERSION,
-    'timestamp' => date('Y-m-d H:i:s'),
-    'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'
-];
-
-echo json_encode($response, JSON_PRETTY_PRINT);
+    'database' => $dbStatus,
+    'total_visits' => $visits,
+    'timestamp' => date('Y-m-d H:i:s')
+], JSON_PRETTY_PRINT);
 ?>`,
-        '.htaccess': `# Enable rewrite engine
-RewriteEngine On
-
-# Serve index.php for root requests
+        '.htaccess': `RewriteEngine On
 DirectoryIndex index.php
 
-# Allow CORS
 <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
-</IfModule>
-`
+</IfModule>`
       }
     };
 
@@ -334,6 +538,9 @@ DirectoryIndex index.php
     for (const [filename, content] of Object.entries(files)) {
       await fs.writeFile(path.join(containerPath, filename), content);
     }
+    
+    // 👇 GARANTIR PERMISSÕES NOS ARQUIVOS CRIADOS
+    await execAsync(`chmod -R 775 ${containerPath}`);
   }
 
   async getContainerStats(containerId) {
@@ -366,9 +573,9 @@ DirectoryIndex index.php
   }
 
   calculateCpuPercent(stats) {
-    const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - 
+    const cpuDelta = stats.cpu_stats.cpu_usage.total_usage -
                      stats.precpu_stats.cpu_usage.total_usage;
-    const systemDelta = stats.cpu_stats.system_cpu_usage - 
+    const systemDelta = stats.cpu_stats.system_cpu_usage -
                         stats.precpu_stats.system_cpu_usage;
 
     if (systemDelta > 0 && cpuDelta > 0) {

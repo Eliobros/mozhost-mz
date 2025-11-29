@@ -14,12 +14,12 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const containers = await database.query(`
-      SELECT 
-        id, name, type, status, port, domain, 
+      SELECT
+        id, name, type, status, port, domain,
         cpu_limit, memory_limit_mb, storage_used_mb,
         auto_restart, created_at, updated_at
-      FROM containers 
-      WHERE user_id = ? 
+      FROM containers
+      WHERE user_id = ?
       ORDER BY created_at DESC
     `, [req.user.userId]);
 
@@ -107,7 +107,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const container = containers[0];
-    
+
     // Tentar obter estatísticas se container estiver rodando
     let stats = null;
     if (container.status === 'running') {
@@ -138,8 +138,8 @@ router.post('/', [
     .matches(/^[a-zA-Z0-9_-\s]+$/)
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
-    .isIn(['nodejs', 'python'])
-    .withMessage('Type must be nodejs or python'),
+    .isIn(['nodejs', 'python', 'php'])  // ⬅️ CORRIGIDO AQUI!
+    .withMessage('Type must be nodejs, python or php'),
   body('environment')
     .optional()
     .isObject()
@@ -221,7 +221,7 @@ router.post('/', [
         dockerId: containerData.dockerId
       }
     };
-    
+
     console.log('📤 Resposta da API de criação:', responseData);
     res.status(201).json(responseData);
 
