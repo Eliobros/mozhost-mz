@@ -14,7 +14,7 @@ import {
   Download,
   Upload
 } from 'lucide-react';
-import DashboardLayout from './DashboardLayout';
+
 
 const WebTerminal = () => {
   const [containers, setContainers] = useState([]);
@@ -287,20 +287,17 @@ Status: ${connected ? '🟢 Conectado' : '🔴 Desconectado'}
 
   if (loading) {
     return (
-      <DashboardLayout currentPage="terminal">
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando terminal...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando terminal...</p>
         </div>
-      </DashboardLayout>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout currentPage="terminal">
-      <div className={`h-[calc(100vh-8rem)] flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+    <div className={`h-[calc(100vh-8rem)] flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
         {/* Header */}
         <div className="bg-white shadow-sm border-b p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-4 w-full sm:w-auto">
@@ -514,7 +511,7 @@ Status: ${connected ? '🟢 Conectado' : '🔴 Desconectado'}
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </div>
   );
 };
 

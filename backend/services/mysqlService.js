@@ -5,7 +5,8 @@ const mysql = require('mysql2/promise');
 class MySQLService {
   constructor() {
     this.pool = mysql.createPool({
-      host: 'mysql-shared',
+      host: 'localhost',
+      port: 3307,
       user: 'root',
       password: process.env.MYSQL_ROOT_PASSWORD,
       waitForConnections: true,

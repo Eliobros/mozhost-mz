@@ -1,7 +1,6 @@
 // components/Dashboard/index.js
 import React, { useState, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
-import DashboardLayout from '../DashboardLayout';
 
 // Componentes separados
 import WelcomeHeader from './WelcomeHeader';
@@ -119,57 +118,53 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando dashboard...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando dashboard...</p>
         </div>
-      </DashboardLayout>
+      </div>
     );
   }
 
   return (
-    <DashboardLayout currentPage="dashboard">
-      <div className="space-y-6">
-        <WelcomeHeader user={user} coins={coins} uptime={stats.uptime} />
+    <div className="space-y-6">
+      <WelcomeHeader user={user} coins={coins} uptime={stats.uptime} />
 
-        {storageAlerts.length > 0 && (
-          <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-md p-4">
-            <div className="font-semibold mb-1">Armazenamento quase cheio</div>
-            <ul className="list-disc list-inside text-sm">
-              {storageAlerts.map(a => (
-                <li key={a.id}>
-                  {a.name}: {a.usedMB}MB de {a.maxMB}MB usados. Vá em Containers → Upgrade Storage.
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      {storageAlerts.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-md p-4">
+          <div className="font-semibold mb-1">Armazenamento quase cheio</div>
+          <ul className="list-disc list-inside text-sm">
+            {storageAlerts.map(a => (
+              <li key={a.id}>
+                {a.name}: {a.usedMB}MB de {a.maxMB}MB usados. Vá em Containers → Upgrade Storage.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-red-800">{error}</p>
-              </div>
+      {error && (
+        <div className="rounded-md bg-red-50 p-4">
+          <div className="flex">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <p className="text-sm font-medium text-red-800">{error}</p>
             </div>
           </div>
-        )}
-
-        <StatsGrid stats={stats} />
-        <PerformanceOverview stats={stats} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RecentActivity activities={recentActivity} />
-          <QuickActions />
         </div>
+      )}
 
-        <ContainersPreview containers={containers} />
+      <StatsGrid stats={stats} />
+      <PerformanceOverview stats={stats} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RecentActivity activities={recentActivity} />
+        <QuickActions />
       </div>
-    </DashboardLayout>
+
+      <ContainersPreview containers={containers} />
+    </div>
   );
 };
 

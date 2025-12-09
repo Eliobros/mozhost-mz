@@ -12,6 +12,13 @@ const router = express.Router();
 // Aplicar middleware de auth
 router.use(authMiddleware);
 
+// Helper para escrever arquivo com permissões corretas
+async function writeFileWithPermissions(filePath, content, encoding = 'utf8') {
+  await fs.writeFile(filePath, content, encoding);
+  // Definir permissões 0o666 (rw-rw-rw-) para que todos possam ler/escrever
+  await fs.chmod(filePath, 0o666);
+}
+
 // Upload simples para CLI (não conflita com a interface web)
 router.post('/:containerId/cli-upload', [
   body('path').notEmpty().withMessage('Path is required'),
@@ -48,8 +55,8 @@ router.post('/:containerId/cli-upload', [
     const contentBytes = Buffer.byteLength(content, 'utf8');
     await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
 
-    // Escrever/sobrescrever arquivo
-    await fs.writeFile(fullPath, content, 'utf8');
+    // Escrever/sobrescrever arquivo COM PERMISSÕES CORRETAS
+    await writeFileWithPermissions(fullPath, content, 'utf8');
 
     res.json({
       message: 'File uploaded successfully',
@@ -59,7 +66,7 @@ router.post('/:containerId/cli-upload', [
 
   } catch (error) {
     console.error('Error uploading file (CLI):', error);
-    
+
     if (error.status === 413) {
       return res.status(413).json({
         error: 'Storage limit exceeded',
@@ -68,9 +75,9 @@ router.post('/:containerId/cli-upload', [
       });
     }
 
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to upload file',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -170,71 +177,6 @@ async function ensureStorageAllowance(containerId, userId, additionalBytes = 0) 
   return { usedBytes, limitBytes };
 }
 
-/*
-//deploy route
-// Upload simples para CLI (não conflita com a interface web)
-router.post('/:containerId/cli-upload', [
-  body('path').notEmpty().withMessage('Path is required'),
-  body('content').isString().withMessage('Content must be a string')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: errors.array()
-      });
-    }
-
-    const { containerId } = req.params;
-    const { path: filePath, content } = req.body;
-
-    if (!await verifyContainerOwnership(containerId, req.user.userId)) {
-      return res.status(404).json({ error: 'Container not found' });
-    }
-
-    const containerPath = getContainerPath(containerId);
-    const fullPath = path.join(containerPath, filePath);
-
-    // Verificar segurança do caminho
-    if (!fullPath.startsWith(containerPath)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Garantir que o diretório pai existe
-    await fs.ensureDir(path.dirname(fullPath));
-
-    // Verificar cota de armazenamento
-    const contentBytes = Buffer.byteLength(content, 'utf8');
-    await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
-
-    // Escrever/sobrescrever arquivo
-    await fs.writeFile(fullPath, content, 'utf8');
-
-    res.json({
-      message: 'File uploaded successfully',
-      path: filePath,
-      size: contentBytes
-    });
-
-  } catch (error) {
-    console.error('Error uploading file (CLI):', error);
-    
-    if (error.status === 413) {
-      return res.status(413).json({
-        error: 'Storage limit exceeded',
-        message: error.message,
-        details: error.details
-      });
-    }
-
-    res.status(500).json({ 
-      error: 'Failed to upload file',
-      message: error.message 
-    });
-  }
-});
-*/
 // Listar arquivos e pastas de um container
 router.get('/:containerId', async (req, res) => {
   try {
@@ -270,7 +212,7 @@ router.get('/:containerId', async (req, res) => {
         try {
           const itemPath = path.join(fullPath, item);
           const itemStats = await fs.stat(itemPath);
-          
+
           fileList.push({
             name: item,
             type: itemStats.isDirectory() ? 'directory' : 'file',
@@ -299,7 +241,7 @@ router.get('/:containerId', async (req, res) => {
     } else {
       // Retornar conteúdo do arquivo
       const content = await fs.readFile(fullPath, 'utf8');
-      
+
       res.json({
         type: 'file',
         path: subPath,
@@ -312,11 +254,11 @@ router.get('/:containerId', async (req, res) => {
 
   } catch (error) {
     console.error('Error listing files:', error);
-    
+
     if (error.code === 'ENOENT') {
       return res.status(404).json({ error: 'Path not found' });
     }
-    
+
     res.status(500).json({ error: 'Failed to list files' });
   }
 });
@@ -358,12 +300,13 @@ router.post('/:containerId', [
 
     if (type === 'directory') {
       await fs.ensureDir(fullPath);
+      await fs.chmod(fullPath, 0o777); // Permissões para diretório
     } else {
       // Garantir que o diretório pai existe
       await fs.ensureDir(path.dirname(fullPath));
       const contentBytes = Buffer.byteLength(content, 'utf8');
       await ensureStorageAllowance(containerId, req.user.userId, contentBytes);
-      await fs.writeFile(fullPath, content, 'utf8');
+      await writeFileWithPermissions(fullPath, content, 'utf8');
     }
 
     res.status(201).json({
@@ -419,7 +362,9 @@ router.put('/:containerId/*', [
     // Verificar cota (considerar delta opcionalmente; aqui usamos tamanho novo)
     const newBytes = Buffer.byteLength(content, 'utf8');
     await ensureStorageAllowance(containerId, req.user.userId, newBytes);
-    await fs.writeFile(fullPath, content, 'utf8');
+    
+    // CORRIGIDO: Usar writeFileWithPermissions
+    await writeFileWithPermissions(fullPath, content, 'utf8');
 
     res.json({
       message: 'File saved successfully',
@@ -454,9 +399,9 @@ router.delete('/:containerId/*', async (req, res) => {
     // Não permitir deletar arquivos essenciais
     const essentialFiles = ['package.json', 'requirements.txt', 'main.py', 'index.js'];
     const fileName = path.basename(fullPath);
-    
+
     if (essentialFiles.includes(fileName) && path.dirname(fullPath) === containerPath) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: 'Cannot delete essential file',
         message: `${fileName} is required for the container to function`
       });
@@ -519,7 +464,7 @@ router.patch('/:containerId/*', [
 
     // Garantir que diretório de destino existe
     await fs.ensureDir(path.dirname(newFullPath));
-    
+
     await fs.move(oldFullPath, newFullPath);
 
     res.json({
@@ -567,7 +512,7 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
 
     for (const file of req.files) {
       const filePath = path.join(uploadPath, file.originalname);
-      
+
       // Verificar se arquivo já existe
       if (await fs.pathExists(filePath)) {
         // Renomear arquivo com timestamp
@@ -576,15 +521,15 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
         const timestamp = Date.now();
         const newName = `${name}_${timestamp}${ext}`;
         const newFilePath = path.join(uploadPath, newName);
-        
-        await fs.writeFile(newFilePath, file.buffer);
+
+        await writeFileWithPermissions(newFilePath, file.buffer);
         uploadedFiles.push({
           original: file.originalname,
           saved: newName,
           size: file.size
         });
       } else {
-        await fs.writeFile(filePath, file.buffer);
+        await writeFileWithPermissions(filePath, file.buffer);
         uploadedFiles.push({
           original: file.originalname,
           saved: file.originalname,
@@ -601,14 +546,14 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
 
   } catch (error) {
     console.error('Error uploading files:', error);
-    
+
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({
         error: 'File too large',
         message: 'Maximum file size is 10MB'
       });
     }
-    
+
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(413).json({
         error: 'Too many files',
@@ -686,7 +631,7 @@ router.get('/:containerId/storage', async (req, res) => {
         const itemPath = path.join(dirPath, item);
         try {
           const stats = await fs.stat(itemPath);
-          
+
           if (stats.isDirectory()) {
             totalSize += await calculateDirSize(itemPath);
           } else {
@@ -816,7 +761,7 @@ router.post('/:containerId/backup', async (req, res) => {
     const archiver = require('archiver');
     const containerPath = getContainerPath(containerId);
     const backupPath = path.join(process.env.BACKUPS_PATH || '/root/mozhost/user-data/backups');
-    
+
     await fs.ensureDir(backupPath);
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -829,7 +774,7 @@ router.post('/:containerId/backup', async (req, res) => {
 
     archive.pipe(output);
     archive.directory(containerPath, false);
-    
+
     await archive.finalize();
 
     // Aguardar conclusão

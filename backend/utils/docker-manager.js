@@ -20,11 +20,164 @@ class DockerManager {
     this.portRange = { min: 4000, max: 5000 };
   }
 
-  // 👇 NOVA FUNÇÃO HELPER PARA CRIAR DIRETÓRIOS COM PERMISSÕES CORRETAS
   async createContainerDir(dirPath) {
     await fs.ensureDir(dirPath);
-    await fs.chmod(dirPath, 0o775); // Permissão 775 (rwxrwxr-x)
+    await fs.chmod(dirPath, 0o775);
     return dirPath;
+  }
+
+  // Criar script de inicialização do MySQL
+  async createMySQLInitScript(containerPath, dbUser, dbPassword, dbName) {
+    const initScriptDir = path.join(containerPath, 'mysql', 'init');
+    await this.createContainerDir(initScriptDir);
+    
+    const initSQL = `-- Script de inicialização automática do MySQL
+-- Garantir que o usuário existe com acesso de qualquer host
+CREATE USER IF NOT EXISTS '${dbUser}'@'%' IDENTIFIED BY '${dbPassword}';
+GRANT ALL PRIVILEGES ON ${dbName}.* TO '${dbUser}'@'%';
+GRANT ALL PRIVILEGES ON *.* TO '${dbUser}'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+
+-- Log de inicialização
+SELECT 'Usuario ${dbUser} criado com sucesso!' as Status;
+`;
+    
+    await fs.writeFile(
+      path.join(initScriptDir, '01-init.sql'),
+      initSQL
+    );
+    
+    console.log(`✅ Script de inicialização MySQL criado para ${dbUser}`);
+  }
+
+ 
+
+ // Criar configuração Nginx para phpMyAdmin
+
+ async createNginxConfig(containerId, pmaDomain, pmaPort) {
+  const nginxConfig = `# phpMyAdmin proxy para container ${containerId}
+server {
+    listen 80;
+    server_name ${pmaDomain};
+
+    access_log /var/log/nginx/pma-${containerId}-access.log;
+    error_log /var/log/nginx/pma-${containerId}-error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:${pmaPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        client_max_body_size 100M;
+    }
+}
+`;
+
+  const configPath = `/etc/nginx/sites-available/pma-${containerId}`;
+  const enabledPath = `/etc/nginx/sites-enabled/pma-${containerId}`;
+  const tempPath = `/tmp/pma-${containerId}.conf`;
+
+  try {
+    // Escrever em /tmp primeiro (sem sudo)
+    await fs.writeFile(tempPath, nginxConfig);
+    
+    // Mover para nginx com sudo
+    await execAsync(`sudo mv ${tempPath} ${configPath}`);
+    await execAsync(`sudo chmod 644 ${configPath}`);
+    
+    // Criar symlink
+    await execAsync(`sudo ln -sf ${configPath} ${enabledPath}`);
+    
+    // Testar configuração
+    await execAsync('sudo nginx -t');
+    
+    // Recarregar nginx
+    await execAsync('sudo nginx -s reload');
+    
+    console.log(`✅ Nginx config criado: ${pmaDomain} -> ${pmaPort}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Erro ao criar config Nginx:`, error.message);
+    try {
+      await execAsync(`sudo rm -f ${tempPath} ${configPath} ${enabledPath}`);
+    } catch (e) {}
+    throw error;
+  }
+}
+
+ /* async createNginxConfig(containerId, pmaDomain, pmaPort) {
+    const nginxConfig = `# phpMyAdmin proxy para container ${containerId}
+server {
+    listen 80;
+    server_name ${pmaDomain};
+
+    access_log /var/log/nginx/pma-${containerId}-access.log;
+    error_log /var/log/nginx/pma-${containerId}-error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:${pmaPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Configurações específicas para phpMyAdmin
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        client_max_body_size 100M;
+    }
+}
+`;
+
+    const configPath = `/etc/nginx/sites-available/pma-${containerId}`;
+    const enabledPath = `/etc/nginx/sites-enabled/pma-${containerId}`;
+
+    try {
+      // Escrever arquivo de configuração
+      await fs.writeFile(configPath, nginxConfig);
+      
+      // Criar symlink
+      await execAsync(`sudo ln -sf ${configPath} ${enabledPath}`);
+      
+      // Testar configuração
+      const { stdout, stderr } = await execAsync('sudo nginx -t');
+      
+      // Recarregar nginx
+      await execAsync('sudo nginx -s reload');
+      
+      console.log(`✅ Nginx config criado: ${pmaDomain} -> ${pmaPort}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Erro ao criar config Nginx para ${containerId}:`, error.message);
+      // Tentar remover o arquivo se deu erro
+      try {
+        await execAsync(`sudo rm -f ${configPath} ${enabledPath}`);
+      } catch (e) {}
+      throw error;
+    }
+  }
+*/
+  // Remover configuração Nginx
+  async removeNginxConfig(containerId) {
+    try {
+      await execAsync(`sudo rm -f /etc/nginx/sites-enabled/pma-${containerId}`);
+      await execAsync(`sudo rm -f /etc/nginx/sites-available/pma-${containerId}`);
+      await execAsync('sudo nginx -s reload');
+      console.log(`✅ Nginx config removido para ${containerId}`);
+    } catch (error) {
+      console.error(`⚠️  Erro ao remover config Nginx para ${containerId}:`, error.message);
+      // Não lançar erro, pois pode não existir
+    }
   }
 
   async createDockerCompose(containerPath, containerId, port, type) {
@@ -63,7 +216,10 @@ class DockerManager {
             MYSQL_USER: dbUser,
             MYSQL_PASSWORD: dbPassword
           },
-          volumes: ['./mysql/data:/var/lib/mysql'],
+          volumes: [
+            './mysql/data:/var/lib/mysql',
+            './mysql/init:/docker-entrypoint-initdb.d'
+          ],
           restart: 'unless-stopped',
           networks: [`mozhost_${containerId}`],
           mem_limit: '512m',
@@ -112,8 +268,7 @@ class DockerManager {
 
     try {
       const containerPath = path.join(this.containersPath, containerId);
-      
-      // 👇 USAR A NOVA FUNÇÃO COM PERMISSÕES CORRETAS
+
       await this.createContainerDir(containerPath);
 
       const port = await this.findAvailablePort();
@@ -134,12 +289,16 @@ class DockerManager {
 
       // PHP com MySQL
       if (type === 'php') {
-        // 👇 CRIAR SUBPASTAS COM PERMISSÕES CORRETAS
+        // Criar estrutura de diretórios
         await this.createContainerDir(path.join(containerPath, 'php'));
         await this.createContainerDir(path.join(containerPath, 'mysql'));
         await this.createContainerDir(path.join(containerPath, 'mysql', 'data'));
 
         const dbInfo = await this.createDockerCompose(containerPath, containerId, port, type);
+        
+        // Criar script de inicialização do MySQL
+        await this.createMySQLInitScript(containerPath, dbInfo.dbUser, dbInfo.dbPassword, dbInfo.dbName);
+        
         const pmaDomain = `pma-${subdomain}.mozhost.topaziocoin.online`;
 
         // Criar arquivos PHP
@@ -148,6 +307,64 @@ class DockerManager {
         // Iniciar com docker-compose
         console.log(`🐳 Starting docker-compose for ${containerId}...`);
         await execAsync(`cd ${containerPath} && docker-compose up -d`);
+
+        // Aguardar MySQL inicializar completamente
+        console.log(`⏳ Aguardando MySQL inicializar...`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+	
+	// ===== ADICIONE TODA ESTA SEÇÃO =====
+
+// Ativar mod_rewrite no Apache
+console.log(`🔧 Ativando mod_rewrite...`);
+try {
+  await execAsync(`docker exec mozhost_php_${containerId} a2enmod rewrite`);
+  await execAsync(`docker exec mozhost_php_${containerId} service apache2 restart`);
+  console.log(`✅ mod_rewrite ativado com sucesso`);
+} catch (error) {
+  console.error(`⚠️  Erro ao ativar mod_rewrite:`, error.message);
+}
+
+// Criar arquivo .env com credenciais
+console.log(`📝 Criando arquivo .env...`);
+try {
+  const envContent = `# Configurações do Banco de Dados MySQL
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=${dbInfo.dbName}
+DB_USERNAME=${dbInfo.dbUser}
+DB_PASSWORD=${dbInfo.dbPassword}
+
+# Configurações da Aplicação
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://${domain}
+
+# Acesso ao phpMyAdmin
+PMA_URL=https://${pmaDomain}
+PMA_USER=${dbInfo.dbUser}
+PMA_PASSWORD=${dbInfo.dbPassword}
+`;
+
+  // Escrever arquivo .env no container
+  const tempFile = `/tmp/env_${containerId}`;
+  await fs.writeFile(tempFile, envContent);
+  await execAsync(`docker cp ${tempFile} mozhost_php_${containerId}:/var/www/html/.env`);
+  await execAsync(`docker exec mozhost_php_${containerId} chmod 644 /var/www/html/.env`);
+  await fs.unlink(tempFile);
+  
+  console.log(`✅ Arquivo .env criado automaticamente`);
+} catch (error) {
+  console.error(`⚠️  Erro ao criar .env:`, error.message);
+}
+
+// ===== FIM DA SEÇÃO =====
+
+        // Criar configuração Nginx para phpMyAdmin
+        try {
+          await this.createNginxConfig(containerId, pmaDomain, dbInfo.pmaPort);
+        } catch (error) {
+          console.error('⚠️  Erro ao criar Nginx config, mas container foi criado:', error.message);
+        }
 
         // Salvar no banco
         await database.query(`
@@ -167,7 +384,8 @@ class DockerManager {
           domain,
           pmaDomain,
           port,
-          pmaPort: dbInfo.pmaPort
+          pmaPort: dbInfo.pmaPort,
+          dbUser: dbInfo.dbUser
         });
 
         return {
@@ -317,6 +535,9 @@ class DockerManager {
         const { docker_container_id, type } = containerInfo[0];
 
         if (type === 'php') {
+          // Remover configuração Nginx primeiro
+          await this.removeNginxConfig(containerId);
+
           const containerPath = path.join(this.containersPath, containerId);
           try {
             // Parar docker-compose
@@ -341,7 +562,6 @@ class DockerManager {
 
       const containerPath = path.join(this.containersPath, containerId);
 
-      // 👇 TRATAMENTO DE PERMISSÃO APRIMORADO
       try {
         // Tentar deletar normalmente primeiro
         await fs.remove(containerPath);
@@ -353,7 +573,7 @@ class DockerManager {
           await execAsync(`sudo rm -rf ${containerPath}`);
           console.log(`✅ Container ${containerId} deletado com sudo`);
         } else {
-          throw error; // Outro tipo de erro
+          throw error;
         }
       }
 
@@ -538,8 +758,7 @@ DirectoryIndex index.php
     for (const [filename, content] of Object.entries(files)) {
       await fs.writeFile(path.join(containerPath, filename), content);
     }
-    
-    // 👇 GARANTIR PERMISSÕES NOS ARQUIVOS CRIADOS
+
     await execAsync(`chmod -R 775 ${containerPath}`);
   }
 

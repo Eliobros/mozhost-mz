@@ -1,0 +1,38 @@
+# MozHost - robots.txt
+User-agent: *
+
+# Permitir tudo por padrão
+Allow: /
+
+# Bloquear áreas privadas
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.json$
+Disallow: /terminal/
+Disallow: /files/
+
+# Permitir páginas públicas importantes
+Allow: /login
+Allow: /register
+Allow: /pricing
+Allow: /docs
+Allow: /about
+
+# Sitemap
+Sitemap: https://mozhost.topazioverse.com.br/sitemap.xml
+
+# Crawl delay (opcional, para não sobrecarregar)
+Crawl-delay: 1
+
+# Google Bot específico
+User-agent: Googlebot
+Allow: /
+Disallow: /dashboard/
+Disallow: /api/
+
+# Bing Bot
+User-agent: Bingbot
+Allow: /
+Disallow: /dashboard/
+Disallow: /api/

@@ -1,0 +1,204 @@
+// services/dnsMonitor.js
+const dns = require('dns').promises;
+const db = require('../models/database');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const fs = require('fs').promises;
+
+const SERVER_IP = process.env.SERVER_IP || '45.76.123.45';
+
+class DNSMonitor {
+  constructor() {
+    this.monitoring = new Map();
+  }
+  
+  async checkDNS(domain) {
+    try {
+      const addresses = await dns.resolve4(domain);
+      return {
+        configured: addresses.includes(SERVER_IP),
+        ip: addresses[0],
+        allIPs: addresses
+      };
+    } catch (error) {
+      return {
+        configured: false,
+        ip: null,
+        error: error.message
+      };
+    }
+  }
+  
+  async startMonitoring(domain, containerId) {
+    if (this.monitoring.has(domain)) {
+      console.log(`⚠️  ${domain} já está sendo monitorado`);
+      return;
+    }
+    
+    console.log(`📡 Monitorando DNS: ${domain}`);
+    
+    let attempts = 0;
+    const maxAttempts = 1440; // 24h (1 minuto cada)
+    
+    const intervalId = setInterval(async () => {
+      try {
+        attempts++;
+        
+        const result = await this.checkDNS(domain);
+        
+        if (result.configured) {
+          console.log(`✅ DNS configurado: ${domain} → ${result.ip}`);
+          
+          // Parar monitoramento
+          clearInterval(intervalId);
+          this.monitoring.delete(domain);
+          
+          // Atualizar status
+          await db.query(
+            'UPDATE custom_domains SET status = ?, ip_detected = ? WHERE domain = ?',
+            ['dns_configured', result.ip, domain]
+          );
+          
+          // Iniciar geração de SSL
+          await this.generateSSL(domain, containerId);
+          
+        } else {
+          console.log(`⏳ DNS não propagado: ${domain} (${attempts}/${maxAttempts})`);
+          
+          // Timeout após 24h
+          if (attempts >= maxAttempts) {
+            console.log(`❌ Timeout: ${domain}`);
+            clearInterval(intervalId);
+            this.monitoring.delete(domain);
+            
+            await db.query(
+              'UPDATE custom_domains SET status = ? WHERE domain = ?',
+              ['failed', domain]
+            );
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao verificar ${domain}:`, error.message);
+      }
+    }, 60000); // 1 minuto
+    
+    this.monitoring.set(domain, { intervalId, attempts, containerId });
+  }
+  
+  stopMonitoring(domain) {
+    if (this.monitoring.has(domain)) {
+      const { intervalId } = this.monitoring.get(domain);
+      clearInterval(intervalId);
+      this.monitoring.delete(domain);
+      console.log(`⏹️  Monitoramento parado: ${domain}`);
+    }
+  }
+  
+  async generateSSL(domain, containerId) {
+    console.log(`🔒 Gerando SSL: ${domain}`);
+    
+    try {
+      // Atualizar status
+      await db.query(
+        'UPDATE custom_domains SET status = ? WHERE domain = ?',
+        ['ssl_generating', domain]
+      );
+      
+      // Buscar container
+      const containers = await db.query(
+        'SELECT * FROM containers WHERE id = ?',
+        [containerId]
+      );
+      
+      if (containers.length === 0) {
+        throw new Error('Container não encontrado');
+      }
+      
+      const container = containers[0];
+      
+      // Gerar certificado
+      const certbotCmd = `certbot certonly --nginx -d ${domain} --non-interactive --agree-tos --email admin@mozhost.com`;
+      await execPromise(certbotCmd);
+      
+      // Configurar Nginx
+      await this.configureNginx(domain, container.port);
+      
+      // Atualizar status
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 90);
+      
+      await db.query(
+        'UPDATE custom_domains SET status = ?, ssl_expires_at = ? WHERE domain = ?',
+        ['active', expiresAt.toISOString().slice(0, 19).replace('T', ' '), domain]
+      );
+      
+      console.log(`✅ Domínio ativo: ${domain}`);
+      
+    } catch (error) {
+      console.error(`❌ Erro SSL: ${domain}`, error);
+      await db.query(
+        'UPDATE custom_domains SET status = ? WHERE domain = ?',
+        ['failed', domain]
+      );
+    }
+  }
+  
+  async configureNginx(domain, containerPort) {
+    const nginxConfig = `server {
+    listen 80;
+    listen 443 ssl;
+    server_name ${domain};
+    
+    ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:${containerPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+    
+    // Salvar config
+    await fs.writeFile(`/etc/nginx/sites-available/${domain}`, nginxConfig);
+    
+    // Criar symlink
+    try {
+      await fs.symlink(
+        `/etc/nginx/sites-available/${domain}`,
+        `/etc/nginx/sites-enabled/${domain}`
+      );
+    } catch (error) {
+      // Symlink já existe, ignorar
+    }
+    
+    // Testar e reload
+    await execPromise('nginx -t && nginx -s reload');
+  }
+}
+
+// Criar instância
+const monitor = new DNSMonitor();
+
+// Retomar monitoramento ao reiniciar
+(async () => {
+  try {
+    const pending = await db.query(
+      'SELECT * FROM custom_domains WHERE status IN (?, ?)',
+      ['pending', 'dns_configured']
+    );
+    
+    console.log(`🔄 Retomando monitoramento de ${pending.length} domínios`);
+    
+    for (const domain of pending) {
+      monitor.startMonitoring(domain.domain, domain.container_id);
+    }
+  } catch (error) {
+    console.error('Erro ao retomar monitoramento:', error);
+  }
+})();
+
+module.exports = monitor;

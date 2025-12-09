@@ -24,10 +24,10 @@ import {
   Crown,
   Zap,
   Star,
-  Coins,
-  Phone
+  Coins
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
+import PaymentModal from './ContainersPage/PaymentModal';
 
 const ProfilePage = () => {
   const [user, setUser] = useState(null);
@@ -63,6 +63,7 @@ const ProfilePage = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [coins, setCoins] = useState(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -463,13 +464,12 @@ const ProfilePage = () => {
               </div>
               <div className="flex items-center">
                 <span className="text-lg font-bold text-gray-900 mr-3">{coins}</span>
-                <a
-                  href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins"
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-green-700 hover:text-green-800 hover:underline inline-flex items-center"
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="inline-flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
                 >
-                  <Phone className="w-3 h-3 mr-1" /> Comprar coins
-                </a>
+                  <Coins className="w-4 h-4 mr-1" /> Comprar coins
+                </button>
               </div>
             </div>
                 <div className="flex items-center justify-between">
@@ -567,6 +567,18 @@ const ProfilePage = () => {
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <PaymentModal
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={(coinsAdded) => {
+            setShowPaymentModal(false);
+            setCoins(prev => prev + coinsAdded);
+            alert(`✅ ${coinsAdded} coins adicionadas!`);
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 };

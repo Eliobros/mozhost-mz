@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const authMiddleware = require('../middleware/auth');
 const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
+const subscriptionService = require('../services/subscriptionService');
 
 const router = express.Router();
 
@@ -17,11 +18,21 @@ router.get('/', async (req, res) => {
       SELECT
         id, name, type, status, port, domain,
         cpu_limit, memory_limit_mb, storage_used_mb,
-        auto_restart, created_at, updated_at
+        auto_restart, created_at, updated_at,
+        db_name, db_user, db_password, pma_port, pma_domain
       FROM containers
       WHERE user_id = ?
       ORDER BY created_at DESC
     `, [req.user.userId]);
+
+    // Adicionar info de subscription para cada container
+    const containersWithSubs = await Promise.all(containers.map(async (container) => {
+      const subStatus = await subscriptionService.getSubscriptionStatus(container.id);
+      return {
+        ...container,
+        subscription: subStatus
+      };
+    }));
 
     // Notificação de armazenamento quase cheio (>90%)
     const userInfo = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
@@ -31,8 +42,8 @@ router.get('/', async (req, res) => {
       .map(c => ({ id: c.id, name: c.name, usedMB: c.storage_used_mb, maxMB }));
 
     res.json({
-      containers,
-      total: containers.length,
+      containers: containersWithSubs,
+      total: containersWithSubs.length,
       storageAlerts,
       coins: userInfo.length ? userInfo[0].coins : 0
     });
@@ -138,7 +149,7 @@ router.post('/', [
     .matches(/^[a-zA-Z0-9_-\s]+$/)
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
-    .isIn(['nodejs', 'python', 'php'])  // ⬅️ CORRIGIDO AQUI!
+    .isIn(['nodejs', 'python', 'php'])
     .withMessage('Type must be nodejs, python or php'),
   body('environment')
     .optional()
@@ -203,6 +214,9 @@ router.post('/', [
       environment: environment || {}
     });
 
+    // Criar subscription de 30 dias
+    const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, MIN_COINS_TO_CREATE);
+
     // Debitar coins
     await database.query(
       'UPDATE users SET coins = coins - ? WHERE id = ?',
@@ -219,6 +233,10 @@ router.post('/', [
         port: containerData.port,
         domain: containerData.domain,
         dockerId: containerData.dockerId
+      },
+      subscription: {
+        expiresAt: subscription.expiresAt,
+        daysLeft: 30
       }
     };
 
@@ -252,6 +270,16 @@ router.post('/:id/start', async (req, res) => {
     }
 
     const container = containers[0];
+
+    // Verificar se subscription está válida
+    const subStatus = await subscriptionService.getSubscriptionStatus(id);
+    if (subStatus.expired) {
+      return res.status(402).json({
+        error: 'Assinatura expirada',
+        message: 'Recarregue 500 coins para reativar este container.',
+        subscription: subStatus
+      });
+    }
 
     if (container.status === 'running') {
       return res.status(400).json({
@@ -509,6 +537,57 @@ router.patch('/:id', [
     res.status(500).json({
       error: 'Failed to update container'
     });
+  }
+});
+
+// Renovar subscription do container
+router.post('/:id/renew', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const RENEW_COST = 500;
+
+    // Verificar container
+    const containers = await database.query(
+      'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
+      [id, req.user.userId]
+    );
+
+    if (containers.length === 0) {
+      return res.status(404).json({ error: 'Container não encontrado' });
+    }
+
+    // Verificar coins
+    const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+    const coins = users.length ? users[0].coins : 0;
+    
+    if (coins < RENEW_COST) {
+      return res.status(402).json({ 
+        error: 'Coins insuficientes', 
+        message: `Você precisa de ${RENEW_COST} coins para renovar.`,
+        needed: RENEW_COST, 
+        have: coins 
+      });
+    }
+
+    // Debitar coins
+    await database.query('UPDATE users SET coins = coins - ? WHERE id = ?', [RENEW_COST, req.user.userId]);
+
+    // Renovar subscription
+    const result = await subscriptionService.renewSubscription(req.user.userId, id, RENEW_COST);
+
+    // Buscar coins atualizados
+    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+
+    res.json({
+      success: true,
+      message: 'Container renovado por mais 30 dias!',
+      expiresAt: result.expiresAt,
+      coins: updated[0].coins
+    });
+
+  } catch (error) {
+    console.error('Erro ao renovar container:', error);
+    res.status(500).json({ error: 'Falha ao renovar container' });
   }
 });
 
