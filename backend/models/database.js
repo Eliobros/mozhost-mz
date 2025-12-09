@@ -40,8 +40,8 @@ class Database {
           password_hash VARCHAR(255) NOT NULL,
           plan ENUM('free', 'basic', 'pro') DEFAULT 'free',
           max_containers INT DEFAULT 2,
-          max_ram_mb INT DEFAULT 512,
-          max_storage_mb INT DEFAULT 1024,
+          max_ram_mb INT DEFAULT 0,
+          max_storage_mb INT DEFAULT 0,
           coins INT DEFAULT 250,
           email_verified BOOLEAN DEFAULT false,
           email_verification_code VARCHAR(10),
@@ -152,6 +152,65 @@ class Database {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
           INDEX idx_user_database (user_id)
+        )
+      `);
+
+      // Tabela de pagamentos
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          payment_method ENUM('mpesa', 'emola') NOT NULL,
+          phone_number VARCHAR(20),
+          coins_to_add INT NOT NULL,
+          status ENUM('pending', 'completed', 'failed', 'expired') DEFAULT 'pending',
+          external_payment_id VARCHAR(100),
+          provider VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          completed_at TIMESTAMP NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_payment_user (user_id),
+          INDEX idx_payment_status (status)
+        )
+      `);
+
+      // Tabela de subscrições (controle de expiração de containers)
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS subscriptions (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          container_id VARCHAR(36) NOT NULL,
+          coins_paid INT NOT NULL DEFAULT 500,
+          ram_mb INT NOT NULL DEFAULT 1024,
+          storage_mb INT NOT NULL DEFAULT 1024,
+          starts_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL,
+          status ENUM('active', 'expiring_soon', 'expired') DEFAULT 'active',
+          renewed_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE,
+          INDEX idx_sub_user (user_id),
+          INDEX idx_sub_container (container_id),
+          INDEX idx_sub_expires (expires_at)
+        )
+      `);
+
+      // Tabela de notificações
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+          category ENUM('container', 'billing', 'system', 'welcome', 'subscription') DEFAULT 'system',
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          read_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_notif_user (user_id),
+          INDEX idx_notif_read (user_id, read_at)
         )
       `);
 

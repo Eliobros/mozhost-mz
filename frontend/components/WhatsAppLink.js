@@ -118,7 +118,7 @@ const WhatsAppLink = () => {
 
   if (loadingStatus) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6 flex items-center justify-center">
+      <div className="flex items-center justify-center p-6">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Carregando...</p>
@@ -128,7 +128,7 @@ const WhatsAppLink = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6">
+    <div>
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}

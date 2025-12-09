@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area,
@@ -15,12 +15,12 @@ import {
   BarChart,
   Bar
 } from 'recharts';
-import { 
-  Activity, 
-  Cpu, 
-  MemoryStick, 
-  HardDrive, 
-  Server, 
+import {
+  Activity,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Server,
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -43,21 +43,26 @@ const MonitoringPage = () => {
   const [selectedContainer, setSelectedContainer] = useState('all');
   const [isLiveMode, setIsLiveMode] = useState(true);
   const [systemMetrics, setSystemMetrics] = useState({
-    cpu: 45.2,
-    memory: 62.8,
-    storage: 28.5,
-    network: 150.3
+    cpu: 0,
+    memory: 0,
+    storage: 0,
+    network: 0
+  });
+  const [previousMetrics, setPreviousMetrics] = useState({
+    cpu: 0,
+    memory: 0,
+    storage: 0,
+    network: 0
   });
 
   useEffect(() => {
     loadContainers();
-    generateInitialData();
+    loadInitialMetrics();
 
     let interval;
     if (isLiveMode) {
       interval = setInterval(() => {
         updateRealTimeData();
-        updateSystemMetrics();
       }, 3000);
     }
 
@@ -84,62 +89,97 @@ const MonitoringPage = () => {
     }
   };
 
-  const generateInitialData = () => {
-    const now = new Date();
-    const data = [];
-    const points = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
-    const interval = selectedTimeRange === '1h' ? 3 : selectedTimeRange === '6h' ? 6 : 12;
-
-    for (let i = points; i >= 0; i--) {
-      const time = new Date(now - i * interval * 60000);
-      data.push({
-        time: time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        timestamp: time,
-        cpu: Math.random() * 60 + 20,
-        memory: Math.random() * 70 + 15,
-        storage: Math.random() * 40 + 10,
-        network: Math.random() * 200 + 50,
-        containers: Math.floor(Math.random() * 3)
+  const loadInitialMetrics = async () => {
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-    }
 
-    setRealTimeData(data);
-  };
+      if (response.ok) {
+        const data = await response.json();
+        const metrics = {
+          cpu: data.cpu,
+          memory: data.memory.percent,
+          storage: data.storage.percent,
+          network: data.network.total
+        };
+        
+        setSystemMetrics(metrics);
+        setPreviousMetrics(metrics);
 
-  const updateRealTimeData = () => {
-    setRealTimeData(prevData => {
-      if (!prevData || prevData.length === 0) return prevData;
-      
-      const newData = [...prevData];
-      const now = new Date();
-
-      const maxPoints = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
-      if (newData.length >= maxPoints) {
-        newData.shift();
+        // Gera dados iniciais
+        const now = new Date();
+        const initialData = [];
+        const points = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
+        
+        for (let i = points; i >= 0; i--) {
+          const time = new Date(now - i * 3 * 60000); // 3 minutos por ponto
+          initialData.push({
+            time: time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: time,
+            cpu: metrics.cpu,
+            memory: metrics.memory,
+            storage: metrics.storage,
+            network: metrics.network,
+            containers: containers.filter(c => c.status === 'running').length
+          });
+        }
+        
+        setRealTimeData(initialData);
       }
-
-      const lastData = prevData[prevData.length - 1];
-      newData.push({
-        time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        timestamp: now,
-        cpu: Math.max(0, Math.min(100, (lastData?.cpu || 50) + (Math.random() - 0.5) * 10)),
-        memory: Math.max(0, Math.min(100, (lastData?.memory || 50) + (Math.random() - 0.5) * 8)),
-        storage: Math.max(0, Math.min(100, (lastData?.storage || 30) + (Math.random() - 0.5) * 5)),
-        network: Math.max(0, (lastData?.network || 100) + (Math.random() - 0.5) * 20),
-        containers: containers.filter(c => c.status === 'running').length
-      });
-
-      return newData;
-    });
+    } catch (error) {
+      console.error('Erro ao carregar métricas iniciais:', error);
+    }
   };
 
-  const updateSystemMetrics = () => {
-    setSystemMetrics(prev => ({
-      cpu: Math.max(0, Math.min(100, prev.cpu + (Math.random() - 0.5) * 5)),
-      memory: Math.max(0, Math.min(100, prev.memory + (Math.random() - 0.5) * 4)),
-      storage: Math.max(0, Math.min(100, prev.storage + (Math.random() - 0.5) * 2)),
-      network: Math.max(0, prev.network + (Math.random() - 0.5) * 10)
-    }));
+  const updateRealTimeData = async () => {
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Atualiza métricas anteriores antes de setar as novas
+        setPreviousMetrics(systemMetrics);
+        
+        const newMetrics = {
+          cpu: data.cpu,
+          memory: data.memory.percent,
+          storage: data.storage.percent,
+          network: data.network.total
+        };
+        
+        setSystemMetrics(newMetrics);
+
+        setRealTimeData(prevData => {
+          const newData = [...prevData];
+          const now = new Date();
+
+          const maxPoints = selectedTimeRange === '1h' ? 20 : selectedTimeRange === '6h' ? 60 : 120;
+          if (newData.length >= maxPoints) {
+            newData.shift();
+          }
+
+          newData.push({
+            time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: now,
+            cpu: data.cpu,
+            memory: data.memory.percent,
+            storage: data.storage.percent,
+            network: data.network.total,
+            containers: containers.filter(c => c.status === 'running').length
+          });
+
+          return newData;
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar dados em tempo real:', error);
+    }
   };
 
   const containerStatusData = [
@@ -168,6 +208,14 @@ const MonitoringPage = () => {
       message: systemMetrics.storage > 90 ? 'Espaço crítico' : systemMetrics.storage > 75 ? 'Espaço baixo' : 'Espaço normal'
     }
   ];
+
+  const calculateTrend = (current, previous) => {
+    const diff = current - previous;
+    return {
+      direction: diff > 0 ? 'up' : 'down',
+      value: Math.abs(diff).toFixed(1)
+    };
+  };
 
   const exportData = () => {
     const dataStr = JSON.stringify(realTimeData, null, 2);
@@ -250,8 +298,8 @@ const MonitoringPage = () => {
             unit="%"
             icon={Cpu}
             color="blue"
-            trend={Math.random() > 0.5 ? 'up' : 'down'}
-            trendValue={2.5}
+            trend={calculateTrend(systemMetrics.cpu, previousMetrics.cpu).direction}
+            trendValue={calculateTrend(systemMetrics.cpu, previousMetrics.cpu).value}
           />
           <MetricCard
             title="Memória"
@@ -259,8 +307,8 @@ const MonitoringPage = () => {
             unit="%"
             icon={MemoryStick}
             color="green"
-            trend={Math.random() > 0.5 ? 'up' : 'down'}
-            trendValue={1.2}
+            trend={calculateTrend(systemMetrics.memory, previousMetrics.memory).direction}
+            trendValue={calculateTrend(systemMetrics.memory, previousMetrics.memory).value}
           />
           <MetricCard
             title="Armazenamento"
@@ -268,8 +316,8 @@ const MonitoringPage = () => {
             unit="%"
             icon={HardDrive}
             color="purple"
-            trend={Math.random() > 0.5 ? 'up' : 'down'}
-            trendValue={0.8}
+            trend={calculateTrend(systemMetrics.storage, previousMetrics.storage).direction}
+            trendValue={calculateTrend(systemMetrics.storage, previousMetrics.storage).value}
           />
           <MetricCard
             title="Rede"
@@ -277,8 +325,8 @@ const MonitoringPage = () => {
             unit="MB/s"
             icon={Network}
             color="orange"
-            trend={Math.random() > 0.5 ? 'up' : 'down'}
-            trendValue={15.3}
+            trend={calculateTrend(systemMetrics.network, previousMetrics.network).direction}
+            trendValue={calculateTrend(systemMetrics.network, previousMetrics.network).value}
           />
         </div>
 
@@ -316,16 +364,16 @@ const MonitoringPage = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={realTimeData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="time" 
+                      <XAxis
+                        dataKey="time"
                         tick={{ fontSize: 12 }}
                       />
-                      <YAxis 
+                      <YAxis
                         tick={{ fontSize: 12 }}
                         domain={[0, 100]}
                       />
-                      <Tooltip 
-                        contentStyle={{ 
+                      <Tooltip
+                        contentStyle={{
                           backgroundColor: '#f9fafb',
                           border: '1px solid #e5e7eb',
                           borderRadius: '8px'
@@ -410,16 +458,16 @@ const MonitoringPage = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={realTimeData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="time" 
+                    <XAxis
+                      dataKey="time"
                       tick={{ fontSize: 12 }}
                     />
-                    <YAxis 
+                    <YAxis
                       tick={{ fontSize: 12 }}
                       label={{ value: 'MB/s', angle: -90, position: 'insideLeft' }}
                     />
-                    <Tooltip 
-                      contentStyle={{ 
+                    <Tooltip
+                      contentStyle={{
                         backgroundColor: '#f9fafb',
                         border: '1px solid #e5e7eb',
                         borderRadius: '8px'
@@ -468,21 +516,22 @@ const MonitoringPage = () => {
 
 const MetricCard = ({ title, value, unit, icon: Icon, color, trend, trendValue }) => {
   const colorClasses = {
-    blue: 'bg-blue-500 text-blue-600',
-    green: 'bg-green-500 text-green-600',
-    purple: 'bg-purple-500 text-purple-600',
-    orange: 'bg-orange-500 text-orange-600'
+    blue: { bg: 'bg-blue-500', text: 'text-blue-600' },
+    green: { bg: 'bg-green-500', text: 'text-green-600' },
+    purple: { bg: 'bg-purple-500', text: 'text-purple-600' },
+    orange: { bg: 'bg-orange-500', text: 'text-orange-600' }
   };
 
+  const colors = colorClasses[color] || colorClasses.blue;
   const TrendIcon = trend === 'up' ? TrendingUp : TrendingDown;
-  const trendColor = trend === 'up' ? 'text-green-600' : 'text-red-600';
+  const trendColor = trend === 'up' ? 'text-red-600' : 'text-green-600';
 
   return (
     <div className="bg-white rounded-lg shadow border p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <div className={`w-12 h-12 rounded-lg ${colorClasses[color].split(' ')[0]} bg-opacity-10 flex items-center justify-center`}>
-            <Icon className={`w-6 h-6 ${colorClasses[color].split(' ')[1]}`} />
+          <div className={`w-12 h-12 rounded-lg ${colors.bg} bg-opacity-10 flex items-center justify-center`}>
+            <Icon className={`w-6 h-6 ${colors.text}`} />
           </div>
           <div className="ml-4">
             <p className="text-sm font-medium text-gray-600">{title}</p>
@@ -517,7 +566,7 @@ const ContainerMetricCard = ({ container }) => {
       try {
         const token = localStorage.getItem('mozhost_token');
         const response = await fetch(
-          `https://api.mozhost.topaziocoin.online/api/containers/${container.id}/stats`,
+          `https://api.mozhost.topaziocoin.online/api/monitoring/containers/${container.id}/stats`,
           {
             headers: { 'Authorization': `Bearer ${token}` }
           }
@@ -574,8 +623,8 @@ const ContainerMetricCard = ({ container }) => {
                 <span className="font-medium">{metrics.cpu.toFixed(1)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all"
                   style={{ width: `${Math.min(metrics.cpu, 100)}%` }}
                 />
               </div>
@@ -585,8 +634,8 @@ const ContainerMetricCard = ({ container }) => {
                 <span className="font-medium">{metrics.memory.percent.toFixed(1)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full transition-all" 
+                <div
+                  className="bg-green-600 h-2 rounded-full transition-all"
                   style={{ width: `${Math.min(metrics.memory.percent, 100)}%` }}
                 />
               </div>
@@ -623,4 +672,4 @@ const ContainerMetricCard = ({ container }) => {
   );
 };
 
-export default  MonitoringPage;
+export default MonitoringPage;

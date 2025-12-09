@@ -16,8 +16,8 @@ router.post('/create', authMiddleware, async (req, res) => {
     );
 
     if (existing.length > 0) {
-      return res.status(400).json({ 
-        error: 'Você já possui um database' 
+      return res.status(400).json({
+        error: 'Você já possui um database'
       });
     }
 
@@ -38,10 +38,22 @@ router.post('/create', authMiddleware, async (req, res) => {
       ]
     );
 
+    // Buscar porta do phpMyAdmin
+    const containerInfo = await db.query(
+      'SELECT pma_port FROM containers WHERE user_id = ? AND type = "php" LIMIT 1',
+      [userId]
+    );
+
+    let pmaUrl = null;
+    if (containerInfo.length > 0 && containerInfo[0].pma_port) {
+      // Sempre usar porta ao invés de domínio
+      pmaUrl = `http://api.mozhost.topaziocoin.online:${containerInfo[0].pma_port}`;
+    }
+
     res.json({
       message: 'Database criado com sucesso!',
       credentials: dbCredentials,
-      phpmyadmin: 'https://api.mozhost.topaziocoin.online:8080'
+      phpmyadmin: pmaUrl
     });
 
   } catch (error) {
@@ -61,8 +73,8 @@ router.get('/credentials', authMiddleware, async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ 
-        error: 'Você ainda não possui um database' 
+      return res.status(404).json({
+        error: 'Você ainda não possui um database'
       });
     }
 
@@ -70,6 +82,23 @@ router.get('/credentials', authMiddleware, async (req, res) => {
 
     // Verificar tamanho usado
     const sizeUsed = await mysqlService.getDatabaseSize(userId);
+
+    // Buscar porta do phpMyAdmin
+    const containerInfo = await db.query(
+      'SELECT pma_port FROM containers WHERE user_id = ? AND type = "php" LIMIT 1',
+      [userId]
+    );
+
+    let pmaUrl = null;
+    if (containerInfo.length > 0 && containerInfo[0].pma_port) {
+      // Sempre usar porta ao invés de domínio
+      pmaUrl = `http://api.mozhost.topaziocoin.online:${containerInfo[0].pma_port}`;
+    }
+
+    console.log('🔍 Debug phpMyAdmin:');
+    console.log('  - User ID:', userId);
+    console.log('  - Container Info:', containerInfo);
+    console.log('  - PMA URL:', pmaUrl);
 
     res.json({
       credentials: {
@@ -84,7 +113,7 @@ router.get('/credentials', authMiddleware, async (req, res) => {
         limit_mb: 100,
         percentage: ((sizeUsed || 0) / 100) * 100
       },
-      phpmyadmin: 'https://api.mozhost.topaziocoin.online:8080'
+      phpmyadmin: pmaUrl
     });
 
   } catch (error) {
@@ -104,8 +133,8 @@ router.delete('/delete', authMiddleware, async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ 
-        error: 'Você não possui um database' 
+      return res.status(404).json({
+        error: 'Você não possui um database'
       });
     }
 

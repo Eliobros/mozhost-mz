@@ -30,23 +30,36 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      // Simular carregamento de notificações
-      // Em produção, faria uma requisição para a API
-      const mockNotifications = [
-        { id: 1, type: 'success', title: 'Container criado', message: 'Seu container "meu-bot" foi criado.', timestamp: new Date(Date.now() - 5 * 60 * 1000), read: false, category: 'container' },
-        { id: 2, type: 'info', title: 'Container iniciado', message: 'O container "meu-bot" foi iniciado.', timestamp: new Date(Date.now() - 30 * 60 * 1000), read: false, category: 'container' },
-        { id: 3, type: 'warning', title: 'Armazenamento quase cheio', message: 'Falta pouco para atingir o limite. Considere upgrade.', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), read: true, category: 'billing' },
-        { id: 4, type: 'info', title: 'Boas-vindas', message: 'Bem-vindo ao MozHost! Você começa com 250 coins.', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), read: true, category: 'welcome' },
-        { id: 5, type: 'info', title: 'Upgrade de armazenamento', message: 'Aumente armazenamento usando coins.', timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), read: true, category: 'system' }
-      ];
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao carregar notificações');
+      }
+
+      const data = await response.json();
       
-      setNotifications(mockNotifications);
+      const formattedNotifications = data.notifications.map(n => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        timestamp: new Date(n.created_at),
+        read: !!n.read_at,
+        category: n.category
+      }));
+      
+      setNotifications(formattedNotifications);
       if (onUnreadChange) {
-        const unread = mockNotifications.filter(n => !n.read).length;
-        onUnreadChange(unread);
+        onUnreadChange(data.unreadCount);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -54,7 +67,14 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      // Em produção, faria uma requisição para marcar como lida
+      const token = localStorage.getItem('mozhost_token');
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       const next = notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
       setNotifications(next);
       if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);
@@ -65,7 +85,14 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
 
   const markAllAsRead = async () => {
     try {
-      // Em produção, faria uma requisição para marcar todas como lidas
+      const token = localStorage.getItem('mozhost_token');
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/read-all`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       const next = notifications.map(n => ({ ...n, read: true }));
       setNotifications(next);
       if (onUnreadChange) onUnreadChange(0);
@@ -76,7 +103,14 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
 
   const deleteNotification = async (notificationId) => {
     try {
-      // Em produção, faria uma requisição para deletar
+      const token = localStorage.getItem('mozhost_token');
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
       const next = notifications.filter(n => n.id !== notificationId);
       setNotifications(next);
       if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);

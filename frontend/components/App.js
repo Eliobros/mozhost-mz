@@ -10,8 +10,10 @@ import SettingsPage from './SettingsPage';
 import ResetPasswordPage from './ResetPasswordPage';
 import TermsConditionsPage from './TermsConditionsPage';
 import PrivacyPolicyPage from './PrivacyPolicyPage';
-import WhatsAppLink from './WhatsAppLink'; // 👈 ADICIONA ISSO
-//import CoinsPage from './CoinsPage'; // 👈 SE TIVER PÁGINA DE COINS
+import WhatsAppLink from './WhatsAppLink';
+import MySQLPage from './MySQLPage';
+import DashboardLayout from './DashboardLayout';
+//import CoinsPage from './CoinsPage';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -33,7 +35,7 @@ const App = () => {
     };
 
     window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // Verificar hash inicial
+    handleHashChange();
 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -48,7 +50,6 @@ const App = () => {
         return;
       }
 
-      // Verificar se token ainda é válido
       const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -61,7 +62,6 @@ const App = () => {
         setUnreadNotifications(0);
         setIsAuthenticated(true);
       } else {
-        // Token inválido, limpar dados
         localStorage.removeItem('mozhost_token');
         localStorage.removeItem('mozhost_user');
       }
@@ -74,7 +74,6 @@ const App = () => {
     }
   };
 
-  // Tela de loading
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -86,7 +85,6 @@ const App = () => {
     );
   }
 
-  // Páginas legais (acessíveis sem autenticação)
   if (currentPage.startsWith('reset')) {
     return <ResetPasswordPage />;
   }
@@ -105,12 +103,10 @@ const App = () => {
     }} />;
   }
 
-  // Se não autenticado, mostrar login
   if (!isAuthenticated) {
     return <LoginPage />;
   }
 
-  // Roteamento básico baseado na página atual
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'dashboard':
@@ -128,16 +124,22 @@ const App = () => {
         return <ProfilePage />;
       case 'settings':
         return <SettingsPage />;
-      case 'whatsapp': // 👈 ADICIONA ISSO
+      case 'whatsapp':
         return <WhatsAppLink />;
-  //    case 'coins': // 👈 ADICIONA SE TIVER
-    //    return <CoinsPage />;
+      case 'mysql':
+        return <MySQLPage />;
+      //case 'coins':
+      //  return <CoinsPage />;
       default:
         return <Dashboard />;
     }
   };
 
-  return renderCurrentPage();
+  return (
+    <DashboardLayout currentPage={currentPage}>
+      {renderCurrentPage()}
+    </DashboardLayout>
+  );
 };
 
 export default App;

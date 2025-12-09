@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- SEO Básico -->
+  <title>MozHost - Hospedagem de Containers Docker | Node.js, Python, PHP</title>
+  <meta name="description" content="Hospedagem em nuvem com containers Docker. Crie aplicações Node.js, Python e PHP com MySQL integrado. Painel intuitivo, terminal web e editor de código.">
+  <meta name="keywords" content="hospedagem, docker, nodejs, python, php, mysql, containers, cloud hosting, vps, paas">
+  <meta name="author" content="MozHost">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://mozhost.topazioverse.com.br/">
+  
+  <!-- Open Graph (Facebook, WhatsApp) -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mozhost.topazioverse.com.br/">
+  <meta property="og:title" content="MozHost - Hospedagem de Containers Docker">
+  <meta property="og:description" content="Hospedagem em nuvem com containers Docker. Node.js, Python, PHP e MySQL integrado.">
+  <meta property="og:image" content="https://mozhost.topazioverse.com.br/og-image.png">
+  <meta property="og:site_name" content="MozHost">
+  <meta property="og:locale" content="pt_BR">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://mozhost.topazioverse.com.br/">
+  <meta name="twitter:title" content="MozHost - Hospedagem Docker">
+  <meta name="twitter:description" content="Hospedagem em nuvem com containers Docker">
+  <meta name="twitter:image" content="https://mozhost.topazioverse.com.br/twitter-image.png">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1e40af">
+  
+  <!-- Preconnect para performance -->
+  <link rel="preconnect" href="https://api.mozhost.topaziocoin.online">
+  <link rel="dns-prefetch" href="https://api.mozhost.topaziocoin.online">
+  
+  <!-- Schema.org para Google -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "MozHost",
+    "description": "Hospedagem de Containers Docker",
+    "url": "https://mozhost.topazioverse.com.br/",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://mozhost.topazioverse.com.br/#search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "MozHost",
+    "url": "https://mozhost.topazioverse.com.br/",
+    "logo": "https://mozhost.topazioverse.com.br/logo.png",
+    "sameAs": [
+      "https://github.com/mozhost"
+    ]
+  }
+  </script>
+  
+  <style>
+    /* Loading Screen */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1e293b 0%, #1e40af 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <noscript>
+    <div style="padding: 20px; background: #fee; color: #c00; text-align: center;">
+      Você precisa habilitar JavaScript para usar MozHost.
+    </div>
+  </noscript>
+  
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-spinner"></div>
+  </div>
+  
+  <!-- React App -->
+  <div id="root"></div>
+  
+  <!-- Google Analytics (opcional) -->
+  <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script> -->
+  
+  <!-- Remove loading screen quando React carregar -->
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        const loading = document.getElementById('loading-screen');
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.3s';
+          setTimeout(() => loading.remove(), 300);
+        }
+      }, 500);
+    });
+  </script>
+</body>
+</html>

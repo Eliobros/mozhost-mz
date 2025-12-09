@@ -68,9 +68,12 @@ router.post('/register', [
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
     // Criar usuário
+    // Free tier: 2 containers max, mas 0 RAM/Storage grátis - precisa comprar com coins
+    // 250 coins de boas-vindas (não suficiente para 1 container que custa 500)
+    // Após verificar email/whatsapp/sms: +350 coins = 600 total (suficiente para 1 container)
     const result = await database.query(
       `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins)
-       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 512, 1024, 250)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 0, 0, 250)`,
       [username, email, passwordHash, phone || null, countryCode || null, preferredVerificationMethod || 'email']
     );
 

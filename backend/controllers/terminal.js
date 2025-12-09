@@ -1,357 +1,293 @@
-// controllers/terminal.js
-const jwt = require('jsonwebtoken');
+// controllers/terminal.js (Versão com fallback correto)
+const Docker = require('dockerode');
 const database = require('../models/database');
-const pty = require('node-pty');
-const os = require('os');
 
-class TerminalController {
-  constructor() {
-    this.terminals = new Map(); // socketId -> { pty, containerId, userId }
-    this.containerTerminals = new Map(); // containerId -> Set of socketIds
-  }
+const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-  // Autenticar socket connection
-  async authenticateSocket(socket) {
-    try {
-      const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+/**
+ * WebSocket handler para terminal interativo
+ */
+const handleTerminalWebSocket = async (ws, req) => {
+  const { containerId } = req.params;
+  const userId = req.user?.id || req.user?.userId;
 
-      if (!token) {
-        throw new Error('No token provided');
-      }
+  console.log(`[Terminal WS] Nova conexão - User: ${userId}, Container: ${containerId}`);
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  try {
+    // Verificar se o container pertence ao usuário no BANCO DE DADOS
+    const containers = await database.query(
+      'SELECT id, docker_container_id, user_id, name, status FROM containers WHERE id = ?',
+      [containerId]
+    );
 
-      // Verificar se usuário existe
-      const user = await database.query(
-        'SELECT id, username FROM users WHERE id = ? AND is_active = true',
-        [decoded.userId]
-      );
-
-      if (user.length === 0) {
-        throw new Error('User not found');
-      }
-
-      return {
-        userId: decoded.userId,
-        username: decoded.username
-      };
-
-    } catch (error) {
-      console.error('Socket authentication error:', error);
-      return null;
+    if (containers.length === 0) {
+      console.error('[Terminal WS] Container não encontrado no banco');
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: '❌ Container não encontrado' 
+      }));
+      ws.close();
+      return;
     }
-  }
 
-  // Verificar se usuário possui o container
-  async verifyContainerAccess(containerId, userId) {
-    try {
-      const containers = await database.query(
-        'SELECT id FROM containers WHERE id = ? AND user_id = ?',
-        [containerId, userId]
-      );
+    const containerData = containers[0];
 
-      return containers.length > 0;
-    } catch (error) {
-      console.error('Container verification error:', error);
-      return false;
+    // Verificar ownership
+    if (containerData.user_id !== userId) {
+      console.error(`[Terminal WS] Acesso negado - Container pertence ao user ${containerData.user_id}, não ${userId}`);
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: '❌ Acesso negado a este container' 
+      }));
+      ws.close();
+      return;
     }
-  }
 
-  // Handle de conexão WebSocket
-  handleConnection(socket, io) {
-    console.log(`Terminal connection attempt: ${socket.id}`);
+    // Verificar se está rodando
+    if (containerData.status !== 'running') {
+      console.error('[Terminal WS] Container não está rodando');
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: `❌ Container está ${containerData.status}, não rodando` 
+      }));
+      ws.close();
+      return;
+    }
 
-    // Event: Conectar ao terminal de um container
-    socket.on('connect-terminal', async (data) => {
+    console.log(`[Terminal WS] Container verificado: ${containerData.name}`);
+
+    // Pegar o container do Docker
+    const dockerContainerId = containerData.docker_container_id;
+    const container = docker.getContainer(dockerContainerId);
+
+    // Verificar se existe no Docker
+    let containerInfo;
+    try {
+      containerInfo = await container.inspect();
+    } catch (error) {
+      console.error('[Terminal WS] Container não existe no Docker:', error.message);
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: '❌ Container não encontrado no Docker' 
+      }));
+      ws.close();
+      return;
+    }
+
+    // Verificar se está realmente rodando
+    if (!containerInfo.State.Running) {
+      console.error('[Terminal WS] Container não está rodando no Docker');
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: '❌ Container não está rodando' 
+      }));
+      ws.close();
+      return;
+    }
+
+    console.log(`[Terminal WS] Criando exec para container ${dockerContainerId}`);
+
+    // Tentar diferentes shells em ordem de preferência
+    const shellsToTry = ['/bin/sh', '/bin/ash', 'sh', 'bash'];
+    let exec = null;
+    let shellUsed = null;
+
+    for (const shell of shellsToTry) {
       try {
-        const { containerId } = data;
+        console.log(`[Terminal WS] Tentando shell: ${shell}`);
+        
+        const execOptions = {
+          AttachStdin: true,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: true,
+          Cmd: [shell]
+        };
 
-        // Autenticar socket
-        const user = await this.authenticateSocket(socket);
-        if (!user) {
-          socket.emit('terminal-error', { error: 'Authentication failed' });
-          return;
-        }
-
-        // Verificar acesso ao container
-        if (!await this.verifyContainerAccess(containerId, user.userId)) {
-          socket.emit('terminal-error', { error: 'Container access denied' });
-          return;
-        }
-
-        // Se já existe um terminal para este socket, fechar
-        if (this.terminals.has(socket.id)) {
-          this.closeTerminal(socket.id);
-        }
-
-        // Obter docker_container_id
-        const rows = await database.query(
-          'SELECT docker_container_id FROM containers WHERE id = ? AND user_id = ?',
-          [containerId, user.userId]
-        );
-
-        if (!rows.length || !rows[0].docker_container_id) {
-          socket.emit('terminal-error', { error: 'Container not available' });
-          return;
-        }
-
-        const dockerContainerId = rows[0].docker_container_id;
-
-        // 🔥 SOLUÇÃO: Criar PTY persistente que executa docker exec
-        const shell = pty.spawn('docker', [
-          'exec',
-          '-it',
-          dockerContainerId,
-          '/bin/sh'
-        ], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 30,
-          cwd: process.env.HOME || os.homedir(),
-          env: process.env
+        exec = await container.exec(execOptions);
+        
+        // Testar se o exec foi criado com sucesso
+        const stream = await exec.start({
+          hijack: true,
+          stdin: true,
+          Tty: true
         });
 
-        // Armazenar referência da sessão PTY
-        this.terminals.set(socket.id, {
-          pty: shell,  // ✅ Agora sim temos um PTY real!
-          dockerContainerId,
-          containerId,
-          userId: user.userId,
-          username: user.username
-        });
+        // Se chegou aqui, o shell funciona!
+        shellUsed = shell;
+        console.log(`[Terminal WS] Shell ${shell} funcionou!`);
 
-        // Adicionar à lista de terminais do container
-        if (!this.containerTerminals.has(containerId)) {
-          this.containerTerminals.set(containerId, new Set());
-        }
-        this.containerTerminals.get(containerId).add(socket.id);
+        // Configurar o stream
+        setupStream(stream, ws);
 
-        // 🔥 Encaminhar output do PTY para o cliente
-        shell.on('data', (data) => {
+        // Mensagem de boas-vindas
+        ws.send(JSON.stringify({ 
+          type: 'output', 
+          data: `\r\n\x1b[32m✓ Conectado ao container ${containerData.name}!\x1b[0m\r\n` +
+                `\x1b[90mShell: ${shellUsed}\x1b[0m\r\n\r\n`
+        }));
+
+        // Handlers do WebSocket
+        ws.on('message', (message) => {
           try {
-            socket.emit('terminal-output', { data: data });
+            const data = JSON.parse(message);
+            if (data.type === 'input' && data.data) {
+              stream.write(data.data);
+            }
           } catch (error) {
-            console.error('Error emitting terminal output:', error);
+            console.error('[Terminal WS] Erro ao processar mensagem:', error);
           }
         });
 
-        // Handle de saída do PTY
-        shell.on('exit', (code) => {
+        ws.on('close', () => {
+          console.log('[Terminal WS] WebSocket fechado pelo cliente');
           try {
-            socket.emit('terminal-exit', { code });
+            stream.end();
           } catch (error) {
-            console.error('Error emitting terminal exit:', error);
+            console.error('[Terminal WS] Erro ao fechar stream:', error);
           }
-          this.closeTerminal(socket.id);
         });
 
-        // Confirmar conexão
-        socket.emit('terminal-connected', { 
-          containerId,
-          message: `Connected to container ${containerId.substring(0, 8)}`
+        ws.on('error', (error) => {
+          console.error('[Terminal WS] Erro no WebSocket:', error);
+          try {
+            stream.end();
+          } catch (err) {
+            console.error('[Terminal WS] Erro ao fechar stream após erro:', err);
+          }
         });
 
-        console.log(`✅ Terminal connected: user ${user.username} -> container ${containerId}`);
+        return; // Sucesso! Sair da função
 
       } catch (error) {
-        console.error('Terminal connection error:', error);
-        socket.emit('terminal-error', { error: error.message });
+        console.log(`[Terminal WS] Shell ${shell} falhou: ${error.message}`);
+        // Tentar próximo shell
+        continue;
       }
-    });
+    }
 
-    // Event: Enviar comando para terminal
-    socket.on('terminal-input', (data) => {
-      try {
-        const { input } = data;
-        const terminal = this.terminals.get(socket.id);
+    // Se chegou aqui, nenhum shell funcionou
+    console.error('[Terminal WS] Nenhum shell disponível no container');
+    ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: '❌ Nenhum shell disponível no container (tentado: bash, sh, ash)' 
+    }));
+    ws.close();
 
-        if (!terminal) {
-          socket.emit('terminal-error', { error: 'Terminal not connected' });
-          return;
-        }
-
-        // 🔥 Agora sim funciona! PTY.write() existe
-        terminal.pty.write(input);
-
-      } catch (error) {
-        console.error('Terminal input error:', error);
-        socket.emit('terminal-error', { error: error.message });
-      }
-    });
-
-    // Event: Redimensionar terminal
-    socket.on('terminal-resize', (data) => {
-      try {
-        const { cols, rows } = data;
-        const terminal = this.terminals.get(socket.id);
-
-        if (!terminal) {
-          socket.emit('terminal-error', { error: 'Terminal not connected' });
-          return;
-        }
-
-        // Redimensionar PTY
-        terminal.pty.resize(cols || 80, rows || 24);
-
-      } catch (error) {
-        console.error('Terminal resize error:', error);
-        socket.emit('terminal-error', { error: error.message });
-      }
-    });
-
-    // Event: Desconectar terminal
-    socket.on('disconnect-terminal', () => {
-      this.closeTerminal(socket.id);
-    });
-
-    // Event: Obter logs de container
-    socket.on('container-logs', async (data) => {
-      try {
-        const { containerId, tail = 100 } = data;
-
-        // Autenticar
-        const user = await this.authenticateSocket(socket);
-        if (!user) {
-          socket.emit('logs-error', { error: 'Authentication failed' });
-          return;
-        }
-
-        // Verificar acesso
-        if (!await this.verifyContainerAccess(containerId, user.userId)) {
-          socket.emit('logs-error', { error: 'Container access denied' });
-          return;
-        }
-
-        const dockerManager = require('../utils/docker-manager');
-        const logs = await dockerManager.getContainerLogs(containerId, tail);
-
-        socket.emit('container-logs-data', {
-          containerId,
-          logs: logs.split('\n').filter(line => line.trim()).slice(-tail)
-        });
-
-      } catch (error) {
-        console.error('Container logs error:', error);
-        socket.emit('logs-error', { error: error.message });
-      }
-    });
-
-    // Event: Stream de logs em tempo real
-    socket.on('start-log-stream', async (data) => {
-      try {
-        const { containerId } = data;
-
-        // Autenticar
-        const user = await this.authenticateSocket(socket);
-        if (!user) {
-          socket.emit('logs-error', { error: 'Authentication failed' });
-          return;
-        }
-
-        // Verificar acesso
-        if (!await this.verifyContainerAccess(containerId, user.userId)) {
-          socket.emit('logs-error', { error: 'Container access denied' });
-          return;
-        }
-
-        socket.emit('log-stream-started', { containerId });
-
-      } catch (error) {
-        console.error('Log stream error:', error);
-        socket.emit('logs-error', { error: error.message });
-      }
-    });
-  }
-
-  // Fechar terminal
-  closeTerminal(socketId) {
+  } catch (error) {
+    console.error('[Terminal WS] Erro ao iniciar terminal:', error);
     try {
-      const terminal = this.terminals.get(socketId);
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: `Erro: ${error.message}` 
+      }));
+      ws.close();
+    } catch (e) {
+      console.error('[Terminal WS] Erro ao enviar mensagem final de erro:', e);
+    }
+  }
+};
 
-      if (terminal) {
-        // 🔥 Matar processo PTY corretamente
-        try {
-          terminal.pty.kill();
-        } catch (error) {
-          console.error('Error killing PTY:', error);
-        }
-
-        // Remover das listas
-        this.terminals.delete(socketId);
-
-        if (this.containerTerminals.has(terminal.containerId)) {
-          this.containerTerminals.get(terminal.containerId).delete(socketId);
-
-          // Se não há mais terminais para o container, limpar
-          if (this.containerTerminals.get(terminal.containerId).size === 0) {
-            this.containerTerminals.delete(terminal.containerId);
-          }
-        }
-
-        console.log(`Terminal closed: ${socketId}`);
+/**
+ * Configurar stream do Docker
+ */
+function setupStream(stream, ws) {
+  stream.on('data', (chunk) => {
+    try {
+      if (ws.readyState === 1) { // WebSocket.OPEN
+        ws.send(JSON.stringify({ 
+          type: 'output', 
+          data: chunk.toString('utf-8')
+        }));
       }
     } catch (error) {
-      console.error('Error closing terminal:', error);
+      console.error('[Terminal WS] Erro ao enviar dados:', error);
     }
-  }
+  });
 
-  // Handle de desconexão
-  handleDisconnection(socket) {
-    this.closeTerminal(socket.id);
-  }
-
-  // Broadcast para todos os terminais de um container
-  broadcastToContainer(containerId, event, data) {
-    const sockets = this.containerTerminals.get(containerId);
-    if (sockets) {
-      sockets.forEach(socketId => {
-        // Em uma implementação real, você teria referência ao io
-        // io.to(socketId).emit(event, data);
-      });
+  stream.on('error', (error) => {
+    console.error('[Terminal WS] Erro no stream:', error);
+    try {
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: `Erro no stream: ${error.message}` 
+      }));
+    } catch (e) {
+      console.error('[Terminal WS] Erro ao enviar mensagem de erro:', e);
     }
-  }
+  });
 
-  // Estatísticas dos terminais ativos
-  getStats() {
-    return {
-      activeTerminals: this.terminals.size,
-      activeContainers: this.containerTerminals.size,
-      terminalsPerContainer: Array.from(this.containerTerminals.entries()).map(([containerId, sockets]) => ({
-        containerId,
-        terminalCount: sockets.size
-      }))
-    };
-  }
-
-  // Cleanup: fechar todos os terminais
-  cleanup() {
-    console.log('Cleaning up terminals...');
-
-    this.terminals.forEach((terminal, socketId) => {
-      try {
-        terminal.pty.kill();
-      } catch (error) {
-        console.error(`Error killing terminal ${socketId}:`, error);
-      }
-    });
-
-    this.terminals.clear();
-    this.containerTerminals.clear();
-  }
+  stream.on('end', () => {
+    console.log('[Terminal WS] Stream encerrado');
+    ws.close();
+  });
 }
 
-// Singleton instance
-const terminalController = new TerminalController();
+/**
+ * Rota HTTP alternativa para executar comandos (fallback)
+ */
+const executeCommand = async (req, res) => {
+  const { containerId } = req.params;
+  const { command } = req.body;
+  const userId = req.user?.id || req.user?.userId;
 
-// Cleanup na saída do processo
-process.on('SIGINT', () => {
-  terminalController.cleanup();
-  process.exit(0);
-});
+  console.log(`[Terminal HTTP] User ${userId} executando: ${command}`);
 
-process.on('SIGTERM', () => {
-  terminalController.cleanup();
-  process.exit(0);
-});
+  if (!command) {
+    return res.status(400).json({ error: 'Comando não fornecido' });
+  }
 
-module.exports = terminalController;
+  try {
+    // Verificar ownership
+    const containers = await database.query(
+      'SELECT id, docker_container_id, user_id, status FROM containers WHERE id = ?',
+      [containerId]
+    );
+
+    if (containers.length === 0) {
+      return res.status(404).json({ error: 'Container não encontrado' });
+    }
+
+    const containerData = containers[0];
+
+    if (containerData.user_id !== userId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    if (containerData.status !== 'running') {
+      return res.status(400).json({ error: 'Container não está rodando' });
+    }
+
+    // Executar comando
+    const container = docker.getContainer(containerData.docker_container_id);
+    const exec = await container.exec({
+      Cmd: ['/bin/sh', '-c', command],
+      AttachStdout: true,
+      AttachStderr: true
+    });
+
+    const stream = await exec.start({ Detach: false });
+
+    let output = '';
+    stream.on('data', (chunk) => {
+      output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, '');
+    });
+
+    stream.on('end', async () => {
+      const inspectExec = await exec.inspect();
+      res.json({ 
+        output: output.trim() || '(sem output)',
+        exitCode: inspectExec.ExitCode
+      });
+    });
+
+  } catch (error) {
+    console.error('[Terminal HTTP] Erro:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  handleTerminalWebSocket,
+  executeCommand
+};

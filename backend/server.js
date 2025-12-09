@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const expressWs = require('express-ws');
 const path = require('path');
 require('dotenv').config();
 
@@ -19,9 +20,23 @@ const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
 const { startWhatsApp, disconnectWhatsApp } = require('./utils/whatsapp');
 const paymentRoutes = require('./routes/payment');
+const authenticateToken = require('./middleware/auth');
+const domainsRoutes = require('./routes/domains');
+const monitoringRoutes = require('./routes/monitoring');
+const notificationRoutes = require('./routes/notifications');
+const subscriptionService = require('./services/subscriptionService');
+
+
 const app = express();
 app.set('trust proxy', 1);
 const server = createServer(app);
+
+//app.use('/api/logs', logsRoutes);
+
+
+// HABILITAR WEBSOCKET (express-ws)
+const wsInstance = expressWs(app, server);
+
 const parseOrigins = (originsStr) => {
   if (!originsStr) return [];
   return originsStr
@@ -62,7 +77,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Adicione também este middleware para preflight requests:
+// Middleware para preflight requests
 app.options('*', (req, res) => {
   const reqOrigin = req.headers.origin;
   if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
@@ -74,6 +89,7 @@ app.options('*', (req, res) => {
   }
   return res.sendStatus(403);
 });
+
 // Rate limiting
 const RL_WINDOW_MIN = Number(process.env.RATE_LIMIT_WINDOW) || 15;
 const RL_MAX = Number(process.env.RATE_LIMIT_MAX) || 100;
@@ -93,59 +109,54 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   });
 });
 
-// API Routes
+// ============================================
+// API ROUTES - IMPORTANTE: Registrar ANTES dos middlewares catch-all
+// ============================================
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRouter);
 app.use('/api/containers', containerRoutes);
 app.use('/api/whatsapp-link', whatsappLinkRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/payment', paymentRoutes);
-
-// Socket.IO para terminal e logs em tempo real
+app.use('/api/domains', domainsRoutes);
+app.use('/api/notifications', notificationRoutes);
+// ============================================
+// ROTA WEBSOCKET PARA TERMINAL
+// CRÍTICO: Deve vir ANTES do proxy dinâmico e do 404 handler
+// ============================================
+const terminalRoutes = require('./routes/terminal');
+app.use('/api/terminal', terminalRoutes);
+const logsRoutes = require('./routes/logs');
+app.use('/api/logs', logsRoutes);
+const mysqlRoutes = require('./routes/mysql');
+app.use('/api/mysql', mysqlRoutes);
+// Socket.IO para terminal e logs em tempo real (mantém compatibilidade)
+/*
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
-  
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+
   // Configurar terminal handler
   terminalHandler.handleConnection(socket, io);
 
   socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
     terminalHandler.handleDisconnection(socket);
   });
 });
+*/
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      error: 'Validation Error',
-      details: err.message
-    });
-  }
-  
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      error: 'Unauthorized'
-    });
-  }
-
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
-
-// Proxy dinâmico para containers (adicionar antes do 404)
+// ============================================
+// PROXY DINÂMICO - Deve vir DEPOIS de todas as rotas da API
+// ============================================
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
@@ -184,7 +195,35 @@ app.use('*', async (req, res, next) => {
     return res.status(500).json({ error: 'Proxy error' });
   }
 });
-// 404 handler
+
+// ============================================
+// ERROR HANDLING - Deve vir antes do 404
+// ============================================
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation Error',
+      details: err.message
+    });
+  }
+
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      error: 'Unauthorized'
+    });
+  }
+
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// ============================================
+// 404 HANDLER - Sempre por último!
+// ============================================
 app.use('*', (req, res) => {
   res.status(404).json({
     error: 'Route not found'
@@ -218,6 +257,7 @@ async function startServer() {
       console.log('🚀 MozHost Backend started successfully!');
       console.log(`📡 Server running on port ${PORT}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔌 WebSocket terminal: ws://localhost:${PORT}/api/terminal/:containerId`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
@@ -231,15 +271,15 @@ async function startServer() {
 async function cleanupOrphanedContainers() {
   try {
     const dockerManager = require('./utils/docker-manager');
-    
+
     // Verificar se há containers na tabela primeiro
     const containerCount = await database.query('SELECT COUNT(*) as count FROM containers');
-    
+
     if (containerCount[0].count === 0) {
       console.log('✅ No containers to cleanup');
       return;
     }
-    
+
     // Buscar todos os containers ativos no banco
     const activeContainers = await database.query(
       'SELECT id, docker_container_id FROM containers WHERE status = ? AND docker_container_id IS NOT NULL',
@@ -253,15 +293,15 @@ async function cleanupOrphanedContainers() {
         // Verificar se container ainda existe no Docker
         const dockerContainer = dockerManager.docker.getContainer(container.docker_container_id);
         const inspect = await dockerContainer.inspect();
-        
+
         // Atualizar status baseado no estado real
         const realStatus = inspect.State.Running ? 'running' : 'stopped';
-        
+
         await database.query(
           'UPDATE containers SET status = ? WHERE id = ?',
           [realStatus, container.id]
         );
-        
+
       } catch (dockerError) {
         // Container não existe mais no Docker
         console.log(`🧹 Cleaning up orphaned container: ${container.id}`);
@@ -300,3 +340,36 @@ process.on('SIGINT', async () => {
 
 // Start the server
 startServer();
+
+// Job para verificar subscriptions (roda a cada 1 hora)
+const checkSubscriptions = async () => {
+  try {
+    console.log('🔍 Verificando subscriptions...');
+    
+    // Verificar expirando (aviso 5 dias antes)
+    const expiring = await subscriptionService.checkExpiringSubscriptions();
+    if (expiring > 0) {
+      console.log(`⚠️  ${expiring} subscriptions expirando em breve`);
+    }
+    
+    // Expirar as vencidas
+    const expired = await subscriptionService.expireSubscriptions();
+    if (expired > 0) {
+      console.log(`❌ ${expired} subscriptions expiradas`);
+    }
+    
+    console.log('✅ Verificação de subscriptions concluída');
+  } catch (error) {
+    console.error('❌ Erro ao verificar subscriptions:', error);
+  }
+};
+
+// Rodar verificação no startup
+setTimeout(() => {
+  checkSubscriptions();
+}, 10000); // 10 segundos após iniciar
+
+// Rodar a cada hora
+setInterval(() => {
+  checkSubscriptions();
+}, 60 * 60 * 1000); // 1 hora
