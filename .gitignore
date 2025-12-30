@@ -6,7 +6,7 @@
 .env.production.local
 backend/.env
 frontend/.env
-
+backend/.auth/
 # Node modules
 node_modules/
 backend/node_modules/
