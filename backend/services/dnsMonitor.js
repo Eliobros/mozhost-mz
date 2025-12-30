@@ -20,9 +20,9 @@ class DNSMonitor {
     try {
       const addresses = await dns.resolve4(domain);
       const configured = addresses.includes(SERVER_IP);
-      
+
       console.log(`🔍 DNS check ${domain}: ${addresses.join(', ')} | Match: ${configured}`);
-      
+
       return {
         configured,
         ip: addresses[0],
@@ -62,10 +62,10 @@ class DNSMonitor {
           clearInterval(intervalId);
           this.monitoring.delete(domain);
 
-          // Atualizar status no banco
+          // Atualizar status no banco para ssl_generating (vai gerar SSL logo depois)
           await db.query(
             'UPDATE custom_domains SET status = ?, ip_detected = ? WHERE domain = ?',
-            ['dns_configured', result.ip, domain]
+            ['ssl_generating', result.ip, domain]
           );
 
           // Iniciar geração de SSL
@@ -90,9 +90,9 @@ class DNSMonitor {
       }
     }, this.checkInterval);
 
-    this.monitoring.set(domain, { 
-      intervalId, 
-      attempts, 
+    this.monitoring.set(domain, {
+      intervalId,
+      attempts,
       containerId,
       startedAt: new Date()
     });
@@ -137,7 +137,7 @@ class DNSMonitor {
 
       // Gerar certificado SSL com Let's Encrypt
       console.log(`📜 Gerando certificado SSL com Let's Encrypt...`);
-      
+
       const certbotCmd = `sudo certbot certonly --nginx \
         -d ${domain} \
         --non-interactive \
@@ -148,7 +148,7 @@ class DNSMonitor {
 
       const { stdout, stderr } = await execPromise(certbotCmd);
       console.log(`Certbot output: ${stdout}`);
-      
+
       if (stderr && !stderr.includes('Successfully')) {
         console.warn(`Certbot warnings: ${stderr}`);
       }
@@ -170,7 +170,7 @@ class DNSMonitor {
 
     } catch (error) {
       console.error(`❌ Erro ao gerar SSL para ${domain}:`, error.message);
-      
+
       await db.query(
         'UPDATE custom_domains SET status = ?, error_message = ? WHERE domain = ?',
         ['failed', error.message, domain]
@@ -195,7 +195,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_connect_timeout 60s;
@@ -216,18 +216,18 @@ server {
     try {
       // Escrever em /tmp primeiro
       await fs.writeFile(tempPath, nginxConfig);
-      
+
       // Mover para nginx com sudo
       await execPromise(`sudo mv ${tempPath} ${finalPath}`);
       await execPromise(`sudo chmod 644 ${finalPath}`);
-      
+
       // Criar symlink
       await execPromise(`sudo ln -sf ${finalPath} ${enabledPath}`);
-      
+
       // Testar e recarregar
       await execPromise('sudo nginx -t');
       await execPromise('sudo nginx -s reload');
-      
+
       console.log(`✅ Configuração HTTP criada: ${domain}`);
     } catch (error) {
       console.error(`❌ Erro ao criar config HTTP:`, error.message);
@@ -242,7 +242,7 @@ server {
 server {
     listen 80;
     server_name ${domain};
-    
+
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
 }
@@ -262,7 +262,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_connect_timeout 60s;
@@ -282,15 +282,15 @@ server {
     try {
       // Escrever em /tmp
       await fs.writeFile(tempPath, nginxConfig);
-      
+
       // Mover com sudo (sobrescrever o anterior)
       await execPromise(`sudo mv ${tempPath} ${finalPath}`);
       await execPromise(`sudo chmod 644 ${finalPath}`);
-      
+
       // Testar e recarregar
       await execPromise('sudo nginx -t');
       await execPromise('sudo nginx -s reload');
-      
+
       console.log(`✅ Configuração HTTPS atualizada: ${domain}`);
     } catch (error) {
       console.error(`❌ Erro ao criar config HTTPS:`, error.message);
@@ -300,7 +300,7 @@ server {
 
   async cleanupNginxConfig(domain) {
     console.log(`🧹 Limpando configurações do Nginx para ${domain}`);
-    
+
     try {
       await execPromise(`sudo rm -f /etc/nginx/sites-enabled/custom-${domain}`);
       await execPromise(`sudo rm -f /etc/nginx/sites-available/custom-${domain}`);
@@ -359,15 +359,15 @@ const monitor = new DNSMonitor();
 (async () => {
   try {
     console.log('🔄 Verificando domínios pendentes...');
-    
+
     const pending = await db.query(
       'SELECT * FROM custom_domains WHERE status IN (?, ?)',
-      ['pending', 'dns_configured']
+      ['pending', 'dns_pending']
     );
 
     if (pending.length > 0) {
       console.log(`📡 Retomando monitoramento de ${pending.length} domínios`);
-      
+
       for (const domain of pending) {
         monitor.startMonitoring(domain.domain, domain.container_id);
       }

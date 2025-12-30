@@ -1,0 +1,156 @@
+// routes/databases.js
+const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/auth');
+const database = require('../models/database');
+const databaseManager = require('../utils/docker-database-manager');
+
+/**
+ * Listar databases do usuário
+ */
+router.get('/', auth, async (req, res) => {
+  try {
+    const databases = await database.query(`
+      SELECT 
+        d.*,
+        GROUP_CONCAT(c.name) as containers
+      FROM databases d
+      LEFT JOIN database_container_links dcl ON d.id = dcl.database_id
+      LEFT JOIN containers c ON dcl.container_id = c.id
+      WHERE d.user_id = ?
+      GROUP BY d.id
+      ORDER BY d.created_at DESC
+    `, [req.user.userId]);
+
+    // Build connection strings
+    databases.forEach(db => {
+      db.connection_string = databaseManager.buildConnectionString(
+        db.type,
+        { username: db.username, password: db.password, database: db.database_name },
+        db.port
+      );
+      db.containers = db.containers ? db.containers.split(',') : [];
+    });
+
+    res.json({
+      databases,
+      total_cost: databases.length * 5 // 5 coins por database
+    });
+  } catch (error) {
+    console.error('Error listing databases:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Criar database
+ */
+router.post('/', auth, async (req, res) => {
+  try {
+    const { name, type, container } = req.body;
+
+    if (!name || !type) {
+      return res.status(400).json({ error: 'Name and type are required' });
+    }
+
+    const validTypes = ['mysql', 'postgres', 'mongodb', 'redis', 'mariadb'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid database type' });
+    }
+
+    // Verificar coins
+    const userInfo = await database.query(
+      'SELECT coins FROM users WHERE id = ?',
+      [req.user.userId]
+    );
+
+    if (userInfo[0].coins < 5) {
+      return res.status(400).json({ error: 'Insufficient coins' });
+    }
+
+    const result = await databaseManager.createDatabase(req.user.userId, {
+      name,
+      type,
+      linkToContainer: container
+    });
+
+    res.status(201).json({ database: result });
+  } catch (error) {
+    console.error('Error creating database:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Buscar database específico
+ */
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const db = await database.query(`
+      SELECT 
+        d.*,
+        GROUP_CONCAT(c.id) as container_ids,
+        GROUP_CONCAT(c.name) as container_names
+      FROM databases d
+      LEFT JOIN database_container_links dcl ON d.id = dcl.database_id
+      LEFT JOIN containers c ON dcl.container_id = c.id
+      WHERE d.id = ? AND d.user_id = ?
+      GROUP BY d.id
+    `, [req.params.id, req.user.userId]);
+
+    if (!db.length) {
+      return res.status(404).json({ error: 'Database not found' });
+    }
+
+    const dbInfo = db[0];
+
+    // Build connection string
+    dbInfo.connection_string = databaseManager.buildConnectionString(
+      dbInfo.type,
+      { username: dbInfo.username, password: dbInfo.password, database: dbInfo.database_name },
+      dbInfo.port
+    );
+
+    // Parse containers
+    dbInfo.containers = [];
+    if (dbInfo.container_ids) {
+      const ids = dbInfo.container_ids.split(',');
+      const names = dbInfo.container_names.split(',');
+      dbInfo.containers = ids.map((id, i) => ({ id, name: names[i] }));
+    }
+    delete dbInfo.container_ids;
+    delete dbInfo.container_names;
+
+    dbInfo.cost = 5;
+
+    res.json({ database: dbInfo });
+  } catch (error) {
+    console.error('Error fetching database:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Deletar database
+ */
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const db = await database.query(
+      'SELECT * FROM databases WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId]
+    );
+
+    if (!db.length) {
+      return res.status(404).json({ error: 'Database not found' });
+    }
+
+    await databaseManager.deleteDatabase(req.params.id);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting database:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;

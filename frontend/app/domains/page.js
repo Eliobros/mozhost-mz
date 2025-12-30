@@ -26,11 +26,11 @@ export default function DomainsPage() {
   const [selectedContainer, setSelectedContainer] = useState('');
   const [newDomain, setNewDomain] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState({});
   const [error, setError] = useState(null);
 
   useEffect(() => {
     loadData();
-    // Auto-refresh a cada 30 segundos
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -68,8 +68,7 @@ export default function DomainsPage() {
         const containersData = await containersRes.json();
 
         setDomains(Array.isArray(domainsData) ? domainsData : []);
-        // A API retorna { containers: [...], coins, storageAlerts }
-        const containersList = containersData?.containers || containersData || [];
+        const containersList = containersData?.containers || [];
         setContainers(Array.isArray(containersList) ? containersList : []);
       } else {
         setError('Erro ao carregar dados.');
@@ -79,6 +78,37 @@ export default function DomainsPage() {
       setError('Erro de conexão. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyDomain = async (domainId) => {
+    setVerifying(prev => ({ ...prev, [domainId]: true }));
+
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) return;
+
+      const res = await fetch(`${API_BASE_URL}/api/domains/${domainId}/verify`, {
+        method: 'POST',
+        headers
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        if (data.configured) {
+          alert(`✅ DNS configurado corretamente!\nIP detectado: ${data.ip}`);
+        } else {
+          alert(`⏳ DNS ainda não propagou.\nIP detectado: ${data.ip || 'Nenhum'}\n\nAguarde alguns minutos e tente novamente.`);
+        }
+        loadData(); // Recarregar lista
+      } else {
+        alert(`❌ Erro ao verificar: ${data.error}`);
+      }
+    } catch (error) {
+      alert('❌ Erro ao verificar domínio');
+    } finally {
+      setVerifying(prev => ({ ...prev, [domainId]: false }));
     }
   };
 
@@ -111,7 +141,6 @@ export default function DomainsPage() {
         setSelectedContainer('');
         loadData();
 
-        // Mostrar instruções
         alert(`✅ Domínio adicionado!\n\nConfigure seu DNS:\nTipo: A\nNome: @\nValor: ${data.instructions.ip}`);
       } else {
         setError(data.error || 'Erro ao adicionar domínio');
@@ -344,9 +373,30 @@ export default function DomainsPage() {
                         </div>
                       </div>
 
-                      <p className="text-xs text-yellow-700 mt-3">
-                        ⏳ A propagação DNS pode levar de 5 minutos a 24 horas
-                      </p>
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-yellow-200">
+                        <p className="text-xs text-yellow-700">
+                          ⏳ A propagação DNS pode levar de 5 minutos a 24 horas
+                        </p>
+                        
+                        {/* BOTÃO VERIFICAR AGORA */}
+                        <button
+                          onClick={() => verifyDomain(domain.id)}
+                          disabled={verifying[domain.id]}
+                          className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {verifying[domain.id] ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Verificando...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-4 h-4" />
+                              Verificar Agora
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -376,7 +426,7 @@ export default function DomainsPage() {
                   {/* Erro */}
                   {domain.status === 'failed' && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 mb-4">
                         <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
                         <div className="flex-1">
                           <h4 className="font-semibold text-red-900 mb-1">
@@ -387,6 +437,25 @@ export default function DomainsPage() {
                           </p>
                         </div>
                       </div>
+                      
+                      {/* BOTÃO VERIFICAR NOVAMENTE */}
+                      <button
+                        onClick={() => verifyDomain(domain.id)}
+                        disabled={verifying[domain.id]}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full justify-center"
+                      >
+                        {verifying[domain.id] ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Verificando...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            Tentar Novamente
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
 

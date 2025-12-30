@@ -7,6 +7,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const expressWs = require('express-ws');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 // Importar módulos
@@ -25,14 +26,14 @@ const domainsRoutes = require('./routes/domains');
 const monitoringRoutes = require('./routes/monitoring');
 const notificationRoutes = require('./routes/notifications');
 const subscriptionService = require('./services/subscriptionService');
+const databasesRoutes = require('./routes/databases');
 
+// ✨ NOVO: Importar NotificationManager
+const notificationManager = require('./utils/notification-manager');
 
 const app = express();
 app.set('trust proxy', 1);
 const server = createServer(app);
-
-//app.use('/api/logs', logsRoutes);
-
 
 // HABILITAR WEBSOCKET (express-ws)
 const wsInstance = expressWs(app, server);
@@ -55,14 +56,19 @@ const io = new Server(server, {
       }
       return callback(new Error('Not allowed by CORS'));
     },
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
+
+// ✨ NOVO: Configurar NotificationManager com Socket.IO
+notificationManager.setSocketIO(io);
+
 const PORT = process.env.PORT || 3001;
 
 // Middlewares de segurança
 app.use(helmet({
-  contentSecurityPolicy: false, // Permitir WebSocket
+  contentSecurityPolicy: false,
 }));
 
 app.use(cors({
@@ -77,7 +83,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Middleware para preflight requests
 app.options('*', (req, res) => {
   const reqOrigin = req.headers.origin;
   if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
@@ -99,7 +104,10 @@ const limiter = rateLimit({
   max: RL_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => {
+    return req.path.includes('/cli-upload');
+  }
 });
 app.use('/api/', limiter);
 
@@ -112,12 +120,78 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    connectedUsers: notificationManager.getConnectedUsersCount()
   });
 });
 
 // ============================================
-// API ROUTES - IMPORTANTE: Registrar ANTES dos middlewares catch-all
+// ✨ NOVO: SOCKET.IO PARA NOTIFICAÇÕES
+// ============================================
+io.on('connection', async (socket) => {
+  console.log(`[Socket.IO] Cliente conectado: ${socket.id}`);
+
+  // Autenticar usuário via token
+  const token = socket.handshake.auth.token || socket.handshake.query.token;
+
+  if (!token) {
+    console.error('[Socket.IO] Token não fornecido');
+    socket.disconnect();
+    return;
+  }
+
+  try {
+    // Verificar token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    // Verificar se usuário existe
+    const users = await database.query(
+      'SELECT id, username FROM users WHERE id = ? AND is_active = true',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      console.error('[Socket.IO] Usuário não encontrado ou inativo');
+      socket.disconnect();
+      return;
+    }
+
+    // Registrar conexão
+    socket.userId = userId;
+    socket.username = users[0].username;
+    notificationManager.registerUserSocket(userId, socket.id);
+
+    console.log(`✅ [Socket.IO] Usuário autenticado: ${socket.username} (ID: ${userId})`);
+
+    // Enviar notificação de boas-vindas (opcional)
+    socket.emit('connected', {
+      message: 'Conectado ao sistema de notificações',
+      userId,
+      username: socket.username
+    });
+
+    // Desconexão
+    socket.on('disconnect', () => {
+      console.log(`[Socket.IO] Cliente desconectado: ${socket.id}`);
+      if (socket.userId) {
+        notificationManager.unregisterUserSocket(socket.userId);
+      }
+    });
+
+    // Evento de teste (opcional)
+    socket.on('ping', () => {
+      socket.emit('pong', { timestamp: Date.now() });
+    });
+
+  } catch (error) {
+    console.error('[Socket.IO] Erro na autenticação:', error.message);
+    socket.disconnect();
+  }
+});
+
+// ============================================
+// API ROUTES
 // ============================================
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRouter);
@@ -128,51 +202,32 @@ app.use('/proxy', proxyRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/domains', domainsRoutes);
+app.use('/api/databases', databasesRoutes);
 app.use('/api/notifications', notificationRoutes);
-// ============================================
-// ROTA WEBSOCKET PARA TERMINAL
-// CRÍTICO: Deve vir ANTES do proxy dinâmico e do 404 handler
-// ============================================
+
 const terminalRoutes = require('./routes/terminal');
 app.use('/api/terminal', terminalRoutes);
 const logsRoutes = require('./routes/logs');
 app.use('/api/logs', logsRoutes);
 const mysqlRoutes = require('./routes/mysql');
 app.use('/api/mysql', mysqlRoutes);
-// Socket.IO para terminal e logs em tempo real (mantém compatibilidade)
-/*
-io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Client connected: ${socket.id}`);
-
-  // Configurar terminal handler
-  terminalHandler.handleConnection(socket, io);
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
-    terminalHandler.handleDisconnection(socket);
-  });
-});
-*/
 
 // ============================================
-// PROXY DINÂMICO - Deve vir DEPOIS de todas as rotas da API
+// PROXY DINÂMICO
 // ============================================
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
 
-  // Não interceptar chamadas da própria API
   if (req.path && req.path.startsWith('/api')) {
     return next();
   }
 
-  // Ignorar subdomínio de API
   if (!host || !host.endsWith('.mozhost.topaziocoin.online') || host === 'api.mozhost.topaziocoin.online' || host.startsWith('api.')) {
     return next();
   }
 
   try {
-    // Buscar container no banco pelo campo domain
     const containers = await database.query(
       'SELECT port FROM containers WHERE domain = ? AND status = ?',
       [host, 'running']
@@ -182,7 +237,6 @@ app.use('*', async (req, res, next) => {
       return res.status(404).json({ error: 'Container not found' });
     }
 
-    // Fazer proxy para o container
     const { createProxyMiddleware } = require('http-proxy-middleware');
     const proxy = createProxyMiddleware({
       target: `http://localhost:${containers[0].port}`,
@@ -197,7 +251,7 @@ app.use('*', async (req, res, next) => {
 });
 
 // ============================================
-// ERROR HANDLING - Deve vir antes do 404
+// ERROR HANDLING
 // ============================================
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -222,7 +276,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 404 HANDLER - Sempre por último!
+// 404 HANDLER
 // ============================================
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -233,30 +287,26 @@ app.use('*', (req, res) => {
 // Inicializar servidor
 async function startServer() {
   try {
-    // Testar conexão com banco
     console.log('🔍 Testing database connection...');
     const dbConnected = await database.testConnection();
     if (!dbConnected) {
       throw new Error('Database connection failed');
     }
 
-    // Inicializar tabelas
     console.log('📋 Initializing database tables...');
     await database.initTables();
 
-    // Limpar containers órfãos no startup
     console.log('🧹 Cleaning up orphaned containers...');
     await cleanupOrphanedContainers();
 
-    // Inicializar WhatsApp
     console.log('📱 Initializing WhatsApp...');
     startWhatsApp();
 
-    // Iniciar servidor
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');
       console.log(`📡 Server running on port ${PORT}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔔 WebSocket notifications: ws://localhost:${PORT}`);
       console.log(`🔌 WebSocket terminal: ws://localhost:${PORT}/api/terminal/:containerId`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
@@ -271,8 +321,6 @@ async function startServer() {
 async function cleanupOrphanedContainers() {
   try {
     const dockerManager = require('./utils/docker-manager');
-
-    // Verificar se há containers na tabela primeiro
     const containerCount = await database.query('SELECT COUNT(*) as count FROM containers');
 
     if (containerCount[0].count === 0) {
@@ -280,7 +328,6 @@ async function cleanupOrphanedContainers() {
       return;
     }
 
-    // Buscar todos os containers ativos no banco
     const activeContainers = await database.query(
       'SELECT id, docker_container_id FROM containers WHERE status = ? AND docker_container_id IS NOT NULL',
       ['running']
@@ -290,11 +337,8 @@ async function cleanupOrphanedContainers() {
 
     for (const container of activeContainers) {
       try {
-        // Verificar se container ainda existe no Docker
         const dockerContainer = dockerManager.docker.getContainer(container.docker_container_id);
         const inspect = await dockerContainer.inspect();
-
-        // Atualizar status baseado no estado real
         const realStatus = inspect.State.Running ? 'running' : 'stopped';
 
         await database.query(
@@ -303,7 +347,6 @@ async function cleanupOrphanedContainers() {
         );
 
       } catch (dockerError) {
-        // Container não existe mais no Docker
         console.log(`🧹 Cleaning up orphaned container: ${container.id}`);
         await database.query(
           'UPDATE containers SET status = ? WHERE id = ?',
@@ -315,7 +358,6 @@ async function cleanupOrphanedContainers() {
     console.log('✅ Container cleanup completed');
   } catch (error) {
     console.error('⚠️ Error during container cleanup:', error.message);
-    // Não quebrar o startup por causa disso
   }
 }
 
@@ -341,35 +383,30 @@ process.on('SIGINT', async () => {
 // Start the server
 startServer();
 
-// Job para verificar subscriptions (roda a cada 1 hora)
+// Job para verificar subscriptions
 const checkSubscriptions = async () => {
   try {
     console.log('🔍 Verificando subscriptions...');
-    
-    // Verificar expirando (aviso 5 dias antes)
     const expiring = await subscriptionService.checkExpiringSubscriptions();
     if (expiring > 0) {
       console.log(`⚠️  ${expiring} subscriptions expirando em breve`);
     }
-    
-    // Expirar as vencidas
+
     const expired = await subscriptionService.expireSubscriptions();
     if (expired > 0) {
       console.log(`❌ ${expired} subscriptions expiradas`);
     }
-    
+
     console.log('✅ Verificação de subscriptions concluída');
   } catch (error) {
     console.error('❌ Erro ao verificar subscriptions:', error);
   }
 };
 
-// Rodar verificação no startup
 setTimeout(() => {
   checkSubscriptions();
-}, 10000); // 10 segundos após iniciar
+}, 10000);
 
-// Rodar a cada hora
 setInterval(() => {
   checkSubscriptions();
-}, 60 * 60 * 1000); // 1 hora
+}, 60 * 60 * 1000);

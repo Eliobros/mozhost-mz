@@ -155,4 +155,25 @@ router.delete('/delete', authMiddleware, async (req, res) => {
   }
 });
 
+
+// Teste de Banco de dwdos
+router.get('/test', authMiddleware, async (req, res) => {
+  try {
+    // Tenta conectar no MySQL do usuário
+    const connection = await mysql.createConnection({
+      host: 'localhost',
+      user: req.user.dbUser,
+      password: req.user.dbPassword,
+      database: req.user.dbName
+    });
+    
+    await connection.ping();
+    await connection.end();
+    
+    res.json({ success: true, message: 'Conexão OK!' });
+  } catch (error) {
+    res.json({ success: false, message: 'Falha na conexão' });
+  }
+});
+
 module.exports = router;

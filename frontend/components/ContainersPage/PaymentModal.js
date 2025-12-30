@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Coins, Smartphone, Loader, CheckCircle, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
 
 const PaymentModal = ({ onClose, onSuccess }) => {
@@ -15,38 +15,49 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online';
   const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
 
-  const packages = [
-    { mzn: 50, coins: 500, popular: false },
-    { mzn: 100, coins: 1100, popular: true, bonus: '+100 bonus' },
-    { mzn: 200, coins: 2300, popular: false, bonus: '+300 bonus' },
-    { mzn: 500, coins: 6000, popular: false, bonus: '+1000 bonus' }
-  ];
+  // Configuração de moedas
+  const currencies = {
+    MZN: {
+      symbol: 'MT',
+      name: 'Metical Moçambicano',
+      coinsPerUnit: 10,
+      minDeposit: 50,
+      flag: '🇲🇿'
+    },
+    BRL: {
+      symbol: 'R$',
+      name: 'Real Brasileiro',
+      coinsPerUnit: 100,
+      minDeposit: 5,
+      flag: '🇧🇷'
+    }
+  };
 
   const paymentMethods = [
-    { 
-      id: 'mpesa', 
-      name: 'M-Pesa', 
-      icon: '📱', 
+    {
+      id: 'mpesa',
+      name: 'M-Pesa',
+      icon: '📱',
       color: 'red',
       prefix: ['84', '85'],
       description: 'Vodacom (Moçambique)',
       requiresPhone: true,
       currency: 'MZN'
     },
-    { 
-      id: 'emola', 
-      name: 'e-Mola', 
-      icon: '💳', 
+    {
+      id: 'emola',
+      name: 'e-Mola',
+      icon: '💳',
       color: 'blue',
       prefix: ['86', '87'],
       description: 'Movitel (Moçambique)',
       requiresPhone: true,
       currency: 'MZN'
     },
-    { 
-      id: 'mercadopago', 
-      name: 'MercadoPago', 
-      icon: '💰', 
+    {
+      id: 'mercadopago',
+      name: 'MercadoPago',
+      icon: '💰',
       color: 'cyan',
       prefix: [],
       description: 'PIX, Cartão, Boleto (Brasil)',
@@ -56,20 +67,88 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     }
   ];
 
+  // Usar useMemo pra evitar re-renderizações desnecessárias
+  const selectedMethodData = useMemo(() => {
+    return paymentMethods.find(m => m.id === paymentMethod);
+  }, [paymentMethod]);
+
+  const currentCurrency = useMemo(() => {
+    return selectedMethodData?.currency || 'MZN';
+  }, [selectedMethodData]);
+
+  const currencyConfig = useMemo(() => {
+    return currencies[currentCurrency];
+  }, [currentCurrency]);
+
+  // Pacotes dependem da moeda
+  const packages = useMemo(() => {
+    if (currentCurrency === 'BRL') {
+      return [
+        { amount: 5, coins: 500, popular: false },
+        { amount: 10, coins: 1100, popular: true, bonus: '+100 bonus' },
+        { amount: 20, coins: 2300, popular: false, bonus: '+300 bonus' },
+        { amount: 50, coins: 6000, popular: false, bonus: '+1000 bonus' }
+      ];
+    } else {
+      return [
+        { amount: 50, coins: 500, popular: false },
+        { amount: 100, coins: 1100, popular: true, bonus: '+100 bonus' },
+        { amount: 200, coins: 2300, popular: false, bonus: '+300 bonus' },
+        { amount: 500, coins: 6000, popular: false, bonus: '+1000 bonus' }
+      ];
+    }
+  }, [currentCurrency]);
+
+  // Calcula coins
+  const getCoinsFromAmount = (value) => {
+    const numValue = parseFloat(value);
+    if (!numValue || isNaN(numValue)) return 0;
+
+    const baseCoins = numValue * currencyConfig.coinsPerUnit;
+
+    let bonus = 0;
+    if (currentCurrency === 'MZN') {
+      if (numValue >= 500) bonus = 1000;
+      else if (numValue >= 200) bonus = 300;
+      else if (numValue >= 100) bonus = 100;
+    } else if (currentCurrency === 'BRL') {
+      if (numValue >= 50) bonus = 1000;
+      else if (numValue >= 20) bonus = 300;
+      else if (numValue >= 10) bonus = 100;
+    }
+
+    return baseCoins + bonus;
+  };
+
+  // Valida valor
+  const validateAmount = () => {
+    const numAmount = parseFloat(amount);
+    const minDeposit = currencyConfig.minDeposit;
+
+    if (!amount || numAmount < minDeposit) {
+      setError(`Valor mínimo: ${currencyConfig.symbol} ${minDeposit}`);
+      return false;
+    }
+    return true;
+  };
+
   const handlePackageSelect = (pkg) => {
-    setAmount(pkg.mzn.toString());
+    setAmount(pkg.amount.toString());
     setError('');
     setStep('method');
   };
 
   const handleCustomAmount = () => {
-    const numAmount = parseInt(amount);
-    if (!amount || numAmount < 50) {
-      setError('Valor mínimo: 50');
-      return;
-    }
+    if (!validateAmount()) return;
     setError('');
     setStep('method');
+  };
+
+  // Quando muda método de pagamento, reseta amount
+  const handleMethodChange = (methodId) => {
+    setPaymentMethod(methodId);
+    setAmount('');
+    setError('');
   };
 
   const validatePhone = (phone, method) => {
@@ -90,19 +169,18 @@ const PaymentModal = ({ onClose, onSuccess }) => {
 
   const handlePayment = async () => {
     setError('');
-    const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
 
-    if (selectedMethod?.requiresPhone && !phoneNumber) {
+    if (selectedMethodData?.requiresPhone && !phoneNumber) {
       setError('Número de telefone é obrigatório');
       return;
     }
 
-    if (selectedMethod?.requiresPhone && !validatePhone(phoneNumber, paymentMethod)) {
-      setError(`Número inválido para ${selectedMethod.name}. Use: ${selectedMethod.prefix.join(' ou ')}`);
+    if (selectedMethodData?.requiresPhone && !validatePhone(phoneNumber, paymentMethod)) {
+      setError(`Número inválido para ${selectedMethodData.name}. Use: ${selectedMethodData.prefix.join(' ou ')}`);
       return;
     }
 
-    if (selectedMethod?.requiresEmail && !validateEmail(email)) {
+    if (selectedMethodData?.requiresEmail && !validateEmail(email)) {
       setError('Email inválido');
       return;
     }
@@ -156,7 +234,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     }
 
     const paymentData = data.data || data;
-    
+
     await fetch(`${API_URL}/api/payment/initiate`, {
       method: 'POST',
       headers: {
@@ -164,7 +242,9 @@ const PaymentModal = ({ onClose, onSuccess }) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        amount: parseInt(amount),
+        amount: parseFloat(amount),
+        currency: 'BRL',
+        coins: getCoinsFromAmount(amount),
         paymentMethod: 'mercadopago',
         phoneNumber: null,
         external_payment_id: paymentData.id || paymentData.external_reference,
@@ -206,7 +286,9 @@ const PaymentModal = ({ onClose, onSuccess }) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        amount: parseInt(amount),
+        amount: parseFloat(amount),
+        currency: 'MZN',
+        coins: getCoinsFromAmount(amount),
         paymentMethod,
         phoneNumber,
         external_payment_id: data.data?.transaction_id || data.transaction_id,
@@ -252,137 +334,194 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     }, 5000);
   };
 
-  const getCoinsFromAmount = (value) => {
-    return parseInt(value) * 10;
-  };
-
-  const selectedMethodData = paymentMethods.find(m => m.id === paymentMethod);
-
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-          <h3 className="text-lg font-medium text-gray-900">Comprar Coins</h3>
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Comprar Coins</h3>
+            {paymentMethod && (
+              <p className="text-xs text-gray-500 mt-1">
+                {currencyConfig.flag} Pagando em {currencyConfig.name}
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-6 h-6" />
           </button>
         </div>
 
         <div className="p-6">
+          {/* STEP 1: AMOUNT - Escolher método e valor */}
           {step === 'amount' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Escolha um pacote
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {packages.map((pkg) => (
-                    <button
-                      key={pkg.mzn}
-                      onClick={() => handlePackageSelect(pkg)}
-                      className={`relative p-4 border-2 rounded-lg text-left hover:border-blue-500 transition-all ${
-                        pkg.popular ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                      }`}
-                    >
-                      {pkg.popular && (
-                        <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
-                          Popular
-                        </span>
-                      )}
-                      <div className="text-2xl font-bold text-gray-900">{pkg.mzn}</div>
-                      <div className="text-xs text-gray-500">MZN / R$</div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        <Coins className="inline w-4 h-4 text-yellow-500 mr-1" />
-                        {pkg.coins} coins
-                      </div>
-                      {pkg.bonus && (
-                        <div className="text-xs text-green-600 font-medium mt-1">{pkg.bonus}</div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">ou valor personalizado</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Valor (mín. 50)
-                </label>
-                <input
-                  type="number"
-                  min="50"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: 150"
-                />
-                {amount && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    = {getCoinsFromAmount(amount)} coins
-                  </p>
-                )}
-              </div>
-
-              {error && (
-                <div className="flex items-center text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
-                  <AlertCircle className="w-4 h-4 mr-2" />
-                  {error}
+              {!paymentMethod && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <Coins className="w-5 h-5 text-blue-600 mt-0.5" />
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-blue-900">
+                        Primeiro, escolha como pagar
+                      </h4>
+                      <p className="mt-1 text-xs text-blue-700">
+                        Os valores serão exibidos na moeda do método escolhido
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <button
-                onClick={handleCustomAmount}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 rounded-md font-medium"
-              >
-                Continuar
-              </button>
+              {!paymentMethod && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Método de pagamento
+                  </label>
+                  <div className="space-y-2">
+                    {paymentMethods.map((method) => (
+                      <button
+                        key={method.id}
+                        onClick={() => handleMethodChange(method.id)}
+                        className="w-full p-3 border-2 border-gray-200 hover:border-gray-300 rounded-lg text-left flex items-center justify-between transition-all"
+                      >
+                        <div className="flex items-center">
+                          <span className="text-2xl mr-3">{method.icon}</span>
+                          <div>
+                            <div className="font-medium">{method.name}</div>
+                            <div className="text-xs text-gray-500">{method.description}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">
+                            {currencies[method.currency].flag}
+                          </div>
+                          <div className="text-xs font-medium text-gray-700">
+                            {currencies[method.currency].symbol}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {paymentMethod && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Escolha um pacote
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {packages.map((pkg) => (
+                        <button
+                          key={pkg.amount}
+                          onClick={() => handlePackageSelect(pkg)}
+                          className={`relative p-4 border-2 rounded-lg text-left hover:border-blue-500 transition-all ${
+                            pkg.popular ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                          }`}
+                        >
+                          {pkg.popular && (
+                            <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                              Popular
+                            </span>
+                          )}
+                          <div className="text-2xl font-bold text-gray-900">
+                            {currencyConfig.symbol} {pkg.amount}
+                          </div>
+                          <div className="text-xs text-gray-500">{currencyConfig.name}</div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            <Coins className="inline w-4 h-4 text-yellow-500 mr-1" />
+                            {pkg.coins} coins
+                          </div>
+                          {pkg.bonus && (
+                            <div className="text-xs text-green-600 font-medium mt-1">{pkg.bonus}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white text-gray-500">ou valor personalizado</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Valor (mín. {currencyConfig.symbol} {currencyConfig.minDeposit})
+                    </label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                        {currencyConfig.symbol}
+                      </span>
+                      <input
+                        type="number"
+                        min={currencyConfig.minDeposit}
+                        step="0.01"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder={`Ex: ${currencyConfig.minDeposit * 3}`}
+                      />
+                    </div>
+                    {amount && parseFloat(amount) >= currencyConfig.minDeposit && (
+                      <div className="mt-2 p-2 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded">
+                        <p className="text-sm font-medium text-gray-900">
+                          <Coins className="inline w-4 h-4 text-yellow-600 mr-1" />
+                          Você receberá: <span className="text-lg font-bold text-yellow-600">
+                            {getCoinsFromAmount(amount)} coins
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {error && (
+                    <div className="flex items-center text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setPaymentMethod('');
+                        setAmount('');
+                        setError('');
+                      }}
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-md font-medium"
+                    >
+                      Trocar Método
+                    </button>
+                    <button
+                      onClick={handleCustomAmount}
+                      disabled={!amount}
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 rounded-md font-medium disabled:opacity-50"
+                    >
+                      Continuar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
+          {/* STEP 2: METHOD - Pedir telefone ou email */}
           {step === 'method' && (
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
                 <div className="font-medium text-blue-900">Resumo:</div>
                 <div className="text-blue-700 mt-1">
-                  {amount} = {getCoinsFromAmount(amount)} coins
+                  {currencyConfig.symbol} {amount} = <span className="font-bold">{getCoinsFromAmount(amount)} coins</span>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Método de pagamento
-                </label>
-                <div className="space-y-2">
-                  {paymentMethods.map((method) => (
-                    <button
-                      key={method.id}
-                      onClick={() => setPaymentMethod(method.id)}
-                      className={`w-full p-3 border-2 rounded-lg text-left flex items-center justify-between transition-all ${
-                        paymentMethod === method.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center">
-                        <span className="text-2xl mr-3">{method.icon}</span>
-                        <div>
-                          <div className="font-medium">{method.name}</div>
-                          <div className="text-xs text-gray-500">{method.description}</div>
-                        </div>
-                      </div>
-                      {paymentMethod === method.id && (
-                        <CheckCircle className="w-5 h-5 text-blue-600" />
-                      )}
-                    </button>
-                  ))}
+                <div className="text-xs text-blue-600 mt-1">
+                  {currencyConfig.flag} {currencyConfig.name}
                 </div>
               </div>
 
@@ -404,6 +543,9 @@ const PaymentModal = ({ onClose, onSuccess }) => {
                       placeholder={`${selectedMethodData.prefix.join(' ou ')}XXXXXXX`}
                     />
                   </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Exemplo: {selectedMethodData.prefix[0]}1234567
+                  </p>
                 </div>
               )}
 
@@ -431,14 +573,17 @@ const PaymentModal = ({ onClose, onSuccess }) => {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setStep('amount'); setError(''); }}
+                  onClick={() => {
+                    setStep('amount');
+                    setError('');
+                  }}
                   className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-md font-medium"
                 >
                   Voltar
                 </button>
                 <button
                   onClick={handlePayment}
-                  disabled={loading || !paymentMethod}
+                  disabled={loading}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 rounded-md font-medium disabled:opacity-50"
                 >
                   {loading ? 'Processando...' : 'Pagar'}
@@ -447,6 +592,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* STEP 3: PROCESSING - Aguardando confirmação */}
           {step === 'processing' && (
             <div className="text-center py-8">
               <Loader className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
@@ -468,6 +614,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* STEP 4: MERCADOPAGO - Link externo */}
           {step === 'mercadopago' && (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -498,6 +645,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* STEP 5: SUCCESS - Pagamento confirmado */}
           {step === 'success' && (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -514,6 +662,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* STEP 6: ERROR - Erro no pagamento */}
           {step === 'error' && (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">

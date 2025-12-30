@@ -3,6 +3,7 @@ import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
 import CodeEditor from './CodeEditor';
 import WebTerminal from './WebTerminal/WebTerminal';
+import SuportePage from './SuportPage';
 import ContainersPage from './ContainersPage';
 import MonitoringPage from './MonitoringPage';
 import ProfilePage from './ProfilePage';
@@ -11,7 +12,7 @@ import ResetPasswordPage from './ResetPasswordPage';
 import TermsConditionsPage from './TermsConditionsPage';
 import PrivacyPolicyPage from './PrivacyPolicyPage';
 import WhatsAppLink from './WhatsAppLink';
-import MySQLPage from './MySQLPage';
+import DatabasePage from './DatabasePage';
 import DashboardLayout from './DashboardLayout';
 //import CoinsPage from './CoinsPage';
 
@@ -126,8 +127,10 @@ const App = () => {
         return <SettingsPage />;
       case 'whatsapp':
         return <WhatsAppLink />;
-      case 'mysql':
-        return <MySQLPage />;
+      case 'database':
+        return <DatabasePage />;
+      case 'suporte':
+	return <SuportePage />;
       //case 'coins':
       //  return <CoinsPage />;
       default:

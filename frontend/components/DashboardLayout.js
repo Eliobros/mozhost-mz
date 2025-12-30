@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Server,
   Plus,
+  MessageCircle,
   Settings,
   User,
   LogOut,
@@ -42,11 +43,12 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const navigation = [
     { name: 'Dashboard', href: '#dashboard', icon: Home, current: currentPage === 'dashboard' },
     { name: 'Containers', href: '#containers', icon: Server, current: currentPage === 'containers' },
-    { name: 'MySQL', href: '#mysql', icon: Database, current: currentPage === 'mysql' },
+    { name: 'Database', href: '#database', icon: Database, current: currentPage === 'database' },
     { name: 'Editor', href: '#files', icon: FileText, current: currentPage === 'files' },
 //    { name: 'Terminal', href: '#terminal', icon: Terminal, current: currentPage === 'terminal' },
 //    { name: 'Monitoramento', href: '#monitoring', icon: Activity, current: currentPage === 'monitoring' },
     { name: 'Connections', href: '#whatsapp', icon: Link2, current: currentPage === 'whatsapp' },
+    { name: 'Suporte', href: '#suporte', icon: MessageCircle, current: currentPage === 'suporte' },
     { name: 'Perfil', href: '#profile', icon: User, current: currentPage === 'profile' },
     { name: 'Configurações', href: '#settings', icon: Settings, current: currentPage === 'settings' },
   ];
@@ -141,30 +143,44 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t border-gray-200 mt-8">
+        <footer className="bg-white border-t border-gray-200">
           <div className="px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col sm:flex-row justify-between items-center">
               <div className="flex items-center space-x-6 text-sm text-gray-600">
                 <button
-                  onClick={() => window.location.hash = 'terms'}
-                  className="hover:text-gray-900 transition-colors"
+                  onClick={() => window.location.hash = '#termos'}
+                  className="hover:text-gray-900 transition"
                 >
                   Termos e Condições
                 </button>
                 <button
-                  onClick={() => window.location.hash = 'privacy'}
-                  className="hover:text-gray-900 transition-colors"
+                  onClick={() => window.location.hash = '#privacidade'}
+                  className="hover:text-gray-900 transition"
                 >
                   Política de Privacidade
                 </button>
                 <button
-                  onClick={() => window.location.hash = 'containers'}
-                  className="hover:text-gray-900 transition-colors font-semibold text-green-600"
+                  onClick={() => window.location.hash = '#comprar-coins'}
+                  className="hover:text-gray-900 transition"
                 >
                   Comprar Coins
                 </button>
+                <a
+                  href="/docs"
+                  className="hover:text-gray-900 transition"
+                >
+                  📚 Documentação
+                </a>
+                <a
+                  href="https://chat.whatsapp.com/LFgjPsLujgkE3RJYkZM62I"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-gray-900 transition cursor-pointer"
+                >
+                  💬 Comunidade MozHost
+                </a>
               </div>
-              <div className="mt-4 sm:mt-0 text-sm text-gray-500">
+              <div className="mt-4 sm:mt-0 text-sm text-gray-600">
                 © 2025 Eliobros Tech. Todos os direitos reservados.
               </div>
             </div>
