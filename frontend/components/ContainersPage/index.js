@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Server, 
-  Plus, 
-  Play, 
-  Square, 
+import {
+  Server,
+  Plus,
+  Play,
+  Square,
   AlertCircle,
   CheckCircle,
   Coins
@@ -18,6 +18,7 @@ const ContainersPage = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false); // ← NOVO ESTADO
   const [createForm, setCreateForm] = useState({
     name: '',
     type: 'nodejs',
@@ -55,7 +56,7 @@ const ContainersPage = () => {
       alert('Valor inválido. Informe um número em MB (>= 100).');
       return;
     }
-    
+
     try {
       const data = await upgradeStorage(containerId, addMb);
       alert(`Armazenamento atualizado! Novo limite: ${data.maxStorageMb} MB. Coins restantes: ${data.coins}.`);
@@ -84,6 +85,11 @@ const ContainersPage = () => {
       return;
     }
 
+    // ✅ PREVINE MÚLTIPLOS CLIQUES
+    if (isCreating) return;
+
+    setIsCreating(true); // ← ATIVA LOADING
+
     try {
       await createContainer(createForm);
       setShowCreateModal(false);
@@ -91,6 +97,8 @@ const ContainersPage = () => {
       await loadContainers();
     } catch (error) {
       alert(`Erro ao criar container: ${error.message}`);
+    } finally {
+      setIsCreating(false); // ← DESATIVA LOADING
     }
   };
 
@@ -285,7 +293,7 @@ const ContainersPage = () => {
                       : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
                   }`}
                 >
-                  {status === 'all' ? 'Todos' : 
+                  {status === 'all' ? 'Todos' :
                    status === 'running' ? 'Rodando' :
                    status === 'stopped' ? 'Parado' : 'Erro'}
                 </button>
@@ -302,7 +310,7 @@ const ContainersPage = () => {
               {containers.length === 0 ? 'Nenhum container encontrado' : 'Nenhum container corresponde aos filtros'}
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              {containers.length === 0 
+              {containers.length === 0
                 ? 'Comece criando seu primeiro container para hospedar seus bots.'
                 : 'Tente ajustar os filtros ou criar um novo container.'
               }
@@ -341,8 +349,10 @@ const ContainersPage = () => {
             setForm={setCreateForm}
             coins={coins}
             requiredCoins={REQUIRED_COINS}
+            isCreating={isCreating} // ← PASSA A PROP
             onSubmit={handleCreateContainer}
             onClose={() => {
+              if (isCreating) return; // ← Previne fechar durante criação
               setShowCreateModal(false);
               setCreateForm({ name: '', type: 'nodejs', environment: {} });
             }}

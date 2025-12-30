@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import TawkToChat from '@/components/TawkToChat'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -83,6 +84,9 @@ export default function RootLayout({
         {/* Favicon */}
         <link rel="icon" href="/mozhost.png" />
         <link rel="apple-touch-icon" href="/mozhost.png" />
+
+        {/* Theme Color */}
+        <meta name="theme-color" content="#3B82F6" />
 
         {/* SCHEMA 1 - WebHostingService (MozHost) */}
         <script type="application/ld+json">
@@ -229,6 +233,7 @@ export default function RootLayout({
 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
+        <TawkToChat />
       </body>
     </html>
   );

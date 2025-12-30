@@ -11,7 +11,6 @@ import {
   Folder,
   Terminal as TerminalIcon
 } from 'lucide-react';
-import DashboardLayout from '../DashboardLayout';
 import LogsPage from './LogsPage';
 import FileExplorer from './FileExplorer';
 import { 
@@ -295,19 +294,19 @@ const [logsMaximized, setLogsMaximized] = useState(false);
 
   if (loading) {
     return (
-      <DashboardLayout currentPage="files">
+      
         <div className="flex items-center justify-center min-h-96">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">Carregando editor...</p>
           </div>
         </div>
-      </DashboardLayout>
+      
     );
   }
 
   return (
-    <DashboardLayout currentPage="files">
+    
       <div className="h-[calc(100vh-8rem)] flex flex-col">
         {/* Header */}
         <div className="bg-white shadow-sm border-b p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -540,7 +539,7 @@ const [logsMaximized, setLogsMaximized] = useState(false);
           </div>
         )}
       </div>
-    </DashboardLayout>
+    
   );
 };
 

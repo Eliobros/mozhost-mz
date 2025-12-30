@@ -1,5 +1,5 @@
 // utils/email.js
-const brevo = require('@getbrevo/brevo');
+const axios = require('axios');
 require('dotenv').config();
 
 /**
@@ -14,47 +14,47 @@ function generateCode(length = 6) {
 }
 
 /**
- * Envia email usando Brevo
+ * Envia email usando NeuraTech API
  * @param {Object} options - Opções do email
  * @param {string} options.toEmail - Email destinatário
- * @param {string} options.toName - Nome do destinatário
+ * @param {string} options.toName - Nome do destinatário (opcional)
  * @param {string} options.subject - Assunto
  * @param {string} options.htmlContent - Conteúdo HTML
- * @param {string} options.textContent - Conteúdo texto
+ * @param {string} options.textContent - Conteúdo texto (fallback)
  * @returns {Promise} - Resultado do envio
  */
 async function sendEmail({ toEmail, toName, subject, htmlContent, textContent }) {
   try {
-    if (!process.env.BREVO_API_KEY) {
-      console.warn('⚠️  BREVO_API_KEY não configurado, simulando envio de email');
+    if (!process.env.EMAIL_API_KEY) {
+      console.warn('⚠️  EMAIL_API_KEY não configurado, simulando envio de email');
       console.log(`📧 Email simulado para: ${toEmail}`);
       console.log(`📄 Assunto: ${subject}`);
-      console.log(`📝 Conteúdo: ${textContent}`);
-      return { messageId: 'simulated' };
+      console.log(`📝 Conteúdo: ${textContent || htmlContent}`);
+      return { messageId: 'simulated', success: true };
     }
 
-    const apiInstance = new brevo.TransactionalEmailsApi();
-    
-    // Configurar API key
-    apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+    const response = await axios.post('https://api.neuratechmz.tech/api/send', {
+      api_key: process.env.EMAIL_API_KEY,
+      to: toEmail,
+      subject: subject,
+      message: htmlContent || textContent, // Prioriza HTML, fallback para texto
+      prefix: 'mozhost' // Identificador da MozHost
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
 
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: toEmail, name: toName }];
-    sendSmtpEmail.sender = {
-      email: process.env.FROM_EMAIL || 'noreply@mozhost.topaziocoin.online',
-      name: process.env.FROM_NAME || 'MozHost'
+    console.log('✅ Email enviado com sucesso via NeuraTech:', response.data);
+    return {
+      messageId: response.data.id || 'sent',
+      success: true,
+      data: response.data
     };
-    sendSmtpEmail.subject = subject;
-    sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.textContent = textContent;
-
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log('✅ Email enviado com sucesso:', result);
-    return result;
 
   } catch (error) {
-    console.error('❌ Erro ao enviar email:', error);
-    throw new Error('Falha no envio do email: ' + error.message);
+    console.error('❌ Erro ao enviar email via NeuraTech:', error.response?.data || error.message);
+    throw new Error('Falha no envio do email: ' + (error.response?.data?.message || error.message));
   }
 }
 

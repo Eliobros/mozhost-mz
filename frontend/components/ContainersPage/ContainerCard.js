@@ -37,16 +37,6 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
     alert(`${label} copiado!`);
   };
 
-  // Log para debug - remover em produção
-  console.log('Container:', {
-    type: container.type,
-    hasDbName: !!container.db_name,
-    hasDbUser: !!container.db_user,
-    hasDbPassword: !!container.db_password,
-    hasPmaDomain: !!container.pma_domain,
-    fullContainer: container
-  });
-
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
       {/* Subscription Expiration Banner */}
@@ -136,7 +126,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
             </div>
           )}
 
-          {/* MySQL Credentials - Verificação mais robusta */}
+          {/* MySQL Credentials - COM CONEXÃO EXTERNA */}
           {(container.type === 'php' || container.type === 'PHP') && (container.db_name || container.database_name) && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center mb-2">
@@ -145,12 +135,15 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
               </div>
 
               <div className="space-y-2 text-xs">
+                {/* HOST EXTERNO */}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Host:</span>
                   <div className="flex items-center gap-1">
-                    <code className="bg-white px-2 py-1 rounded border border-blue-200">mysql</code>
+                    <code className="bg-white px-2 py-1 rounded border border-blue-200 text-[10px] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
+                      {container.mysql_domain || 'mysql'}
+                    </code>
                     <button
-                      onClick={() => copyToClipboard('mysql', 'Host')}
+                      onClick={() => copyToClipboard(container.mysql_domain || 'mysql', 'Host')}
                       className="p-1 hover:bg-blue-100 rounded"
                       title="Copiar host"
                     >
@@ -158,6 +151,25 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
                     </button>
                   </div>
                 </div>
+
+                {/* PORTA EXTERNA */}
+                {container.mysql_port && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Porta:</span>
+                    <div className="flex items-center gap-1">
+                      <code className="bg-white px-2 py-1 rounded border border-blue-200">
+                        {container.mysql_port}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(container.mysql_port.toString(), 'Porta')}
+                        className="p-1 hover:bg-blue-100 rounded"
+                        title="Copiar porta"
+                      >
+                        <Copy className="w-3 h-3 text-blue-700" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Banco:</span>
@@ -221,8 +233,9 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
                 </div>
               </div>
 
-              {(container.pma_domain || container.phpmyadmin_domain) && (
-                <div className="mt-3 pt-2 border-t border-blue-200">
+              {/* BOTÕES DE ACESSO RÁPIDO */}
+              <div className="mt-3 pt-2 border-t border-blue-200 flex flex-wrap gap-2">
+                {(container.pma_domain || container.phpmyadmin_domain) && (
                   <a
                     href={`http://${container.pma_domain || container.phpmyadmin_domain}`}
                     target="_blank"
@@ -232,8 +245,22 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
                     <ExternalLink className="w-3 h-3 mr-1" />
                     Abrir PHPMyAdmin
                   </a>
-                </div>
-              )}
+                )}
+                
+                {/* Copiar comando MySQL completo */}
+                {container.mysql_domain && container.mysql_port && (
+                  <button
+                    onClick={() => {
+                      const cmd = `mysql -h ${container.mysql_domain} -P ${container.mysql_port} -u ${container.db_user || 'mozhost_user'} -p`;
+                      copyToClipboard(cmd, 'Comando MySQL');
+                    }}
+                    className="inline-flex items-center text-xs text-blue-700 hover:text-blue-800 hover:underline font-medium"
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Copiar comando MySQL
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -274,8 +301,8 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
                   onClick={() => onAction(container.id, 'start')}
                   disabled={actionLoading === 'start' || container.subscription?.expired}
                   className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white disabled:opacity-50 disabled:cursor-not-allowed ${
-                    container.subscription?.expired 
-                      ? 'bg-gray-400' 
+                    container.subscription?.expired
+                      ? 'bg-gray-400'
                       : 'bg-green-600 hover:bg-green-700'
                   }`}
                 >
@@ -325,8 +352,8 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
                   onClick={() => onAction(container.id, 'start')}
                   disabled={actionLoading === 'start' || container.subscription?.expired}
                   className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white disabled:opacity-50 disabled:cursor-not-allowed ${
-                    container.subscription?.expired 
-                      ? 'bg-gray-400' 
+                    container.subscription?.expired
+                      ? 'bg-gray-400'
                       : 'bg-green-600 hover:bg-green-700'
                   }`}
                 >

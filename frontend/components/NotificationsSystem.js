@@ -1,123 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Bell, 
-  X, 
-  Check, 
-  AlertCircle, 
-  Info, 
-  CheckCircle, 
-  Clock, 
-  Server, 
+import {
+  Bell,
+  X,
+  Check,
+  AlertCircle,
+  Info,
+  CheckCircle,
+  Clock,
+  Server,
   CreditCard,
   Settings,
   Trash2,
   Filter,
-  Search
+  Search,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
+// ✨ NOVO: Importar hook de notificações
+import { useNotifications } from '../hooks/useNotifications';
+
 const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
-  const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
 
+  // ✨ NOVO: Usar hook de notificações
+  const {
+    notifications,
+    unreadCount,
+    connected,
+    loading,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    requestNotificationPermission
+  } = useNotifications();
+
+  // ✨ NOVO: Notificar parent component sobre mudanças no unread count
+  useEffect(() => {
+    if (onUnreadChange) {
+      onUnreadChange(unreadCount);
+    }
+  }, [unreadCount, onUnreadChange]);
+
+  // ✨ NOVO: Pedir permissão para notificações quando abre o modal
   useEffect(() => {
     if (isOpen) {
-      loadNotifications();
+      requestNotificationPermission();
     }
-  }, [isOpen]);
-
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Falha ao carregar notificações');
-      }
-
-      const data = await response.json();
-      
-      const formattedNotifications = data.notifications.map(n => ({
-        id: n.id,
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        timestamp: new Date(n.created_at),
-        read: !!n.read_at,
-        category: n.category
-      }));
-      
-      setNotifications(formattedNotifications);
-      if (onUnreadChange) {
-        onUnreadChange(data.unreadCount);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar notificações:', error);
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const markAsRead = async (notificationId) => {
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/${notificationId}/read`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const next = notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
-      setNotifications(next);
-      if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);
-    } catch (error) {
-      console.error('Erro ao marcar notificação como lida:', error);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/read-all`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const next = notifications.map(n => ({ ...n, read: true }));
-      setNotifications(next);
-      if (onUnreadChange) onUnreadChange(0);
-    } catch (error) {
-      console.error('Erro ao marcar todas como lidas:', error);
-    }
-  };
-
-  const deleteNotification = async (notificationId) => {
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/notifications/${notificationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const next = notifications.filter(n => n.id !== notificationId);
-      setNotifications(next);
-      if (onUnreadChange) onUnreadChange(next.filter(n => !n.read).length);
-    } catch (error) {
-      console.error('Erro ao deletar notificação:', error);
-    }
-  };
+  }, [isOpen, requestNotificationPermission]);
 
   const getNotificationIcon = (type) => {
     const icons = {
@@ -144,7 +75,8 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
       container: Server,
       system: Settings,
       billing: CreditCard,
-      welcome: CheckCircle
+      welcome: CheckCircle,
+      subscription: Clock
     };
     return icons[category] || Info;
   };
@@ -169,8 +101,6 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
     return matchesFilter && matchesSearch;
   });
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   if (!isOpen) return null;
 
   return (
@@ -182,9 +112,25 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
             <Bell className="w-6 h-6 text-blue-600 mr-3" />
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
-              <p className="text-sm text-gray-500">
-                {unreadCount > 0 ? `${unreadCount} não lidas` : 'Todas lidas'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-500">
+                  {unreadCount > 0 ? `${unreadCount} não lidas` : 'Todas lidas'}
+                </p>
+                {/* ✨ NOVO: Indicador de conexão WebSocket */}
+                <div className="flex items-center gap-1">
+                  {connected ? (
+                    <>
+                      <Wifi className="w-3 h-3 text-green-500" />
+                      <span className="text-xs text-green-600">Tempo real</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-400">Offline</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -220,8 +166,8 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                 />
               </div>
             </div>
-            <div className="flex gap-2">
-              {['all', 'container', 'system', 'billing', 'welcome'].map(category => (
+            <div className="flex gap-2 flex-wrap">
+              {['all', 'container', 'system', 'billing', 'subscription', 'welcome'].map(category => (
                 <button
                   key={category}
                   onClick={() => setFilter(category)}
@@ -234,7 +180,8 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                   {category === 'all' ? 'Todas' :
                    category === 'container' ? 'Containers' :
                    category === 'system' ? 'Sistema' :
-                   category === 'billing' ? 'Cobrança' : 'Boas-vindas'}
+                   category === 'billing' ? 'Cobrança' :
+                   category === 'subscription' ? 'Assinatura' : 'Boas-vindas'}
                 </button>
               ))}
             </div>
@@ -258,7 +205,7 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                   {search || filter !== 'all' ? 'Nenhuma notificação encontrada' : 'Nenhuma notificação'}
                 </h3>
                 <p className="text-gray-500">
-                  {search || filter !== 'all' 
+                  {search || filter !== 'all'
                     ? 'Tente ajustar os filtros ou termo de busca'
                     : 'Você receberá notificações sobre eventos importantes aqui'
                   }
@@ -283,7 +230,7 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                       <div className={`flex-shrink-0 w-8 h-8 rounded-full ${colorClasses} flex items-center justify-center mr-3`}>
                         <Icon className="w-4 h-4" />
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -295,11 +242,11 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                                 <div className="w-2 h-2 bg-blue-500 rounded-full ml-2"></div>
                               )}
                             </div>
-                            
+
                             <p className="text-sm text-gray-600 mb-2">
                               {notification.message}
                             </p>
-                            
+
                             <div className="flex items-center text-xs text-gray-500">
                               <CategoryIcon className="w-3 h-3 mr-1" />
                               <span className="mr-3 capitalize">{notification.category}</span>
@@ -307,7 +254,7 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                               <span>{formatTimeAgo(notification.timestamp)}</span>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center space-x-1 ml-4">
                             {!notification.read && (
                               <button
@@ -339,9 +286,18 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
         {/* Footer */}
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              {filteredNotifications.length} de {notifications.length} notificações
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500">
+                {filteredNotifications.length} de {notifications.length} notificações
+              </p>
+              {/* ✨ NOVO: Status de conexão no footer */}
+              {connected && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                  Conectado
+                </span>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="text-sm text-gray-600 hover:text-gray-800 font-medium"

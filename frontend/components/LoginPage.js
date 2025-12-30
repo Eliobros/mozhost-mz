@@ -67,16 +67,25 @@ const LoginPage = () => {
         ? 'https://api.mozhost.topaziocoin.online/api/auth/login' 
         : 'https://api.mozhost.topaziocoin.online/api/auth/register';
 
-      const body = isLogin 
-        ? { login: formData.login, password: formData.password }
-        : { 
-            username: formData.username, 
-            email: formData.email, 
-            password: formData.password,
-            phone: (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') ? formData.phone : null,
-            countryCode: (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') ? formData.countryCode : null,
-            preferredVerificationMethod: formData.preferredVerificationMethod
-          };
+ 	const body = isLogin
+  ? { login: formData.login, password: formData.password }
+  : (() => {
+      // Cria objeto base (sempre envia)
+      const registerData = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        preferredVerificationMethod: formData.preferredVerificationMethod
+      };
+      
+      // Só adiciona phone/countryCode se for WhatsApp ou SMS
+      if (formData.preferredVerificationMethod === 'whatsapp' || formData.preferredVerificationMethod === 'sms') {
+        registerData.phone = formData.phone;
+        registerData.countryCode = formData.countryCode;
+      }
+      
+      return registerData;
+    })();
 
       const response = await fetch(url, {
         method: 'POST',

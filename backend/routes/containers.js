@@ -6,26 +6,22 @@ const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
 const subscriptionService = require('../services/subscriptionService');
 
+// ✨ NOVO: Importar NotificationManager
+const notificationManager = require('../utils/notification-manager');
+
 const router = express.Router();
 
-// Aplicar middleware de auth para todas as rotas
 router.use(authMiddleware);
 
 // Listar containers do usuário
 router.get('/', async (req, res) => {
   try {
     const containers = await database.query(`
-      SELECT
-        id, name, type, status, port, domain,
-        cpu_limit, memory_limit_mb, storage_used_mb,
-        auto_restart, created_at, updated_at,
-        db_name, db_user, db_password, pma_port, pma_domain
-      FROM containers
+      SELECT * FROM containers
       WHERE user_id = ?
       ORDER BY created_at DESC
     `, [req.user.userId]);
 
-    // Adicionar info de subscription para cada container
     const containersWithSubs = await Promise.all(containers.map(async (container) => {
       const subStatus = await subscriptionService.getSubscriptionStatus(container.id);
       return {
@@ -34,7 +30,6 @@ router.get('/', async (req, res) => {
       };
     }));
 
-    // Notificação de armazenamento quase cheio (>90%)
     const userInfo = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
     const maxMB = userInfo.length ? userInfo[0].max_storage_mb : 1024;
     const storageAlerts = containers
@@ -69,16 +64,14 @@ router.post('/:id/upgrade-storage', [
     const { id } = req.params;
     const { addMb } = req.body;
 
-    // Verifica usuário e container
     const containers = await database.query(
-      'SELECT id FROM containers WHERE id = ? AND user_id = ?',
+      'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
     );
     if (!containers.length) {
       return res.status(404).json({ error: 'Container not found' });
     }
 
-    // Preço: 1 coin = 1 MB (exemplo simples)
     const priceCoins = Number(addMb);
     const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
     const coins = users.length ? users[0].coins : 0;
@@ -86,10 +79,18 @@ router.post('/:id/upgrade-storage', [
       return res.status(402).json({ error: 'Insufficient coins', needed: priceCoins, have: coins });
     }
 
-    // Debitar coins e aumentar limite por usuário (global)
     await database.query('UPDATE users SET coins = coins - ?, max_storage_mb = max_storage_mb + ? WHERE id = ?', [priceCoins, addMb, req.user.userId]);
 
     const updated = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
+
+    // ✨ NOVO: Notificar upgrade de storage
+    await notificationManager.notify(req.user.userId, {
+      type: 'success',
+      category: 'container',
+      title: '📦 Storage Atualizado',
+      message: `${addMb}MB adicionados ao container "${containers[0].name}". Total: ${updated[0].max_storage_mb}MB`
+    });
+
     res.json({
       message: 'Armazenamento atualizado com sucesso',
       maxStorageMb: updated[0].max_storage_mb,
@@ -119,7 +120,6 @@ router.get('/:id', async (req, res) => {
 
     const container = containers[0];
 
-    // Tentar obter estatísticas se container estiver rodando
     let stats = null;
     if (container.status === 'running') {
       try {
@@ -167,7 +167,6 @@ router.post('/', [
 
     const { name, type, environment } = req.body;
 
-    // Verificar limite de containers
     const userContainers = await database.query(
       'SELECT COUNT(*) as count FROM containers WHERE user_id = ?',
       [req.user.userId]
@@ -185,7 +184,6 @@ router.post('/', [
       });
     }
 
-    // Verificar se nome já existe para o usuário
     const existingContainer = await database.query(
       'SELECT id FROM containers WHERE user_id = ? AND name = ?',
       [req.user.userId, name]
@@ -197,7 +195,6 @@ router.post('/', [
       });
     }
 
-    // Verificar coins mínimos (somente para novos usuários, manter legados)
     const MIN_COINS_TO_CREATE = Number(process.env.MIN_COINS_CREATE) || 500;
     if ((userInfo[0].coins || 0) < MIN_COINS_TO_CREATE) {
       return res.status(402).json({
@@ -207,17 +204,14 @@ router.post('/', [
       });
     }
 
-    // Criar container
     const containerData = await dockerManager.createUserContainer(req.user.userId, {
       name,
       type,
       environment: environment || {}
     });
 
-    // Criar subscription de 30 dias
     const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, MIN_COINS_TO_CREATE);
 
-    // Debitar coins
     await database.query(
       'UPDATE users SET coins = coins - ? WHERE id = ?',
       [MIN_COINS_TO_CREATE, req.user.userId]
@@ -257,7 +251,6 @@ router.post('/:id/start', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar se container pertence ao usuário
     const containers = await database.query(
       'SELECT id, name, status FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
@@ -271,9 +264,11 @@ router.post('/:id/start', async (req, res) => {
 
     const container = containers[0];
 
-    // Verificar se subscription está válida
     const subStatus = await subscriptionService.getSubscriptionStatus(id);
     if (subStatus.expired) {
+      // ✨ NOVO: Notificar subscription expirada
+      await notificationManager.notifySubscriptionExpired(req.user.userId, container.name);
+
       return res.status(402).json({
         error: 'Assinatura expirada',
         message: 'Recarregue 500 coins para reativar este container.',
@@ -369,7 +364,6 @@ router.post('/:id/restart', async (req, res) => {
 
     const container = containers[0];
 
-    // Parar e depois iniciar
     try {
       await dockerManager.stopContainer(id);
     } catch (stopError) {
@@ -377,6 +371,14 @@ router.post('/:id/restart', async (req, res) => {
     }
 
     await dockerManager.startContainer(id);
+
+    // ✨ NOVO: Notificar restart
+    await notificationManager.notify(req.user.userId, {
+      type: 'info',
+      category: 'container',
+      title: '🔄 Container Reiniciado',
+      message: `Container "${container.name}" foi reiniciado com sucesso.`
+    });
 
     res.json({
       message: 'Container restarted successfully',
@@ -495,7 +497,6 @@ router.patch('/:id', [
       });
     }
 
-    // Construir query de update dinâmica
     const updates = [];
     const values = [];
 
@@ -546,7 +547,6 @@ router.post('/:id/renew', async (req, res) => {
     const { id } = req.params;
     const RENEW_COST = 500;
 
-    // Verificar container
     const containers = await database.query(
       'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
@@ -556,27 +556,31 @@ router.post('/:id/renew', async (req, res) => {
       return res.status(404).json({ error: 'Container não encontrado' });
     }
 
-    // Verificar coins
     const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
     const coins = users.length ? users[0].coins : 0;
-    
+
     if (coins < RENEW_COST) {
-      return res.status(402).json({ 
-        error: 'Coins insuficientes', 
+      return res.status(402).json({
+        error: 'Coins insuficientes',
         message: `Você precisa de ${RENEW_COST} coins para renovar.`,
-        needed: RENEW_COST, 
-        have: coins 
+        needed: RENEW_COST,
+        have: coins
       });
     }
 
-    // Debitar coins
     await database.query('UPDATE users SET coins = coins - ? WHERE id = ?', [RENEW_COST, req.user.userId]);
 
-    // Renovar subscription
     const result = await subscriptionService.renewSubscription(req.user.userId, id, RENEW_COST);
 
-    // Buscar coins atualizados
     const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
+
+    // ✨ NOVO: Notificar renovação
+    await notificationManager.notify(req.user.userId, {
+      type: 'success',
+      category: 'subscription',
+      title: '✅ Assinatura Renovada',
+      message: `Container "${containers[0].name}" renovado por mais 30 dias! Expira em: ${new Date(result.expiresAt).toLocaleDateString('pt-BR')}`
+    });
 
     res.json({
       success: true,
