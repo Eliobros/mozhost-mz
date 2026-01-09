@@ -2,6 +2,9 @@
 // routes/payment.js - Integrado com Alauda API
 // ============================================
 const express = require('express');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const axios = require('axios');
 const database = require('../models/database');
@@ -524,6 +527,186 @@ router.get('/history', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching payment history:', error);
     res.status(500).json({ error: 'Erro ao buscar histórico' });
+  }
+});
+
+router.get('/check-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const payments = await database.query(
+      `SELECT id, status, coins, amount, payment_method, currency, created_at, completed_at
+       FROM payments 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (payments.length === 0) {
+      return res.json({
+        status: 'not_found',
+        message: 'Nenhum pagamento encontrado'
+      });
+    }
+
+    const payment = payments[0];
+
+    res.json({
+      status: payment.status,
+      payment_id: payment.id,
+      coins: payment.coins,
+      amount: payment.amount,
+      payment_method: payment.payment_method,
+      currency: payment.currency,
+      coinsAdded: payment.status === 'completed' ? payment.coins : 0
+    });
+
+  } catch (error) {
+    console.error('Erro check-status:', error);
+    res.status(500).json({ error: 'Erro ao verificar status' });
+  }
+});
+
+// Endpoint para gerar recibo
+router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const userId = req.user.id;
+
+    // Busca dados do pagamento no banco
+    const [payment] = await db.query(
+      `SELECT p.*, u.username, u.email, c.name as container_name
+       FROM payments p
+       LEFT JOIN users u ON p.user_id = u.id
+       LEFT JOIN containers c ON p.container_id = c.id
+       WHERE p.id = ? AND p.user_id = ?`,
+      [paymentId, userId]
+    );
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Pagamento não encontrado' });
+    }
+
+    // Cria o PDF
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+
+    // Define o nome do arquivo
+    const filename = `recibo_${paymentId}_${Date.now()}.pdf`;
+    
+    // Headers para download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Pipe o PDF direto pra resposta
+    doc.pipe(res);
+
+    // === HEADER COM LOGO ===
+    doc
+      .fontSize(28)
+      .fillColor('#1e40af')
+      .text('MOZHOST', 50, 50, { align: 'center' })
+      .fontSize(10)
+      .fillColor('#6b7280')
+      .text('Hospedagem de Bots & APIs', { align: 'center' })
+      .moveDown(0.5)
+      .text('mozhost.topaziocoin.online', { align: 'center' });
+
+    // Linha divisória
+    doc
+      .moveTo(50, 120)
+      .lineTo(545, 120)
+      .stroke('#e5e7eb');
+
+    // === STATUS PAGO ===
+    doc
+      .fontSize(20)
+      .fillColor('#16a34a')
+      .text('✓ PAGO', 50, 140, { align: 'center' })
+      .moveDown(1);
+
+    // === TÍTULO ===
+    doc
+      .fontSize(16)
+      .fillColor('#111827')
+      .text('RECIBO DE PAGAMENTO', { align: 'center' })
+      .moveDown(2);
+
+    // === INFORMAÇÕES DO PAGAMENTO ===
+    const startY = 220;
+    const lineHeight = 25;
+
+    const info = [
+      { label: 'ID da Transação:', value: `#${payment.id}` },
+      { label: 'Nome:', value: payment.username },
+      { label: 'Email:', value: payment.email },
+      { label: 'Valor Pago:', value: `${payment.currency === 'MZN' ? 'MT' : 'R$'} ${parseFloat(payment.amount).toFixed(2)}` },
+      { label: 'Coins Creditados:', value: `${payment.coins} coins` },
+      { label: 'Método:', value: payment.payment_method.toUpperCase() },
+      { label: 'Container:', value: payment.container_name || 'N/A' },
+      { label: 'Data:', value: new Date(payment.created_at).toLocaleString('pt-BR') },
+      { label: 'Status:', value: 'Confirmado' }
+    ];
+
+    info.forEach((item, index) => {
+      const y = startY + (index * lineHeight);
+      
+      doc
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(item.label, 80, y, { width: 150, align: 'left' })
+        .fontSize(12)
+        .fillColor('#111827')
+        .text(item.value, 240, y, { width: 250, align: 'left' });
+    });
+
+    // === BOX DE VALIDADE ===
+    const boxY = startY + (info.length * lineHeight) + 30;
+    
+    doc
+      .rect(50, boxY, 495, 60)
+      .fillAndStroke('#f3f4f6', '#e5e7eb');
+
+    doc
+      .fontSize(10)
+      .fillColor('#374151')
+      .text('Validade do Serviço:', 60, boxY + 15)
+      .fontSize(12)
+      .fillColor('#1e40af')
+      .text('30 dias a partir da data do pagamento', 60, boxY + 32);
+
+    // === RODAPÉ ===
+    doc
+      .fontSize(8)
+      .fillColor('#9ca3af')
+      .text(
+        'Este documento é um comprovante válido de pagamento.\nGuarde-o para controle e referência futura.',
+        50,
+        750,
+        { align: 'center', width: 495 }
+      );
+
+    doc
+      .moveTo(50, 740)
+      .lineTo(545, 740)
+      .stroke('#e5e7eb');
+
+    doc
+      .fontSize(7)
+      .fillColor('#d1d5db')
+      .text(
+        `Gerado em: ${new Date().toLocaleString('pt-BR')} | MozHost © ${new Date().getFullYear()}`,
+        50,
+        770,
+        { align: 'center' }
+      );
+
+    // Finaliza o PDF
+    doc.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar recibo:', error);
+    res.status(500).json({ error: 'Erro ao gerar recibo' });
   }
 });
 

@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  Mail, 
-  Calendar, 
-  Shield, 
-  Settings, 
-  Bell, 
-  CreditCard, 
-  Activity, 
-  Server, 
-  HardDrive, 
-  Cpu, 
+import {
+  User,
+  Mail,
+  Calendar,
+  Shield,
+  Settings,
+  Bell,
+  CreditCard,
+  Activity,
+  Server,
+  HardDrive,
+  Cpu,
   MemoryStick,
   Globe,
   Clock,
@@ -24,7 +24,9 @@ import {
   Crown,
   Zap,
   Star,
-  Coins
+  Coins,
+  Gift,
+  Tag
 } from 'lucide-react';
 import DashboardLayout from './DashboardLayout';
 import PaymentModal from './ContainersPage/PaymentModal';
@@ -64,6 +66,11 @@ const ProfilePage = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [coins, setCoins] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // Estados para cupons
+  const [couponCode, setCouponCode] = useState('');
+  const [redeemingCoupon, setRedeemingCoupon] = useState(false);
+  const [couponMessage, setCouponMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
     loadUserData();
@@ -104,14 +111,14 @@ const ProfilePage = () => {
         const data = await response.json();
         const containers = data.containers;
         setCoins(data.coins || 0);
-        
+
         setStats({
           totalContainers: containers.length,
           runningContainers: containers.filter(c => c.status === 'running').length,
           totalUptime: calculateTotalUptime(containers),
           totalStorage: containers.reduce((sum, c) => sum + (c.storage_used_mb || 0), 0),
-          averageCpu: Math.random() * 60 + 20, // Mock data
-          averageMemory: Math.random() * 70 + 10 // Mock data
+          averageCpu: Math.random() * 60 + 20,
+          averageMemory: Math.random() * 70 + 10
         });
       }
     } catch (error) {
@@ -120,7 +127,6 @@ const ProfilePage = () => {
   };
 
   const calculateTotalUptime = (containers) => {
-    // Simular uptime baseado na data de criação
     const now = new Date();
     const totalDays = containers.reduce((sum, container) => {
       const created = new Date(container.created_at);
@@ -128,11 +134,54 @@ const ProfilePage = () => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return sum + diffDays;
     }, 0);
-    
+
     if (totalDays > 0) {
       return `${totalDays} dias`;
     }
     return '0 dias';
+  };
+
+  const handleRedeemCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponMessage({ type: 'error', text: 'Digite um código de cupom' });
+      return;
+    }
+
+    setRedeemingCoupon(true);
+    setCouponMessage({ type: '', text: '' });
+
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/coupons/redeem', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ code: couponCode.trim() })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCouponMessage({ 
+          type: 'success', 
+          text: `🎉 ${data.message} Novo saldo: ${data.newBalance} coins` 
+        });
+        setCoins(data.newBalance);
+        setCouponCode('');
+        
+        // Limpar mensagem após 5 segundos
+        setTimeout(() => setCouponMessage({ type: '', text: '' }), 5000);
+      } else {
+        setCouponMessage({ type: 'error', text: data.message || 'Erro ao resgatar cupom' });
+      }
+    } catch (error) {
+      console.error('Erro ao resgatar cupom:', error);
+      setCouponMessage({ type: 'error', text: 'Erro de conexão ao resgatar cupom' });
+    } finally {
+      setRedeemingCoupon(false);
+    }
   };
 
   const handleSave = async () => {
@@ -141,8 +190,7 @@ const ProfilePage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      
-      // Validar senhas se fornecidas
+
       if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
         setMessage({ type: 'error', text: 'As senhas não coincidem' });
         return;
@@ -151,9 +199,9 @@ const ProfilePage = () => {
       const updateData = {
         username: formData.username,
         email: formData.email,
-        ...(formData.newPassword && { 
+        ...(formData.newPassword && {
           currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword 
+          newPassword: formData.newPassword
         }),
         notifications: formData.notifications,
         preferences: formData.preferences
@@ -279,7 +327,7 @@ const ProfilePage = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Email
@@ -310,7 +358,7 @@ const ProfilePage = () => {
                       {planInfo.name}
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Membro desde
@@ -356,7 +404,7 @@ const ProfilePage = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -370,7 +418,7 @@ const ProfilePage = () => {
                         placeholder="Digite a nova senha"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Confirmar Nova Senha
@@ -457,21 +505,84 @@ const ProfilePage = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Estatísticas da Conta</h3>
               </div>
               <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Coins className="w-5 h-5 text-yellow-600 mr-2" />
-                <span className="text-sm font-semibold text-gray-700">Coins</span>
-              </div>
-              <div className="flex items-center">
-                <span className="text-lg font-bold text-gray-900 mr-3">{coins}</span>
-                <button
-                  onClick={() => setShowPaymentModal(true)}
-                  className="inline-flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
-                >
-                  <Coins className="w-4 h-4 mr-1" /> Comprar coins
-                </button>
-              </div>
-            </div>
+                {/* Coins */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Coins className="w-5 h-5 text-yellow-600 mr-2" />
+                    <span className="text-sm font-semibold text-gray-700">Coins</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-lg font-bold text-gray-900 mr-3">{coins}</span>
+                    <button
+                      onClick={() => setShowPaymentModal(true)}
+                      className="inline-flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
+                    >
+                      <Coins className="w-4 h-4 mr-1" /> Comprar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Resgatar Cupom */}
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex items-center mb-3">
+                    <Gift className="w-5 h-5 text-purple-600 mr-2" />
+                    <span className="text-sm font-semibold text-gray-700">Resgatar Cupom</span>
+                  </div>
+                  
+                  {couponMessage.text && (
+                    <div className={`mb-3 rounded-md p-3 ${
+                      couponMessage.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                    }`}>
+                      <div className="flex">
+                        {couponMessage.type === 'success' ? (
+                          <CheckCircle className="h-4 w-4 text-green-400 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-red-400 mt-0.5" />
+                        )}
+                        <p className={`text-xs ml-2 ${
+                          couponMessage.type === 'success' ? 'text-green-800' : 'text-red-800'
+                        }`}>
+                          {couponMessage.text}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleRedeemCoupon();
+                        }
+                      }}
+                      placeholder="CÓDIGO"
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 uppercase"
+                      disabled={redeemingCoupon}
+                    />
+                    <button
+                      onClick={handleRedeemCoupon}
+                      disabled={redeemingCoupon || !couponCode.trim()}
+                      className="inline-flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {redeemingCoupon ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Tag className="w-4 h-4 mr-1" /> Usar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Digite o código do cupom para ganhar coins grátis!
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-gray-200"></div>
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Server className="w-5 h-5 text-blue-600 mr-2" />
@@ -479,7 +590,7 @@ const ProfilePage = () => {
                   </div>
                   <span className="text-lg font-bold text-gray-900">{stats.totalContainers}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Activity className="w-5 h-5 text-green-600 mr-2" />
@@ -487,7 +598,7 @@ const ProfilePage = () => {
                   </div>
                   <span className="text-lg font-bold text-gray-900">{stats.runningContainers}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Clock className="w-5 h-5 text-purple-600 mr-2" />
@@ -495,7 +606,7 @@ const ProfilePage = () => {
                   </div>
                   <span className="text-lg font-bold text-gray-900">{stats.totalUptime}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <HardDrive className="w-5 h-5 text-orange-600 mr-2" />
@@ -518,21 +629,21 @@ const ProfilePage = () => {
                     <span className="text-sm font-bold text-gray-900">{stats.averageCpu.toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-300 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full" 
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
                       style={{ width: `${Math.min(stats.averageCpu, 100)}%` }}
                     ></div>
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-gray-700">Memória Média</span>
                     <span className="text-sm font-bold text-gray-900">{stats.averageMemory.toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-300 rounded-full h-2">
-                    <div 
-                      className="bg-green-600 h-2 rounded-full" 
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
                       style={{ width: `${Math.min(stats.averageMemory, 100)}%` }}
                     ></div>
                   </div>

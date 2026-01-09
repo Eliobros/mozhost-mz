@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const whatsappLinkRoutes = require('./routes/whatsapp-link');
 const { adminRouter } = require('./routes/auth');
 const containerRoutes = require('./routes/containers');
+const couponRoutes = require('./routes/coupons');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
@@ -27,6 +28,7 @@ const monitoringRoutes = require('./routes/monitoring');
 const notificationRoutes = require('./routes/notifications');
 const subscriptionService = require('./services/subscriptionService');
 const databasesRoutes = require('./routes/databases');
+const emailRoutes = require('./routes/emails');
 
 // ✨ NOVO: Importar NotificationManager
 const notificationManager = require('./utils/notification-manager');
@@ -71,6 +73,7 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
+// ✅ CORREÇÃO CORS - ADICIONAR X-API-Key
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
@@ -80,15 +83,16 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'] // ✅ ADICIONA X-API-Key
 }));
 
+// ✅ CORREÇÃO CORS OPTIONS - ADICIONAR X-API-Key
 app.options('*', (req, res) => {
   const reqOrigin = req.headers.origin;
   if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
     res.header('Access-Control-Allow-Origin', reqOrigin || '');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key'); // ✅ ADICIONA X-API-Key
     res.header('Access-Control-Allow-Credentials', 'true');
     return res.sendStatus(200);
   }
@@ -200,9 +204,12 @@ app.use('/api/whatsapp-link', whatsappLinkRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);
 app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/emails', emailRoutes);
+
 app.use('/api/payment', paymentRoutes);
 app.use('/api/domains', domainsRoutes);
 app.use('/api/databases', databasesRoutes);
+app.use('/api', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 const terminalRoutes = require('./routes/terminal');

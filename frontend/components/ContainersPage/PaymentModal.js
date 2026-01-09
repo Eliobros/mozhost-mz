@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Coins, Smartphone, Loader, CheckCircle, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
 
 const PaymentModal = ({ onClose, onSuccess }) => {
+  const [paymentId, setPaymentId] = useState(null);
   const [step, setStep] = useState('amount');
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -21,7 +22,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       symbol: 'MT',
       name: 'Metical Moçambicano',
       coinsPerUnit: 10,
-      minDeposit: 50,
+      minDeposit: 5,
       flag: '🇲🇿'
     },
     BRL: {
@@ -262,7 +263,8 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       method: 'POST',
       headers: {
         'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || 'sua_api_key'}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+	 'X-API-Key': process.env.NEXT_PUBLIC_MOZHOST_API_KEY || 'sua_api_key_aqui'
       },
       body: JSON.stringify({
         valor: amount,
@@ -279,10 +281,18 @@ const PaymentModal = ({ onClose, onSuccess }) => {
 
     setPaymentResult(data);
 
+    // ADICIONA AQUI:
+const transactionId = data.data?.payment?.transaction_id;
+if (transactionId) {
+  setPaymentId(transactionId);
+  console.log('💾 Transaction ID salvo:', transactionId);
+}
+
     await fetch(`${API_URL}/api/payment/initiate`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
+	 'X-API-Key': process.env.NEXT_PUBLIC_MOZHOST_API_KEY || 'sua_api_key_aqui' ,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -333,6 +343,35 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       }
     }, 5000);
   };
+
+  const downloadReceipt = async () => {
+  try {
+    const token = localStorage.getItem('mozhost_token');
+    
+    const response = await fetch(`${API_URL}/api/payment/receipt/${paymentId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro ao baixar recibo');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `recibo_mozhost_${paymentId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error('Erro ao baixar recibo:', error);
+    alert('Erro ao baixar recibo. Tente novamente.');
+  }
+};
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -647,20 +686,33 @@ const PaymentModal = ({ onClose, onSuccess }) => {
 
           {/* STEP 5: SUCCESS - Pagamento confirmado */}
           {step === 'success' && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-10 h-10 text-green-600" />
-              </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Pagamento confirmado!</h4>
-              <p className="text-sm text-gray-600 mb-4">
-                {getCoinsFromAmount(amount)} coins foram adicionados à sua conta
-              </p>
-              <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <Coins className="inline w-4 h-4 mr-1" />
-                Você já pode criar seus containers!
-              </div>
-            </div>
-          )}
+  <div className="text-center py-8">
+    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <CheckCircle className="w-10 h-10 text-green-600" />
+    </div>
+    <h4 className="text-lg font-medium text-gray-900 mb-2">Pagamento confirmado!</h4>
+    <p className="text-sm text-gray-600 mb-4">
+      {getCoinsFromAmount(amount)} coins foram adicionados à sua conta
+    </p>
+    <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800 mb-4">
+      <Coins className="inline w-4 h-4 mr-1" />
+      Você já pode criar seus containers!
+    </div>
+    
+    {/* BOTÃO DE DOWNLOAD DO RECIBO */}
+    {paymentId && (
+      <button
+        onClick={downloadReceipt}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-md font-medium flex items-center justify-center gap-2 transition-colors"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Baixar Recibo (PDF)
+      </button>
+    )}
+  </div>
+)}
 
           {/* STEP 6: ERROR - Erro no pagamento */}
           {step === 'error' && (

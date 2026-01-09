@@ -1173,3 +1173,75 @@ router.post('/whatsapp-token', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate token' });
   }
 });
+
+
+// ============================================
+// STARTUP COMMANDS - Comandos personalizados
+// ============================================
+
+// GET /api/auth/startup-commands - Obter comandos atuais
+router.get('/startup-commands', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const users = await database.query(
+      'SELECT startup_command_nodejs, startup_command_python FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    res.json({
+      nodejs: users[0].startup_command_nodejs || 'npm install && npm start',
+      python: users[0].startup_command_python || 'pip install -r requirements.txt && python main.py'
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar comandos de inicialização:', error);
+    res.status(500).json({ error: 'Erro ao buscar comandos' });
+  }
+});
+
+// PUT /api/auth/startup-commands - Atualizar comandos
+router.put('/startup-commands', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { nodejs, python } = req.body;
+
+    // Validação básica
+    if (!nodejs || !python) {
+      return res.status(400).json({ 
+        error: 'Comandos para Node.js e Python são obrigatórios' 
+      });
+    }
+
+    // Validação de tamanho (evitar comandos gigantes)
+    if (nodejs.length > 1000 || python.length > 1000) {
+      return res.status(400).json({ 
+        error: 'Comandos muito longos (máximo 1000 caracteres cada)' 
+      });
+    }
+
+    // Atualizar no banco
+    await database.query(
+      'UPDATE users SET startup_command_nodejs = ?, startup_command_python = ? WHERE id = ?',
+      [nodejs.trim(), python.trim(), userId]
+    );
+
+    console.log(`✅ Comandos de inicialização atualizados para usuário ${userId}`);
+
+    res.json({ 
+      message: 'Comandos atualizados com sucesso',
+      nodejs: nodejs.trim(),
+      python: python.trim()
+    });
+
+  } catch (error) {
+    console.error('Erro ao atualizar comandos de inicialização:', error);
+    res.status(500).json({ error: 'Erro ao atualizar comandos' });
+  }
+});
+
+module.exports = router;

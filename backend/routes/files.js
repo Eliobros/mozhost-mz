@@ -4,6 +4,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const multer = require('multer');
 const { body, validationResult } = require('express-validator');
+const AdmZip = require('adm-zip');
 const authMiddleware = require('../middleware/auth');
 const database = require('../models/database');
 
@@ -82,6 +83,46 @@ router.post('/:containerId/cli-upload', [
   }
 });
 
+const upload = multer({
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB para ZIP
+    files: 10
+  },
+  fileFilter: (req, file, cb) => {
+    // Permitir ZIP para rota específica
+    if (req.path.includes('/upload-zip')) {
+      if (file.mimetype === 'application/zip' || 
+          file.mimetype === 'application/x-zip-compressed' ||
+          file.originalname.endsWith('.zip')) {
+        return cb(null, true);
+      } else {
+        return cb(new Error('Only ZIP files allowed for this endpoint'), false);
+      }
+    }
+    
+    // Filtros normais para outras rotas
+    const allowedMimes = [
+      'text/plain',
+      'text/javascript',
+      'application/javascript',
+      'text/x-python',
+      'application/json',
+      'text/html',
+      'text/css',
+      'text/markdown',
+      'application/x-yaml',
+      'text/yaml'
+    ];
+
+    if (allowedMimes.includes(file.mimetype) || file.originalname.match(/\.(js|py|json|html|css|md|txt|yml|yaml|env)$/)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed'), false);
+    }
+  }
+});
+
+/*
 
 // Configurar multer para upload de arquivos
 const upload = multer({
@@ -111,7 +152,7 @@ const upload = multer({
     }
   }
 });
-
+*/
 // Helper para verificar se container pertence ao usuário
 async function verifyContainerOwnership(containerId, userId) {
   const containers = await database.query(
@@ -477,6 +518,107 @@ router.patch('/:containerId/*', [
     console.error('Error moving file:', error);
     res.status(500).json({ error: 'Failed to move file' });
   }
+});
+
+// Nova rota: Upload e extração de ZIP
+router.post('/:containerId/upload-zip', 
+  upload.single('zipfile'),
+  async (req, res) => {
+    try {
+      const { containerId } = req.params;
+      const { path: targetPath = '', overwrite = 'false' } = req.body;
+
+      if (!await verifyContainerOwnership(containerId, req.user.userId)) {
+        return res.status(404).json({ error: 'Container not found' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No ZIP file uploaded' });
+      }
+
+      // Validar que é ZIP
+      if (!req.file.originalname.endsWith('.zip')) {
+        return res.status(400).json({ error: 'File must be a ZIP archive' });
+      }
+
+      const containerPath = getContainerPath(containerId);
+      const extractPath = path.join(containerPath, targetPath);
+
+      // Segurança
+      if (!extractPath.startsWith(containerPath)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Verificar cota
+      await ensureStorageAllowance(containerId, req.user.userId, req.file.size);
+
+      await fs.ensureDir(extractPath);
+
+      // Extrair ZIP
+      const zip = new AdmZip(req.file.buffer);
+      const zipEntries = zip.getEntries();
+
+      const extractedFiles = [];
+      const skippedFiles = [];
+
+      for (const entry of zipEntries) {
+        const entryPath = path.join(extractPath, entry.entryName);
+
+        // Path traversal protection
+        if (!entryPath.startsWith(extractPath)) {
+          skippedFiles.push({ name: entry.entryName, reason: 'Invalid path' });
+          continue;
+        }
+
+        if (entry.isDirectory) {
+          await fs.ensureDir(entryPath);
+          await fs.chmod(entryPath, 0o777);
+          continue;
+        }
+
+        // Verificar se já existe
+        const fileExists = await fs.pathExists(entryPath);
+        if (fileExists && overwrite === 'false') {
+          skippedFiles.push({ name: entry.entryName, reason: 'File already exists' });
+          continue;
+        }
+
+        await fs.ensureDir(path.dirname(entryPath));
+
+        const fileContent = entry.getData();
+        await writeFileWithPermissions(entryPath, fileContent);
+
+        extractedFiles.push({
+          name: entry.entryName,
+          size: entry.header.size,
+          path: path.relative(containerPath, entryPath).replace(/\\/g, '/')
+        });
+      }
+
+      res.json({
+        message: 'ZIP extracted successfully',
+        extracted: extractedFiles.length,
+        skipped: skippedFiles.length,
+        files: extractedFiles,
+        skippedFiles: skippedFiles,
+        totalSize: req.file.size
+      });
+
+    } catch (error) {
+      console.error('Error extracting ZIP:', error);
+
+      if (error.status === 413) {
+        return res.status(413).json({
+          error: 'Storage limit exceeded',
+          message: error.message
+        });
+      }
+
+      res.status(500).json({
+        error: 'Failed to extract ZIP',
+        message: error.message
+      });
+    }
 });
 
 // Upload de arquivos
