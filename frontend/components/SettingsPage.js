@@ -158,7 +158,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/startup-commands', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/startup-commands', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

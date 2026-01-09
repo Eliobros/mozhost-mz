@@ -6,7 +6,7 @@ const authMiddleware = async (req, res, next) => {
   try {
     // Extrair token do header Authorization OU query string (para WebSocket)
     let token = null;
-    
+
     // Verificar se req.headers existe (proteção para WebSocket)
     if (req.headers && req.headers.authorization) {
       // Formato esperado: "Bearer TOKEN"
@@ -139,7 +139,9 @@ const authWebSocket = async (req, res, next) => {
   }
 };
 
-// Middleware opcional - só passa se autenticado, senão continua
+/**
+ * Middleware opcional - só passa se autenticado, senão continua
+ */
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -179,6 +181,106 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware para rotas admin
+ * Verifica se o usuário é admin (ID 1 ou flag is_admin)
+ */
+const authenticateAdmin = async (req, res, next) => {
+  try {
+    // Extrair token
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        error: 'Access denied',
+        message: 'No token provided'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Access denied',
+        message: 'No token provided'
+      });
+    }
+
+    // Verificar e decodificar token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Verificar se usuário existe e está ativo
+    const user = await database.query(
+      'SELECT id, username, email, plan, is_active FROM users WHERE id = ? AND is_active = true',
+      [decoded.userId]
+    );
+
+    if (user.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Access denied',
+        message: 'User not found or inactive'
+      });
+    }
+
+    // Verificar se é admin
+    // OPÇÃO 1: Usuário com ID 1 é sempre admin (você)
+    // OPÇÃO 2: Verifica coluna is_admin na tabela users (se tiver)
+    const isAdmin = decoded.userId === 6; // Ajuste conforme necessário
+    // OU: const isAdmin = user[0].is_admin === 1;
+
+    if (!isAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Acesso restrito a administradores'
+      });
+    }
+
+    // Adicionar informações do usuário ao request
+    req.user = {
+      id: decoded.userId,
+      userId: decoded.userId,
+      username: decoded.username,
+      email: decoded.email,
+      plan: decoded.plan || user[0].plan,
+      isAdmin: true
+    };
+
+    console.log(`[Auth Admin] Admin authenticated: ${req.user.username} (ID: ${req.user.id})`);
+    next();
+
+  } catch (error) {
+    console.error('Admin auth middleware error:', error);
+
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Invalid token'
+      });
+    }
+
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Token expired'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Authentication failed',
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Exportar todos os middlewares
 module.exports = authMiddleware;
 module.exports.authWebSocket = authWebSocket;
 module.exports.optionalAuth = optionalAuth;
+module.exports.authenticateAdmin = authenticateAdmin;

@@ -29,6 +29,19 @@ class Database {
     }
   }
 
+  // ============================================
+  // NOVO MÉTODO - ADICIONA AQUI!
+  // ============================================
+  async getConnection() {
+    try {
+      return await this.pool.getConnection();
+    } catch (error) {
+      console.error('Error getting database connection:', error);
+      throw error;
+    }
+  }
+  // ============================================
+
   async initTables() {
     try {
       // Tabela de usuários
@@ -38,6 +51,8 @@ class Database {
           username VARCHAR(50) UNIQUE NOT NULL,
           email VARCHAR(100) UNIQUE NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
+	  email_quota INT DEFAULT 500,
+	  email_plan ENUM('free', 'basic', 'pro', 'business') DEFAULT 'free',
           plan ENUM('free', 'basic', 'pro') DEFAULT 'free',
           max_containers INT DEFAULT 2,
           max_ram_mb INT DEFAULT 0,
@@ -213,6 +228,32 @@ class Database {
           INDEX idx_notif_read (user_id, read_at)
         )
       `);
+
+	// ============================================
+// TABELAS DE EMAIL SERVICE
+// ============================================
+
+// Tabela de logs de emails enviados
+await this.query(`
+  CREATE TABLE IF NOT EXISTS email_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    recipient_email VARCHAR(255) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    status ENUM('sent', 'failed', 'bounced', 'opened', 'clicked') DEFAULT 'sent',
+    message_id VARCHAR(255),
+    provider VARCHAR(50) DEFAULT 'brevo',
+    error_message TEXT,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_email_user (user_id),
+    INDEX idx_email_status (status),
+    INDEX idx_email_sent (sent_at),
+    INDEX idx_email_user_month (user_id, sent_at)
+  )
+`);
+
+console.log('✅ Email tables initialized successfully');
 
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
