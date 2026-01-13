@@ -15,6 +15,8 @@ const database = require('./models/database');
 const authRoutes = require('./routes/auth');
 const whatsappLinkRoutes = require('./routes/whatsapp-link');
 const { adminRouter } = require('./routes/auth');
+const alexaRoutes = require('./routes/alexa');
+
 const containerRoutes = require('./routes/containers');
 const couponRoutes = require('./routes/coupons');
 const fileRoutes = require('./routes/files');
@@ -211,7 +213,7 @@ app.use('/api/domains', domainsRoutes);
 app.use('/api/databases', databasesRoutes);
 app.use('/api', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
-
+app.use('/api/alexa', alexaRoutes);
 const terminalRoutes = require('./routes/terminal');
 app.use('/api/terminal', terminalRoutes);
 const logsRoutes = require('./routes/logs');
