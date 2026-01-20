@@ -1,0 +1,13 @@
+appId: mz.co.mozhost
+productName: MozHost
+copyright: Copyright © 2026 MozHost
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - main
+      - renderer/out
+publish: null

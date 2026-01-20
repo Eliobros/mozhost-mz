@@ -160,4 +160,41 @@ router.get('/saldo-coins', alexaAuth, async (req, res) => {
   }
 });
 
+// 🎤 Endpoint para TINA: Status geral (admin)
+router.get('/status-geral', alexaAuth, async (req, res) => {
+  try {
+    // Total de usuários
+    const totalUsers = await database.query('SELECT COUNT(*) as total FROM users');
+    
+    // Total de containers
+    const totalContainers = await database.query('SELECT COUNT(*) as total FROM containers');
+    
+    // Containers rodando
+    const runningContainers = await database.query("SELECT COUNT(*) as total FROM containers WHERE status = 'running'");
+    
+    // Usuários inativos (30 dias)
+    const inactiveUsers = await database.query('SELECT COUNT(*) as total FROM users WHERE DATEDIFF(NOW(), updated_at) >= 30');
+
+    res.json({
+      success: true,
+      platform: 'MozHost',
+      status: 'online',
+      stats: {
+        total_users: totalUsers[0]?.total || 0,
+        total_containers: totalContainers[0]?.total || 0,
+        running_containers: runningContainers[0]?.total || 0,
+        inactive_users: inactiveUsers[0]?.total || 0
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar status geral:', error);
+    res.status(500).json({
+      error: 'Erro ao buscar dados',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router;

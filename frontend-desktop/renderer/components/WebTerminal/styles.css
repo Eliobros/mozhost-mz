@@ -1,0 +1,532 @@
+/* src/components/WebTerminal/styles.css */
+
+/* ==================== CONTAINER ==================== */
+.mozhost-terminal-wrapper {
+  height: calc(100vh - 8rem);
+  display: flex;
+  flex-direction: column;
+  background: #0a0e27;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 217, 255, 0.1);
+}
+
+.mozhost-terminal-wrapper.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  height: 100vh;
+  border-radius: 0;
+}
+
+/* ==================== HEADER ==================== */
+.mozhost-terminal-header {
+  background: linear-gradient(135deg, #1a1f3a 0%, #0a0e27 100%);
+  border-bottom: 2px solid #00d9ff;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-icon {
+  color: #00d9ff;
+  width: 20px;
+  height: 20px;
+}
+
+.container-select,
+.theme-select {
+  background: #1a1f3a;
+  color: #00d9ff;
+  border: 1px solid #00d9ff;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.container-select:hover,
+.theme-select:hover {
+  background: #242a45;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
+.status-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-badge.connected {
+  background: rgba(81, 207, 102, 0.2);
+  color: #51cf66;
+  border: 1px solid #51cf66;
+}
+
+.status-badge.disconnected {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
+  color: #000;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4);
+}
+
+.btn-secondary {
+  background: #1a1f3a;
+  color: #00d9ff;
+  border: 1px solid #00d9ff;
+}
+
+.btn-secondary:hover {
+  background: #242a45;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
+/* ==================== CONTENT ==================== */
+.mozhost-terminal-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ==================== SIDEBAR ==================== */
+.mozhost-terminal-sidebar {
+  width: 280px;
+  background: #0d1129;
+  border-right: 1px solid #00d9ff;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.mozhost-terminal-sidebar h3 {
+  color: #00d9ff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.quick-cmd {
+  width: 100%;
+  background: #1a1f3a;
+  border: 1px solid #2a3550;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.quick-cmd:hover {
+  background: #242a45;
+  border-color: #00d9ff;
+  transform: translateX(4px);
+}
+
+.quick-cmd-clear {
+  background: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
+  color: white;
+  border: none;
+  font-weight: 600;
+}
+.cmd-label {
+  color: #00d9ff;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.cmd-desc {
+  color: #8b95a8;
+  font-size: 0.7rem;
+}
+
+/* ==================== ACTIVE SESSIONS ==================== */
+.active-sessions {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2a3550;
+}
+
+.active-sessions h4 {
+  color: #00d9ff;
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1a1f3a;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: #00d9ff;
+  font-family: 'Fira Code', monospace;
+}
+
+.btn-kill {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  transition: transform 0.2s;
+}
+
+.btn-kill:hover {
+  transform: scale(1.2);
+}
+
+/* ==================== SETTINGS ==================== */
+.terminal-settings {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2a3550;
+}
+
+.terminal-settings h4 {
+  color: #00d9ff;
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.terminal-settings label {
+  display: block;
+  color: #8b95a8;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.terminal-settings select {
+  width: 100%;
+  background: #1a1f3a;
+  color: #00d9ff;
+  border: 1px solid #2a3550;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+/* ==================== TERMINAL MAIN ==================== */
+.mozhost-terminal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #0a0e27;
+  position: relative;
+}
+
+.mozhost-xterm-container {
+  flex: 1;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+/* ==================== XTERM CUSTOMIZATION ==================== */
+.mozhost-xterm-container .xterm {
+  height: 100% !important;
+  padding: 0;
+}
+
+.mozhost-xterm-container .xterm-viewport {
+  overflow-y: auto !important;
+  background-color: transparent !important;
+}
+
+.mozhost-xterm-container .xterm-screen {
+  padding: 0 !important;
+}
+
+/* Scrollbar customizada */
+.mozhost-xterm-container .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mozhost-xterm-container .xterm-viewport::-webkit-scrollbar-track {
+  background: rgba(0, 217, 255, 0.05);
+  border-radius: 4px;
+}
+
+.mozhost-xterm-container .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(0, 217, 255, 0.3);
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.mozhost-xterm-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 217, 255, 0.5);
+}
+
+/* ==================== THEME VARIATIONS ==================== */
+.theme-mozhost-dark .xterm-viewport {
+  background: #0a0e27 !important;
+}
+
+.theme-mozhost-light .xterm-viewport {
+  background: #f8f9fa !important;
+}
+
+.theme-mozhost-light .mozhost-terminal-main {
+  background: #f8f9fa;
+}
+
+.theme-vscode-dark .xterm-viewport {
+  background: #1e1e1e !important;
+}
+
+.theme-vscode-dark .mozhost-terminal-main {
+  background: #1e1e1e;
+}
+
+.theme-matrix .xterm-viewport {
+  background: #000000 !important;
+}
+
+.theme-matrix .mozhost-terminal-main {
+  background: #000000;
+}
+
+/* ==================== EMPTY STATE ==================== */
+.mozhost-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+}
+
+.empty-icon {
+  color: #00d9ff;
+  margin-bottom: 1.5rem;
+  opacity: 0.5;
+}
+
+.mozhost-empty-state h3 {
+  color: #00d9ff;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.mozhost-empty-state p {
+  color: #8b95a8;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.empty-features {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.empty-features p {
+  color: #00d9ff;
+  font-size: 0.875rem;
+  margin: 0;
+  padding: 0.75rem 1.5rem;
+  background: rgba(0, 217, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 217, 255, 0.2);
+}
+
+/* ==================== LOADING ==================== */
+.mozhost-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(0, 217, 255, 0.1);
+  border-top-color: #00d9ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.mozhost-loading p {
+  color: #00d9ff;
+  font-size: 0.875rem;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+  .mozhost-terminal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-left,
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mozhost-terminal-content {
+    flex-direction: column;
+  }
+
+  .mozhost-terminal-sidebar {
+    width: 100%;
+    max-height: 300px;
+    border-right: none;
+    border-bottom: 1px solid #00d9ff;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .btn-primary span,
+  .btn-secondary span {
+    display: none;
+  }
+}
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mozhost-terminal-wrapper {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.quick-cmd {
+  animation: fadeIn 0.3s ease-out;
+  animation-fill-mode: backwards;
+}
+
+.quick-cmd:nth-child(1) { animation-delay: 0.05s; }
+.quick-cmd:nth-child(2) { animation-delay: 0.1s; }
+.quick-cmd:nth-child(3) { animation-delay: 0.15s; }
+.quick-cmd:nth-child(4) { animation-delay: 0.2s; }
+.quick-cmd:nth-child(5) { animation-delay: 0.25s; }
+
+/* ==================== GLOW EFFECTS ==================== */
+.mozhost-terminal-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    #00d9ff 50%, 
+    transparent 100%);
+  animation: glow 3s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ==================== SELECTION ==================== */
+.mozhost-xterm-container ::selection {
+  background: rgba(0, 217, 255, 0.3);
+}
+
+.mozhost-xterm-container ::-moz-selection {
+  background: rgba(0, 217, 255, 0.3);
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+.btn-primary:focus,
+.btn-secondary:focus,
+.container-select:focus,
+.theme-select:focus {
+  outline: 2px solid #00d9ff;
+  outline-offset: 2px;
+}
+
+/* ==================== PRINT STYLES ==================== */
+@media print {
+  .mozhost-terminal-header,
+  .mozhost-terminal-sidebar,
+  .controls {
+    display: none;
+  }
+
+  .mozhost-terminal-wrapper {
+    height: auto;
+  }
+
+  .mozhost-xterm-container {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* ==================== DARK MODE OVERRIDES ==================== */
+@media (prefers-color-scheme: dark) {
+  .theme-mozhost-light {
+    /* Mantém o tema claro mesmo no dark mode do sistema */
+  }
+}

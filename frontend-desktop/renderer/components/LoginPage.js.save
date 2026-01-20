@@ -85,7 +85,7 @@ const LoginPage = () => {
       }
       
       return registerData;
-    })();
+    })();.
 
       const response = await fetch(url, {
         method: 'POST',
@@ -144,7 +144,7 @@ const LoginPage = () => {
         }
       }
     } catch (err) {
-      setError('Erro de conexão. Por favor tente novamente mais tarde.');
+      setError('Erro de conexão. Verifique se o backend está rodando na porta 3001.');
       console.error('Erro de conexão:', err);
     } finally {
       setIsLoading(false);
