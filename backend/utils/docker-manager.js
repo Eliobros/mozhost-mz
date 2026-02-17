@@ -174,7 +174,7 @@ async buildCustomImage(type, containerPath) {
   
   if (type === 'nodejs') {
     dockerfileContent = `
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Instalar git e outras ferramentas
 RUN apk add --no-cache git python3 make g++
@@ -368,14 +368,35 @@ CMD ["python", "main.py"]
 
 async createNodePythonContainer(userId, containerId, containerPath, port, name, type, domain, environment) {
   // ✨ NOVO: Build imagem customizada com git
-  const customImage = await this.buildCustomImage(type, containerPath);
+
   
   const imageConfig = this.getImageConfig(type);
+
+    // Buscar comando de inicialização personalizado do usuário
+    const userCommands = await database.query(
+      'SELECT startup_command_nodejs, startup_command_python FROM users WHERE id = ?',
+      [userId]
+    );
+    
+    if (userCommands.length > 0) {
+      const userCmd = type === 'python' 
+        ? userCommands[0].startup_command_python 
+        : userCommands[0].startup_command_nodejs;
+      
+      if (userCmd && userCmd.trim()) {
+        // Manter os prefixos de instalação de dependências do sistema
+        const systemDeps = imageConfig.cmd[2].split('&&').filter(c => c.trim().startsWith('apk ') || c.trim().startsWith('cd ')).map(c => c.trim());
+        const cdCmd = `cd /app/code`;
+        const fullCmd = [...systemDeps.filter(c => !c.startsWith('cd')), cdCmd, userCmd.trim()].join(' && ');
+        imageConfig.cmd = ['sh', '-c', fullCmd];
+      }
+    }
+
   const workingDir = '/app';
   const volumeMount = [`${containerPath}:/app/code:rw`];
 
   const containerConfig = {
-    Image: customImage, // ✨ USA IMAGEM CUSTOMIZADA
+    Image: imageConfig.image,
     name: `mozhost_${containerId}`,
     ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
     HostConfig: {
@@ -612,21 +633,36 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
   }
 
   getImageConfig(type) {
-    const configs = {
-      nodejs: {
-        image: 'node:18-alpine',
-        internalPort: 3000,
-        cmd: ['sh', '-c', 'cd /app/code && npm install && npm start']
-      },
-      python: {
-        image: 'python:3.11-alpine',
-        internalPort: 8000,
-        cmd: ['sh', '-c', 'cd /app/code && pip install -r requirements.txt && python main.py']
-      }
-    };
+  const configs = {
+    nodejs: {
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
+    },
+    api: {
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
+    },
+    'bot-baileys': {
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ && cd /app/code && npm install && npm start']
+    },
+    'bot-wwebjs': { 
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ chromium nss freetype harfbuzz ca-certificates ttf-freefont && cd /app/code && npm install && npm start']
+    },
+    python: {
+      image: 'python:3.11-alpine',
+      internalPort: 8000,
+      cmd: ['sh', '-c', 'cd /app/code && pip install -r requirements.txt && python main.py']
+    }
+  };
 
-    return configs[type] || configs.nodejs;
-  }
+  return configs[type] || configs.nodejs;
+}
 
   async getContainerStats(containerId) {
     try {

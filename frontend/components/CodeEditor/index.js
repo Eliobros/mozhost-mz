@@ -6,6 +6,7 @@ import {
   Save, 
   Plus, 
   Menu,
+  Upload,
   Server,
   FileText,
   Folder,
@@ -59,6 +60,8 @@ const CodeEditor = () => {
   const [terminalMaximized, setTerminalMaximized] = useState(false);
 const [logsVisible, setLogsVisible] = useState(false);
 const [logsMaximized, setLogsMaximized] = useState(false);
+const [uploading, setUploading] = useState(false);
+const fileInputRef = useRef(null);
 
   const editorRef = useRef(null);
 
@@ -265,6 +268,48 @@ const [logsMaximized, setLogsMaximized] = useState(false);
     }
   };
 
+  const uploadZip = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedContainer) return;
+
+    if (!file.name.endsWith('.zip')) {
+      alert('Por favor, selecione um arquivo .zip');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('zipfile', file);
+      formData.append('path', currentPath);
+      formData.append('overwrite', 'true');
+
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/upload-zip`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+          body: formData
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`ZIP extraído com sucesso! ${data.extracted} arquivos extraídos.`);
+        loadFiles(currentPath);
+      } else {
+        const err = await response.json();
+        alert(err.message || 'Erro ao enviar ZIP');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar ZIP:', error);
+      alert('Erro ao enviar arquivo ZIP');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const deleteFile = async (file) => {
     if (!confirm(`Tem certeza que deseja deletar "${file.name}"?`)) return;
 
@@ -290,6 +335,124 @@ const [logsMaximized, setLogsMaximized] = useState(false);
     }
   };
 
+  const renameFile = async (file, newPath) => {
+    if (!selectedContainer) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/${file.path}`,
+        {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ newPath })
+        }
+      );
+      if (response.ok) {
+        loadFiles(currentPath);
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Erro ao renomear');
+      }
+    } catch (error) {
+      console.error('Erro ao renomear:', error);
+      alert('Erro ao renomear arquivo');
+    }
+  };
+
+  const moveFile = async (file, newPath) => {
+    if (!selectedContainer) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/${file.path}`,
+        {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ newPath })
+        }
+      );
+      if (response.ok) {
+        loadFiles(currentPath);
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Erro ao mover');
+      }
+    } catch (error) {
+      console.error('Erro ao mover:', error);
+      alert('Erro ao mover arquivo');
+    }
+  };
+
+  const duplicateFile = async (file) => {
+    if (!selectedContainer || file.type === 'directory') return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}?path=${encodeURIComponent(file.path)}`,
+        { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+        const baseName = file.name.replace(ext, '');
+        const newName = `${baseName}_copia${ext}`;
+        const newPath = currentPath ? `${currentPath}/${newName}` : newName;
+        
+        await fetch(
+          `${API_BASE_URL}/files/${selectedContainer.id}`,
+          {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              path: newPath,
+              type: 'file',
+              content: data.content || ''
+            })
+          }
+        );
+        loadFiles(currentPath);
+      }
+    } catch (error) {
+      console.error('Erro ao duplicar:', error);
+      alert('Erro ao duplicar arquivo');
+    }
+  };
+
+  const extractZip = async (file) => {
+    if (!selectedContainer) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/download/${file.path}`,
+        { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+      );
+      if (response.ok) {
+        const blob = await response.blob();
+        const formData = new FormData();
+        formData.append('zipfile', new File([blob], file.name, { type: 'application/zip' }));
+        formData.append('path', currentPath);
+        formData.append('overwrite', 'true');
+
+        const extractResponse = await fetch(
+          `${API_BASE_URL}/files/${selectedContainer.id}/upload-zip`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+            body: formData
+          }
+        );
+
+        if (extractResponse.ok) {
+          const data = await extractResponse.json();
+          alert(`ZIP extraído! ${data.extracted} arquivo(s) extraído(s).`);
+          loadFiles(currentPath);
+        } else {
+          const err = await extractResponse.json();
+          alert(err.message || 'Erro ao extrair ZIP');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao extrair ZIP:', error);
+      alert('Erro ao extrair arquivo ZIP');
+    }
+  };
+
   // ==================== RENDER ====================
 
   if (loading) {
@@ -309,7 +472,7 @@ const [logsMaximized, setLogsMaximized] = useState(false);
     
       <div className="h-[calc(100vh-8rem)] flex flex-col">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-white shadow-sm border-b p-2 sm:p-4 flex flex-col gap-2 sm:gap-4">
           <div className="flex items-center space-x-4 w-full sm:w-auto">
             {isMobile && (
               <button
@@ -342,7 +505,7 @@ const [logsMaximized, setLogsMaximized] = useState(false);
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {selectedContainer && (
               <div className="flex items-center space-x-2">
                 <button
@@ -359,6 +522,21 @@ const [logsMaximized, setLogsMaximized] = useState(false);
                   <Folder className="w-4 h-4 mr-1" />
                   Pasta
                 </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center justify-center px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 flex-1 sm:flex-none disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  {uploading ? 'Enviando...' : 'ZIP'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".zip"
+                  onChange={uploadZip}
+                  className="hidden"
+                />
               </div>
             )}
 
@@ -436,6 +614,10 @@ const [logsMaximized, setLogsMaximized] = useState(false);
                 onNavigate={setCurrentPath}
                 onClose={() => setSidebarOpen(false)}
                 isMobile={isMobile}
+                onRename={renameFile}
+                onMove={moveFile}
+                onDuplicate={duplicateFile}
+                onExtractZip={extractZip}
               />
             )}
 

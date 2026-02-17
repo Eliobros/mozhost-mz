@@ -220,7 +220,8 @@ const logsRoutes = require('./routes/logs');
 app.use('/api/logs', logsRoutes);
 const mysqlRoutes = require('./routes/mysql');
 app.use('/api/mysql', mysqlRoutes);
-
+const qrcodeRoutes = require('./routes/qrcode');
+app.use('/api/qrcode', qrcodeRoutes);
 // ============================================
 // PROXY DINÂMICO
 // ============================================

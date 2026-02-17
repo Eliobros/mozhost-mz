@@ -149,8 +149,12 @@ router.post('/', [
     .matches(/^[a-zA-Z0-9_-\s]+$/)
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
-    .isIn(['nodejs', 'python', 'php'])
-    .withMessage('Type must be nodejs, python or php'),
+  .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs'])
+  .withMessage('Type must be nodejs, python, php, api, bot-baileys or bot-wwebjs'),
+body('template')
+  .optional()
+  .isIn(['api', 'bot-baileys', 'bot-wwebjs'])
+  .withMessage('Template must be api, bot-baileys or bot-wwebjs'),
   body('environment')
     .optional()
     .isObject()
@@ -165,7 +169,8 @@ router.post('/', [
       });
     }
 
-    const { name, type, environment } = req.body;
+    const { name, type, environment, template } = req.body;
+    const templateType = template || (type === 'nodejs' ? 'api' : type);
 
     const userContainers = await database.query(
       'SELECT COUNT(*) as count FROM containers WHERE user_id = ?',
@@ -205,10 +210,10 @@ router.post('/', [
     }
 
     const containerData = await dockerManager.createUserContainer(req.user.userId, {
-      name,
-      type,
-      environment: environment || {}
-    });
+  name,
+  type: templateType, // Usar o template selecionado
+  environment: environment || {}
+});
 
     const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, MIN_COINS_TO_CREATE);
 

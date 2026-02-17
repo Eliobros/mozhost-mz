@@ -50,8 +50,14 @@ const SettingsPage = () => {
     weeklyReport: false
   });
 
+  const [containers, setContainers] = useState([]);
+  const [selectedContainerId, setSelectedContainerId] = useState('');
+  const [envVars, setEnvVars] = useState([]);
+  const [loadingEnv, setLoadingEnv] = useState(false);
+
   useEffect(() => {
     loadUserData();
+    loadContainers();
   }, []);
 
   const loadUserData = async () => {
@@ -230,6 +236,96 @@ const SettingsPage = () => {
     } catch (err) {
       setError('Erro de conexão');
     }
+  };
+
+  const loadContainers = async () => {
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setContainers(data.containers || []);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar containers:', err);
+    }
+  };
+
+  const loadContainerEnv = async (containerId) => {
+    if (!containerId) {
+      setEnvVars([]);
+      return;
+    }
+    setLoadingEnv(true);
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${containerId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const env = data.container?.environment ? JSON.parse(data.container.environment) : {};
+        const envArray = Object.entries(env).map(([key, value]) => ({
+          key, value, id: Math.random().toString(36).substr(2, 9)
+        }));
+        setEnvVars(envArray);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar variáveis:', err);
+    } finally {
+      setLoadingEnv(false);
+    }
+  };
+
+  const saveEnvironmentVars = async () => {
+    if (!selectedContainerId) return;
+    setSaving({ ...saving, env: true });
+    setError('');
+    setSuccess('');
+
+    try {
+      const environment = {};
+      envVars.forEach(env => {
+        if (env.key.trim()) {
+          environment[env.key.trim()] = env.value;
+        }
+      });
+
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${selectedContainerId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ environment })
+      });
+
+      if (response.ok) {
+        setSuccess('Variáveis de ambiente salvas com sucesso!');
+      } else {
+        const err = await response.json();
+        setError(err.message || 'Erro ao salvar variáveis');
+      }
+    } catch (err) {
+      setError('Erro de conexão');
+    } finally {
+      setSaving({ ...saving, env: false });
+    }
+  };
+
+  const addEnvVar = () => {
+    setEnvVars([...envVars, { key: '', value: '', id: Math.random().toString(36).substr(2, 9) }]);
+  };
+
+  const removeEnvVar = (id) => {
+    setEnvVars(envVars.filter(env => env.id !== id));
+  };
+
+  const updateEnvVar = (id, field, value) => {
+    setEnvVars(envVars.map(env => env.id === id ? { ...env, [field]: value } : env));
   };
 
   if (loading) {
@@ -478,6 +574,120 @@ const SettingsPage = () => {
                     Salvar Comandos
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Environment Variables */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Variáveis de Ambiente
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Gerencie as variáveis de ambiente dos seus containers
+                </p>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selecionar Container
+                  </label>
+                  <select
+                    value={selectedContainerId}
+                    onChange={(e) => {
+                      setSelectedContainerId(e.target.value);
+                      loadContainerEnv(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione um container</option>
+                    {containers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedContainerId && (
+                  <>
+                    {loadingEnv ? (
+                      <div className="text-center py-4">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-blue-500" />
+                        <p className="text-sm text-gray-500 mt-2">Carregando variáveis...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">
+                            Variáveis ({envVars.length})
+                          </span>
+                          <button
+                            onClick={addEnvVar}
+                            className="inline-flex items-center px-3 py-1 text-sm font-medium rounded text-white bg-blue-600 hover:bg-blue-700"
+                          >
+                            + Adicionar
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {envVars.map((env) => (
+                            <div key={env.id} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="CHAVE"
+                                value={env.key}
+                                onChange={(e) => updateEnvVar(env.id, 'key', e.target.value)}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                              />
+                              <span className="text-gray-400 font-bold">=</span>
+                              <input
+                                type="text"
+                                placeholder="valor"
+                                value={env.value}
+                                onChange={(e) => updateEnvVar(env.id, 'value', e.target.value)}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                              />
+                              <button
+                                onClick={() => removeEnvVar(env.id)}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {envVars.length === 0 && (
+                          <div className="text-center py-6 text-gray-400">
+                            <Settings className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Nenhuma variável configurada</p>
+                            <p className="text-xs">Clique em "Adicionar" para criar uma variável</p>
+                          </div>
+                        )}
+
+                        <div className="pt-4 flex items-center justify-between">
+                          <p className="text-xs text-gray-500">
+                            ⚠️ Reinicie o container para aplicar as alterações
+                          </p>
+                          <button
+                            onClick={saveEnvironmentVars}
+                            disabled={saving.env}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {saving.env ? (
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4 mr-2" />
+                            )}
+                            Salvar Variáveis
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>

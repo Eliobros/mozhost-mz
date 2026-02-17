@@ -1,24 +1,24 @@
 import React from 'react';
 import { X, Coins, Loader2 } from 'lucide-react';
 
-const CreateContainerModal = ({ 
-  form, 
-  setForm, 
-  onSubmit, 
-  onClose, 
-  coins, 
+const CreateContainerModal = ({
+  form,
+  setForm,
+  onSubmit,
+  onClose,
+  coins,
   requiredCoins,
-  isCreating = false // ← NOVA PROP
+  isCreating = false
 }) => {
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">Criar Novo Container</h3>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
-            disabled={isCreating} // ← Desabilita X durante criação
+            disabled={isCreating}
           >
             <X className="w-6 h-6" />
           </button>
@@ -48,7 +48,7 @@ const CreateContainerModal = ({
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              disabled={isCreating} // ← Desabilita input
+              disabled={isCreating}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               placeholder="meu-bot-whatsapp"
             />
@@ -57,26 +57,123 @@ const CreateContainerModal = ({
             </p>
           </div>
 
+          {/* Seleção: API ou BOT */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tipo de Aplicação
+              O que deseja criar?
             </label>
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              disabled={isCreating} // ← Desabilita select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="nodejs">Node.js</option>
-              <option value="python">Python</option>
-              <option value="php">PHP</option>
-            </select>
-            <p className="mt-1 text-xs text-gray-500">
-              {form.type === 'nodejs' ? 'Para bots em JavaScript/TypeScript' :
-               form.type === 'python' ? 'Para bots em Python' :
-               'Para aplicações PHP'}
-            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, projectType: 'api', type: 'api', template: 'api' })}
+                disabled={isCreating}
+                className={`p-4 border-2 rounded-lg text-center transition-all ${
+                  form.projectType === 'api'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 hover:border-blue-300'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <div className="text-2xl mb-2">🚀</div>
+                <div className="font-medium text-sm">API</div>
+                <div className="text-xs text-gray-500 mt-1">REST API básica</div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, projectType: 'bot', type: 'bot-baileys', template: 'bot-baileys' })}
+                disabled={isCreating}
+                className={`p-4 border-2 rounded-lg text-center transition-all ${
+                  form.projectType === 'bot'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 hover:border-blue-300'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <div className="text-2xl mb-2">🤖</div>
+                <div className="font-medium text-sm">BOT</div>
+                <div className="text-xs text-gray-500 mt-1">Bot WhatsApp</div>
+              </button>
+            </div>
           </div>
+
+          {/* Template de BOT (apenas se BOT selecionado) */}
+          {form.projectType === 'bot' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Escolha o Template
+              </label>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, type: 'bot-baileys', template: 'bot-baileys' })}
+                  disabled={isCreating}
+                  className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
+                    form.template === 'bot-baileys'
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-300 hover:border-green-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-start">
+                    <div className="text-2xl mr-3">📱</div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">Baileys</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Multi-device • Mais leve • Ideal para iniciantes
+                      </div>
+                    </div>
+                    {form.template === 'bot-baileys' && (
+                      <div className="text-green-500">✓</div>
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, type: 'bot-wwebjs', template: 'bot-wwebjs' })}
+                  disabled={isCreating}
+                  className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
+                    form.template === 'bot-wwebjs'
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-300 hover:border-green-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-start">
+                    <div className="text-2xl mr-3">💬</div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">WWEB.JS</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Recursos avançados • Stickers • Grupos
+                      </div>
+                    </div>
+                    {form.template === 'bot-wwebjs' && (
+                      <div className="text-green-500">✓</div>
+                    )}
+                  </div>
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                ✨ Bots vêm prontos com comandos básicos (!ping, !menu, !info)
+              </p>
+            </div>
+          )}
+
+          {/* Tipo de linguagem (apenas se API selecionado) */}
+          {form.projectType === 'api' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Linguagem
+              </label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value, template: e.target.value === 'nodejs' ? 'api' : e.target.value })}
+                disabled={isCreating}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="api">Node.js (Express)</option>
+                <option value="python">Python (Flask)</option>
+                <option value="php">PHP + MySQL</option>
+              </select>
+            </div>
+          )}
 
           {/* ✨ LOADING MESSAGE */}
           {isCreating && (
@@ -85,7 +182,7 @@ const CreateContainerModal = ({
                 <Loader2 className="w-5 h-5 text-blue-600 animate-spin mr-3" />
                 <div>
                   <p className="text-sm font-medium text-blue-900">
-                    🚀 Criando seu container...
+                    🚀 Criando seu {form.projectType === 'bot' ? 'bot' : 'container'}...
                   </p>
                   <p className="text-xs text-blue-700 mt-1">
                     Por favor aguarde, isso pode levar alguns segundos.
@@ -99,7 +196,7 @@ const CreateContainerModal = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={isCreating} // ← Desabilita cancelar
+              disabled={isCreating}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
@@ -107,7 +204,7 @@ const CreateContainerModal = ({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={coins < requiredCoins || isCreating} // ← Desabilita se criando
+              disabled={coins < requiredCoins || isCreating}
               className={`px-4 py-2 text-white text-sm font-medium rounded-md flex items-center ${
                 coins < requiredCoins || isCreating
                   ? 'bg-gray-400 cursor-not-allowed'
@@ -120,7 +217,7 @@ const CreateContainerModal = ({
                   Criando...
                 </>
               ) : (
-                'Criar Container'
+                `Criar ${form.projectType === 'bot' ? 'Bot' : 'Container'}`
               )}
             </button>
           </div>

@@ -33,6 +33,7 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [activeTab, setActiveTab] = useState('general');
+  const [realStats, setRealStats] = useState({ cpu: 0, memoryUsedMB: 0, memoryLimitMB: 0, loading: true });
 
   useEffect(() => {
     if (container && isOpen) {
@@ -51,8 +52,40 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
         id: Math.random().toString(36).substr(2, 9)
       }));
       setEnvironmentVars(envArray);
+
+      // Buscar métricas reais do container
+      loadContainerStats(container.id, container.status);
     }
   }, [container, isOpen]);
+
+  const loadContainerStats = async (containerId, status) => {
+    if (status !== 'running') {
+      setRealStats({ cpu: 0, memoryUsedMB: 0, memoryLimitMB: 0, loading: false });
+      return;
+    }
+    setRealStats(prev => ({ ...prev, loading: true }));
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/monitoring/containers/${containerId}/stats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRealStats({
+          cpu: data.cpu || 0,
+          memoryUsedMB: data.memory?.usedMB || 0,
+          memoryLimitMB: data.memory?.limitMB || 0,
+          memoryPercent: data.memory?.percent || 0,
+          loading: false
+        });
+      } else {
+        setRealStats({ cpu: 0, memoryUsedMB: 0, memoryLimitMB: 0, loading: false });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar stats do container:', error);
+      setRealStats({ cpu: 0, memoryUsedMB: 0, memoryLimitMB: 0, loading: false });
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -398,26 +431,37 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
               {/* Resource Usage Visualization */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <h5 className="text-sm font-medium text-gray-900 mb-3">Uso Atual de Recursos</h5>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">CPU</span>
-                      <span className="text-gray-900">25%</span>
+                {realStats.loading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader className="w-5 h-5 animate-spin text-blue-500 mr-2" />
+                    <span className="text-sm text-gray-500">Carregando métricas...</span>
+                  </div>
+                ) : container.status !== 'running' ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    Container parado — inicie para ver métricas
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">CPU</span>
+                        <span className="text-gray-900">{realStats.cpu.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className={`h-2 rounded-full transition-all ${realStats.cpu > 80 ? 'bg-red-600' : realStats.cpu > 50 ? 'bg-yellow-500' : 'bg-blue-600'}`} style={{ width: `${Math.min(realStats.cpu, 100)}%` }}></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: '25%' }}></div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Memória</span>
+                        <span className="text-gray-900">{realStats.memoryUsedMB.toFixed(0)} MB / {realStats.memoryLimitMB.toFixed(0)} MB</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className={`h-2 rounded-full transition-all ${(realStats.memoryPercent || 0) > 85 ? 'bg-red-600' : (realStats.memoryPercent || 0) > 60 ? 'bg-yellow-500' : 'bg-green-600'}`} style={{ width: `${Math.min(realStats.memoryPercent || 0, 100)}%` }}></div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Memória</span>
-                      <span className="text-gray-900">180 MB / {formData.memory_limit_mb} MB</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-600 h-2 rounded-full" style={{ width: `${(180 / formData.memory_limit_mb) * 100}%` }}></div>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}

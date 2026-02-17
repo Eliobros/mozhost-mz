@@ -40,14 +40,14 @@ export const Coins: React.FC<CoinsProps> = ({ password, onOpenModal }) => {
   const totalCoins = users.reduce((sum, user) => sum + user.coins, 0);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Gerenciar Coins</h2>
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Gerenciar Coins</h2>
         <p className="text-gray-600 mt-1">Total de coins no sistema: <span className="font-bold text-yellow-600">{totalCoins}</span></p>
       </div>
 
       {/* Action Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-500">
           <h3 className="text-xl font-bold mb-3 text-green-800 flex items-center gap-2">
             <span className="text-2xl">➕</span>

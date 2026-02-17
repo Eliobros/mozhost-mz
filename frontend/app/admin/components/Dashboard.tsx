@@ -35,13 +35,13 @@ const StatsCard = ({ title, value, icon, color }: {
   icon: string;
   color: string;
 }) => (
-  <div className={`bg-white rounded-lg shadow-lg p-6 border-l-4 ${color} transform transition hover:scale-105`}>
+  <div className={`bg-white rounded-lg shadow-lg p-3 sm:p-4 lg:p-6 border-l-4 ${color} transform transition hover:scale-105`}>
     <div className="flex items-center justify-between">
-      <div>
-        <p className="text-gray-500 text-sm font-medium">{title}</p>
-        <p className="text-3xl font-bold mt-2 text-gray-800">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-gray-500 text-xs sm:text-sm font-medium truncate">{title}</p>
+        <p className="text-lg sm:text-2xl lg:text-3xl font-bold mt-1 sm:mt-2 text-gray-800">{value}</p>
       </div>
-      <div className="text-5xl opacity-80">{icon}</div>
+      <div className="text-2xl sm:text-4xl lg:text-5xl opacity-80 ml-2 flex-shrink-0">{icon}</div>
     </div>
   </div>
 );
@@ -92,13 +92,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ password }) => {
   if (!stats) return null;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Dashboard</h2>
         <p className="text-gray-600 mt-1">Visão geral do sistema MozHost</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
         <StatsCard
           title="Total Usuários"
           value={stats.users.total}
@@ -125,7 +125,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ password }) => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h3 className="text-xl font-bold mb-4 text-gray-800">Usuários por Plano</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -157,18 +157,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ password }) => {
 
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h3 className="text-xl font-bold mb-4 text-gray-800">Uso de Recursos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <p className="text-gray-600 font-medium">CPU Total</p>
-            <p className="text-3xl font-bold text-blue-600 mt-2">{stats.resources.cpu.toFixed(2)}</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-600 mt-2">{stats.resources.cpu.toFixed(2)}</p>
           </div>
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <p className="text-gray-600 font-medium">RAM Total (MB)</p>
-            <p className="text-3xl font-bold text-green-600 mt-2">{stats.resources.ram}</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600 mt-2">{stats.resources.ram}</p>
           </div>
           <div className="text-center p-4 bg-purple-50 rounded-lg">
             <p className="text-gray-600 font-medium">Storage (MB)</p>
-            <p className="text-3xl font-bold text-purple-600 mt-2">{stats.resources.storage}</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-600 mt-2">{stats.resources.storage}</p>
           </div>
         </div>
       </div>

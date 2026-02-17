@@ -20,10 +20,12 @@ const ContainersPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false); // ← NOVO ESTADO
   const [createForm, setCreateForm] = useState({
-    name: '',
-    type: 'nodejs',
-    environment: {}
-  });
+  name: '',
+  type: 'api',
+  projectType: 'api', // 'api' ou 'bot'
+  template: 'api', // 'api', 'bot-baileys', 'bot-wwebjs'
+  environment: {}
+});
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [coins, setCoins] = useState(0);
@@ -352,10 +354,16 @@ const ContainersPage = () => {
             isCreating={isCreating} // ← PASSA A PROP
             onSubmit={handleCreateContainer}
             onClose={() => {
-              if (isCreating) return; // ← Previne fechar durante criação
-              setShowCreateModal(false);
-              setCreateForm({ name: '', type: 'nodejs', environment: {} });
-            }}
+  if (isCreating) return;
+  setShowCreateModal(false);
+  setCreateForm({ 
+    name: '', 
+    type: 'api', 
+    projectType: 'api',
+    template: 'api',
+    environment: {} 
+  });
+}}
           />
         )}
 

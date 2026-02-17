@@ -72,8 +72,8 @@ router.post('/register', [
     // 250 coins de boas-vindas (não suficiente para 1 container que custa 500)
     // Após verificar email/whatsapp/sms: +350 coins = 600 total (suficiente para 1 container)
     const result = await database.query(
-      `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins)
-       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 0, 0, 250)`,
+      `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
+       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
       [username, email, passwordHash, phone || null, countryCode || null, preferredVerificationMethod || 'email']
     );
 
@@ -264,7 +264,9 @@ router.post('/login', [
         plan: user.plan,
         maxContainers: user.max_containers,
         maxRamMb: user.max_ram_mb,
-        maxStorageMb: user.max_storage_mb
+        maxStorageMb: user.max_storage_mb,
+        freeTrialEnds: user.free_trial_ends,
+        createdAt: user.created_at
       },
       token
     });
@@ -282,7 +284,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method, free_trial_ends, created_at FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -308,7 +310,9 @@ router.get('/verify', authMiddleware, async (req, res) => {
         emailVerified: !!user[0].email_verified,
         whatsappVerified: !!user[0].whatsapp_verified,
         smsVerified: !!user[0].sms_verified,
-        preferredVerificationMethod: user[0].preferred_verification_method
+        preferredVerificationMethod: user[0].preferred_verification_method,
+        freeTrialEnds: user[0].free_trial_ends,
+        createdAt: user[0].created_at
       }
     });
 
@@ -1241,6 +1245,73 @@ router.put('/startup-commands', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Erro ao atualizar comandos de inicialização:', error);
     res.status(500).json({ error: 'Erro ao atualizar comandos' });
+  }
+});
+
+// POST /api/auth/upgrade-plan - Upgrade do plano do usuário
+router.post('/upgrade-plan', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { plan } = req.body;
+
+    const validPlans = {
+      basic: { cost: 2000, maxContainers: 5, maxRamMb: 1024, maxStorageMb: 2048 },
+      pro: { cost: 5000, maxContainers: 10, maxRamMb: 2048, maxStorageMb: 5120 }
+    };
+
+    if (!validPlans[plan]) {
+      return res.status(400).json({ error: 'Plano inválido', message: 'Escolha basic ou pro' });
+    }
+
+    const planConfig = validPlans[plan];
+
+    // Verificar coins do usuário
+    const users = await database.query('SELECT coins, plan FROM users WHERE id = ?', [userId]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const currentCoins = users[0].coins || 0;
+    const currentPlan = users[0].plan;
+
+    // Não permitir downgrade
+    const planOrder = { free: 0, basic: 1, pro: 2 };
+    if ((planOrder[plan] || 0) <= (planOrder[currentPlan] || 0)) {
+      return res.status(400).json({ 
+        error: 'Plano inválido', 
+        message: `Você já está no plano ${currentPlan.toUpperCase()} ou superior` 
+      });
+    }
+
+    if (currentCoins < planConfig.cost) {
+      return res.status(402).json({
+        error: 'Coins insuficientes',
+        message: `Você precisa de ${planConfig.cost} coins. Tem ${currentCoins}.`,
+        needed: planConfig.cost,
+        have: currentCoins
+      });
+    }
+
+    // Aplicar upgrade
+    await database.query(
+      'UPDATE users SET plan = ?, coins = coins - ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ? WHERE id = ?',
+      [plan, planConfig.cost, planConfig.maxContainers, planConfig.maxRamMb, planConfig.maxStorageMb, userId]
+    );
+
+    const updated = await database.query('SELECT coins, plan, max_containers, max_ram_mb, max_storage_mb FROM users WHERE id = ?', [userId]);
+
+    res.json({
+      message: `Upgrade para ${plan.toUpperCase()} realizado com sucesso!`,
+      plan: updated[0].plan,
+      coins: updated[0].coins,
+      maxContainers: updated[0].max_containers,
+      maxRamMb: updated[0].max_ram_mb,
+      maxStorageMb: updated[0].max_storage_mb
+    });
+
+  } catch (error) {
+    console.error('Erro ao fazer upgrade:', error);
+    res.status(500).json({ error: 'Erro ao processar upgrade' });
   }
 });
 

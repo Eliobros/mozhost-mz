@@ -36,6 +36,7 @@ export const metadata: Metadata = {
     icon: "/mozhost.png",
     apple: "/mozhost.png",
   },
+  manifest: '/manifest.json'
 };
 
 export default function RootLayout({

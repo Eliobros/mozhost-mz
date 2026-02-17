@@ -9,6 +9,7 @@ import PerformanceOverview from './PerformanceOverview';
 import RecentActivity from './RecentActivity';
 import QuickActions from './QuickActions';
 import ContainersPreview from './ContainersPreview';
+import UpgradeBanner from './UpgradeBanner';
 
 const Dashboard = () => {
   const [containers, setContainers] = useState([]);
@@ -35,7 +36,24 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadUserData = () => {
+  const loadUserData = async () => {
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      if (token) {
+        const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+          setCoins(data.user.coins || 0);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao carregar dados do usuário:', e);
+    }
+    // Fallback to localStorage
     const userData = localStorage.getItem('mozhost_user');
     if (userData) {
       setUser(JSON.parse(userData));
@@ -50,12 +68,18 @@ const Dashboard = () => {
         return;
       }
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Buscar containers e métricas reais em paralelo
+      const [containersRes, metricsRes] = await Promise.all([
+        fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => null)
+      ]);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (containersRes.ok) {
+        const data = await containersRes.json();
         setContainers(data.containers);
         setCoins(data.coins || 0);
         setStorageAlerts(Array.isArray(data.storageAlerts) ? data.storageAlerts : []);
@@ -63,19 +87,31 @@ const Dashboard = () => {
         const running = data.containers.filter(c => c.status === 'running').length;
         const stopped = data.containers.filter(c => c.status === 'stopped').length;
 
+        // Usar métricas reais do sistema
+        let cpuUsage = 0;
+        let memoryUsage = 0;
+        let storageUsage = 0;
+
+        if (metricsRes && metricsRes.ok) {
+          const metrics = await metricsRes.json();
+          cpuUsage = metrics.cpu || 0;
+          memoryUsage = metrics.memory?.percent || 0;
+          storageUsage = metrics.storage?.percent || 0;
+        }
+
         setStats({
           total: data.containers.length,
           running,
           stopped,
-          cpuUsage: Math.random() * 60 + 20,
-          memoryUsage: Math.random() * 70 + 10,
-          storageUsage: Math.random() * 40 + 5,
-          uptime: calculateUptime()
+          cpuUsage,
+          memoryUsage,
+          storageUsage,
+          uptime: calculateUptime(data.containers)
         });
 
         generateRecentActivity(data.containers);
 
-      } else if (response.status === 401) {
+      } else if (containersRes.status === 401) {
         localStorage.removeItem('mozhost_token');
         localStorage.removeItem('mozhost_user');
         window.location.href = '/';
@@ -89,31 +125,63 @@ const Dashboard = () => {
     }
   };
 
-  const calculateUptime = () => {
+  const calculateUptime = (containersList) => {
+    // Calcular uptime real baseado no container mais antigo em execução
+    const runningContainers = containersList.filter(c => c.status === 'running' && c.created_at);
+    if (runningContainers.length === 0) return '0h';
+
+    const oldest = runningContainers.reduce((prev, curr) => 
+      new Date(prev.created_at) < new Date(curr.created_at) ? prev : curr
+    );
+
     const now = new Date();
-    const start = new Date(now.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+    const start = new Date(oldest.updated_at || oldest.created_at);
     const diffTime = Math.abs(now - start);
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return diffDays > 0 ? `${diffDays} dias, ${diffHours}h` : `${diffHours} horas`;
   };
 
-  const generateRecentActivity = (containers) => {
-    const activities = [];
-    const actions = ['criado', 'iniciado', 'parado', 'reiniciado'];
-    const timeAgo = ['2 min atrás', '15 min atrás', '1 hora atrás', '3 horas atrás', '1 dia atrás'];
+  const generateRecentActivity = (containersList) => {
+    // Gerar atividade real baseada nos dados dos containers
+    const activities = containersList
+      .slice()
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+      .slice(0, 6)
+      .map((container, index) => {
+        // Determinar ação com base no status real
+        const actionMap = {
+          running: 'iniciado',
+          stopped: 'parado',
+          error: 'erro detectado',
+          building: 'em construção'
+        };
+        const action = actionMap[container.status] || 'atualizado';
 
-    containers.slice(0, 5).forEach((container, index) => {
-      activities.push({
-        id: index,
-        action: actions[Math.floor(Math.random() * actions.length)],
-        container: container.name,
-        time: timeAgo[index] || '1 hora atrás',
-        type: container.type
+        // Calcular tempo real desde última atualização
+        const updatedAt = new Date(container.updated_at);
+        const now = new Date();
+        const diffMs = now - updatedAt;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        let time;
+        if (diffMin < 1) time = 'agora mesmo';
+        else if (diffMin < 60) time = `${diffMin} min atrás`;
+        else if (diffHours < 24) time = `${diffHours}h atrás`;
+        else time = `${diffDays} dia(s) atrás`;
+
+        return {
+          id: index,
+          action,
+          container: container.name,
+          time,
+          type: container.type
+        };
       });
-    });
 
-    setRecentActivity(activities.slice(0, 6));
+    setRecentActivity(activities);
   };
 
   if (loading) {
@@ -130,6 +198,10 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       <WelcomeHeader user={user} coins={coins} uptime={stats.uptime} />
+
+      {user?.plan === 'free' && (
+        <UpgradeBanner user={user} containers={containers} />
+      )}
 
       {storageAlerts.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-md p-4">

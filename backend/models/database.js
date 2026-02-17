@@ -70,6 +70,19 @@ class Database {
         )
       `);
 
+      // Adicionar coluna free_trial_ends se não existir
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN free_trial_ends TIMESTAMP NULL`);
+        console.log('✅ Added free_trial_ends column');
+      } catch (e) {
+        // Column already exists
+      }
+
+      // Definir trial de 30 dias para usuários free existentes que não têm
+      try {
+        await this.query(`UPDATE users SET free_trial_ends = DATE_ADD(created_at, INTERVAL 30 DAY) WHERE plan = 'free' AND free_trial_ends IS NULL`);
+      } catch (e) {}
+
       // Verificar e corrigir a tabela de containers
       try {
         await this.query(`

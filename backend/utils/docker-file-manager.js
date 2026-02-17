@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const templateManager = require('./template-manager');
 
 const execAsync = promisify(exec);
 
@@ -71,52 +72,57 @@ PMA_PASSWORD=${dbInfo.dbPassword}
     console.log(`✅ Arquivo .env criado automaticamente`);
   }
 
+  /**
+   * Criar arquivos iniciais usando o template-manager
+   * @param {string} containerPath - Caminho do container
+   * @param {string} type - Tipo do template ('nodejs', 'python', 'php', 'bot-baileys', 'bot-wwebjs')
+   */
   async createInitialFiles(containerPath, type) {
-    const templates = {
-      nodejs: {
-        'package.json': JSON.stringify({
-          name: 'mozhost-app',
-          version: '1.0.0',
-          main: 'index.js',
-          scripts: { start: 'node index.js' },
-          dependencies: { express: '^4.18.2' }
-        }, null, 2),
-        'index.js': `const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
+    try {
+      // Mapear tipos antigos para novos templates
+      const typeMapping = {
+        'nodejs': 'api',
+        'python': 'python',
+        'php': 'php',
+        'bot-baileys': 'bot-baileys',
+        'bot-wwebjs': 'bot-wwebjs',
+        'api': 'api'
+      };
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Hello from MozHost!',
-    timestamp: new Date().toISOString()
-  });
-});
+      const templateType = typeMapping[type] || 'api';
 
-app.listen(PORT, () => {
-  console.log(\`Server running on port \${PORT}\`);
-});`
-      },
-      python: {
-        'requirements.txt': 'flask==2.3.3',
-        'main.py': `from flask import Flask, jsonify
-from datetime import datetime
-import os
+      // Se for PHP, usar template legado (pois tem lógica específica)
+      if (type === 'php') {
+        await this.createPHPTemplate(containerPath);
+        return;
+      }
 
-app = Flask(__name__)
-PORT = int(os.environ.get('PORT', 8000))
+      // Se for Python, usar template legado (por enquanto)
+      if (type === 'python') {
+        await this.createPythonTemplate(containerPath);
+        return;
+      }
 
-@app.route('/')
-def hello():
-    return jsonify({
-        'message': 'Hello from MozHost!',
-        'timestamp': datetime.now().isoformat()
-    })
+      // Para API e Bots, usar template-manager
+      console.log(`📦 Aplicando template: ${templateType}`);
+      await templateManager.applyTemplate(containerPath, templateType);
+      
+      await execAsync(`chmod -R 775 ${containerPath}`);
+      
+      console.log(`✅ Template ${templateType} aplicado com sucesso!`);
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=False)`
-      },
-      php: {
-        'index.php': `<?php
+    } catch (error) {
+      console.error(`❌ Erro ao criar arquivos iniciais:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Template PHP legado (mantido por compatibilidade)
+   */
+  async createPHPTemplate(containerPath) {
+    const files = {
+      'index.php': `<?php
 header('Content-Type: application/json');
 
 // Configuração MySQL
@@ -164,7 +170,7 @@ echo json_encode([
     'timestamp' => date('Y-m-d H:i:s')
 ], JSON_PRETTY_PRINT);
 ?>`,
-        '.htaccess': `RewriteEngine On
+      '.htaccess': `RewriteEngine On
 DirectoryIndex index.php
 
 <IfModule mod_headers.c>
@@ -172,16 +178,40 @@ DirectoryIndex index.php
     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
 </IfModule>`
-      }
     };
-
-    const files = templates[type] || templates.nodejs;
 
     for (const [filename, content] of Object.entries(files)) {
       await fs.writeFile(path.join(containerPath, filename), content);
     }
+  }
 
-    await execAsync(`chmod -R 775 ${containerPath}`);
+  /**
+   * Template Python legado (mantido por compatibilidade)
+   */
+  async createPythonTemplate(containerPath) {
+    const files = {
+      'requirements.txt': 'flask==2.3.3',
+      'main.py': `from flask import Flask, jsonify
+from datetime import datetime
+import os
+
+app = Flask(__name__)
+PORT = int(os.environ.get('PORT', 8000))
+
+@app.route('/')
+def hello():
+    return jsonify({
+        'message': 'Hello from MozHost!',
+        'timestamp': datetime.now().isoformat()
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=PORT, debug=False)`
+    };
+
+    for (const [filename, content] of Object.entries(files)) {
+      await fs.writeFile(path.join(containerPath, filename), content);
+    }
   }
 }
 
