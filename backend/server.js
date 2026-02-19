@@ -31,6 +31,8 @@ const notificationRoutes = require('./routes/notifications');
 const subscriptionService = require('./services/subscriptionService');
 const databasesRoutes = require('./routes/databases');
 const emailRoutes = require('./routes/emails');
+const billingRoutes = require('./routes/billing');
+
 
 // ✨ NOVO: Importar NotificationManager
 const notificationManager = require('./utils/notification-manager');
@@ -222,6 +224,9 @@ const mysqlRoutes = require('./routes/mysql');
 app.use('/api/mysql', mysqlRoutes);
 const qrcodeRoutes = require('./routes/qrcode');
 app.use('/api/qrcode', qrcodeRoutes);
+const registrarRoutes = require('./routes/registrar');
+app.use('/api/registrar', registrarRoutes);
+app.use('/api/billing', billingRoutes);
 // ============================================
 // PROXY DINÂMICO
 // ============================================

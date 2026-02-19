@@ -268,6 +268,58 @@ await this.query(`
 
 console.log('✅ Email tables initialized successfully');
 
+      // Tabela de billing (planos com dinheiro real)
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS billing (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          plan_id VARCHAR(50) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          currency VARCHAR(5) DEFAULT 'MZN',
+          method ENUM('mpesa', 'emola', 'mercadopago') NOT NULL,
+          reference_code VARCHAR(100) UNIQUE,
+          transaction_id VARCHAR(100),
+          status ENUM('pending', 'processing', 'active', 'expired', 'failed', 'cancelled') DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          activated_at TIMESTAMP NULL,
+          expires_at TIMESTAMP NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_billing_user (user_id),
+          INDEX idx_billing_status (status),
+          INDEX idx_billing_ref (reference_code)
+        )
+      `);
+
+      console.log('✅ Billing table initialized successfully');
+
+      // Tabela de pagamentos de domínios
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS domain_payments (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          domain VARCHAR(255) NOT NULL,
+          action ENUM('buy', 'renew') NOT NULL,
+          price_usd DECIMAL(10,2) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          currency VARCHAR(5) DEFAULT 'MZN',
+          method ENUM('mpesa', 'emola', 'mercadopago') NOT NULL,
+          phone VARCHAR(20),
+          years INT DEFAULT 1,
+          reference_code VARCHAR(100) UNIQUE,
+          transaction_id VARCHAR(100),
+          status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+          error_message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          completed_at TIMESTAMP NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_dompay_user (user_id),
+          INDEX idx_dompay_status (status),
+          INDEX idx_dompay_ref (reference_code)
+        )
+      `);
+
+      console.log('✅ Domain payments table initialized successfully');
+
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing database:', error);
