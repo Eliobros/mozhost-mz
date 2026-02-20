@@ -234,7 +234,7 @@ app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
 
-  if (req.path && req.path.startsWith('/api')) {
+  if (req.originalUrl && req.originalUrl.startsWith('/api')) {
     return next();
   }
 
