@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 const API = 'https://api.mozhost.topaziocoin.online';
+const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
 
 // ===== HELPERS =====
 const hdrs = () => {
@@ -303,8 +304,38 @@ export default function DomainsPage() {
 
     setPayProcessing(true);
     try {
+      let transactionId = null;
+      let paymentUrl = null;
+
+      // === STEP 1: Para M-Pesa/e-Mola, chamar Alauda DIRETO do frontend (mesmo fluxo do coins) ===
+      if (payMethod === 'mpesa' || payMethod === 'emola') {
+        const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
+        const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || 'sua_api_key'}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            valor: Math.ceil(parseFloat(cost) * (parseFloat(process.env.NEXT_PUBLIC_USD_TO_MT) || 63)).toString(),
+            numero_celular: payPhone,
+            usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
+          })
+        });
+        const alaudaData = await alaudaRes.json();
+        if (!alaudaData.success && !alaudaData.data) {
+          showToast(alaudaData.message || alaudaData.error || 'Erro ao processar pagamento móvel', 'error');
+          setPayProcessing(false);
+          return;
+        }
+        const payData = alaudaData.data || alaudaData;
+        transactionId = payData.payment?.transaction_id || payData.transaction_id;
+      }
+
+      // === STEP 2: Registrar o pagamento no backend ===
       const body = { domain, action, cost, method: payMethod, years: years || 1 };
       if (payMethod === 'mpesa' || payMethod === 'emola') body.phone = payPhone;
+      if (transactionId) body.transaction_id = transactionId;
 
       const res = await fetch(`${API}/api/registrar/pay`, {
         method: 'POST', headers: hdrs(), body: JSON.stringify(body)
@@ -351,7 +382,10 @@ export default function DomainsPage() {
       } else {
         showToast(data.error || 'Erro ao processar pagamento', 'error');
       }
-    } catch { showToast('Erro de conexão', 'error'); }
+    } catch (err) {
+      console.error('Erro pagamento domínio:', err);
+      showToast('Erro de conexão', 'error');
+    }
     finally { setPayProcessing(false); }
   };
 

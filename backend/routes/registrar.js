@@ -325,8 +325,7 @@ router.get('/info', (req, res) => {
 router.post('/pay', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { domain, action, cost, method, phone, years } = req.body;
-    // action: 'buy' ou 'renew'
+    const { domain, action, cost, method, phone, years, transaction_id } = req.body;
 
     if (!domain || !action || !cost || !method) {
       return res.status(400).json({ error: 'domain, action, cost e method são obrigatórios' });
@@ -344,11 +343,10 @@ router.post('/pay', auth, async (req, res) => {
       return res.status(400).json({ error: 'Número de telefone é obrigatório para pagamento móvel' });
     }
 
-    // Converter preço USD para MT (taxa aproximada)
     const USD_TO_MT = parseFloat(process.env.USD_TO_MT_RATE) || 63;
     const priceUsd = parseFloat(cost);
     const priceMt = Math.ceil(priceUsd * USD_TO_MT);
-    const amount = method === 'mercadopago' ? Math.ceil(priceUsd * 5.5) : priceMt; // BRL ou MT
+    const amount = method === 'mercadopago' ? Math.ceil(priceUsd * 5.5) : priceMt;
     const currency = method === 'mercadopago' ? 'BRL' : 'MZN';
 
     const users = await database.query('SELECT id, email FROM users WHERE id = ?', [userId]);
@@ -358,7 +356,6 @@ router.post('/pay', auth, async (req, res) => {
     const random = Math.random().toString(36).substr(2, 6).toUpperCase();
     const referenceCode = `DOM${timestamp}${random}`;
 
-    // Salvar pagamento pendente
     await database.query(
       `INSERT INTO domain_payments (user_id, domain, action, price_usd, amount, currency, method, phone, years, reference_code, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
@@ -367,12 +364,65 @@ router.post('/pay', auth, async (req, res) => {
 
     const paymentId = (await database.query('SELECT LAST_INSERT_ID() as id'))[0].id;
 
-    // Chamar Alauda API
     let paymentDetails = {};
     let paymentUrl = null;
 
-    try {
-      if (method === 'mpesa' || method === 'emola') {
+    // Se o frontend já chamou Alauda diretamente e enviou transaction_id, só registrar
+    if ((method === 'mpesa' || method === 'emola') && transaction_id) {
+      await database.query(
+        'UPDATE domain_payments SET transaction_id = ?, status = "processing" WHERE id = ?',
+        [transaction_id, paymentId]
+      );
+
+      const phoneClean = phone.replace(/^258/, '');
+      paymentDetails = {
+        provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+        phone: phoneClean,
+        reference: referenceCode,
+        transaction_id: transaction_id,
+        instructions: [
+          'Aguarde a notificação no seu celular',
+          `Digite seu PIN ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'} para confirmar`,
+          `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
+          `Referência: ${referenceCode}`
+        ]
+      };
+
+    } else if (method === 'mercadopago') {
+      try {
+        const desc = action === 'buy' ? `Registro de domínio: ${domain}` : `Renovação de domínio: ${domain}`;
+        const alaudaRes = await axios.post(
+          `${ALAUDA_API_URL}/mercadopago`,
+          {
+            email: users[0].email,
+            amount: parseFloat(amount),
+            description: desc,
+            usuario_id: userId.toString(),
+            back_urls: {
+              success: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=success&ref=${referenceCode}`,
+              failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=failure`,
+              pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=pending`
+            },
+            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/registrar/webhook/mercadopago`
+          },
+          { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}`, 'Content-Type': 'application/json' } }
+        );
+
+        const alaudaData = alaudaRes.data.data || alaudaRes.data;
+        paymentUrl = alaudaData.payment?.init_point || alaudaData.payment?.sandbox_init_point;
+        paymentDetails = { provider: 'Mercado Pago', url: paymentUrl, preference_id: alaudaData.payment?.id };
+
+        if (alaudaData.payment?.id) {
+          await database.query('UPDATE domain_payments SET transaction_id = ? WHERE id = ?', [alaudaData.payment.id, paymentId]);
+        }
+      } catch (alaudaError) {
+        console.error('❌ Erro Alauda MercadoPago (domain):', alaudaError.response?.data || alaudaError.message);
+        return res.status(500).json({ error: 'Erro ao criar pagamento MercadoPago' });
+      }
+
+    } else {
+      // Fallback: M-Pesa/e-Mola sem transaction_id (chamada direta do backend)
+      try {
         const phoneClean = phone.replace(/^258/, '');
         const endpoint = method === 'mpesa' ? '/mpesa' : '/emola';
 
@@ -407,53 +457,9 @@ router.post('/pay', auth, async (req, res) => {
             [alaudaData.payment.transaction_id, paymentId]
           );
         }
-
-      } else if (method === 'mercadopago') {
-        const desc = action === 'buy' ? `Registro de domínio: ${domain}` : `Renovação de domínio: ${domain}`;
-        const alaudaRes = await axios.post(
-          `${ALAUDA_API_URL}/mercadopago`,
-          {
-            email: users[0].email,
-            amount: parseFloat(amount),
-            description: desc,
-            usuario_id: userId.toString(),
-            back_urls: {
-              success: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=success&ref=${referenceCode}`,
-              failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=failure`,
-              pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=pending`
-            },
-            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/registrar/webhook/mercadopago`
-          },
-          { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}`, 'Content-Type': 'application/json' } }
-        );
-
-        const alaudaData = alaudaRes.data.data || alaudaRes.data;
-        paymentUrl = alaudaData.payment?.init_point || alaudaData.payment?.sandbox_init_point;
-
-        paymentDetails = { provider: 'Mercado Pago', url: paymentUrl, preference_id: alaudaData.payment?.id };
-
-        if (alaudaData.payment?.id) {
-          await database.query('UPDATE domain_payments SET transaction_id = ? WHERE id = ?', [alaudaData.payment.id, paymentId]);
-        }
-      }
-    } catch (alaudaError) {
-      console.error('❌ Erro Alauda (domain pay):', alaudaError.response?.data || alaudaError.message);
-
-      if (method === 'mpesa' || method === 'emola') {
-        const fallbackPhone = process.env[`${method.toUpperCase()}_PHONE`] || '258840000000';
-        paymentDetails = {
-          provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
-          phone: fallbackPhone,
-          reference: referenceCode,
-          manual: true,
-          instructions: [
-            `Abra o app ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'}`,
-            'Escolha "Enviar Dinheiro"',
-            `Para o número: ${fallbackPhone}`,
-            `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
-            `Referência: ${referenceCode}`
-          ]
-        };
+      } catch (alaudaError) {
+        console.error('❌ Erro Alauda (domain pay):', alaudaError.response?.data || alaudaError.message);
+        return res.status(500).json({ error: 'Erro ao processar pagamento móvel. Tente novamente.' });
       }
     }
 
@@ -479,16 +485,66 @@ router.post('/pay', auth, async (req, res) => {
   }
 });
 
-// GET /api/registrar/pay/:id/status - Verificar status do pagamento
+// GET /api/registrar/pay/:id/status - Verificar status do pagamento (com check ativo na Alauda)
 router.get('/pay/:id/status', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const payments = await database.query(
-      'SELECT id, domain, action, price_usd, amount, currency, method, status, reference_code, created_at, completed_at FROM domain_payments WHERE id = ?',
+      'SELECT id, domain, action, price_usd, amount, currency, method, status, reference_code, transaction_id, created_at, completed_at FROM domain_payments WHERE id = ?',
       [id]
     );
     if (!payments.length) return res.status(404).json({ error: 'Pagamento não encontrado' });
-    res.json({ success: true, payment: payments[0] });
+
+    const payment = payments[0];
+
+    // Se ainda pendente/processing e tem transaction_id, verificar ativamente na Alauda
+    if (['pending', 'processing'].includes(payment.status) && payment.transaction_id) {
+      try {
+        const statusRes = await axios.get(
+          `${ALAUDA_API_URL}/status/${payment.transaction_id}`,
+          { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}` } }
+        );
+
+        const alaudaStatus = statusRes.data?.data?.status || statusRes.data?.status;
+
+        if (alaudaStatus === 'completed' || alaudaStatus === 'approved') {
+          // Pagamento confirmado! Executar ação no Porkbun
+          try {
+            if (payment.action === 'buy') {
+              await porkbunRequest(`/domain/create/${payment.domain}`, {
+                cost: parseInt(payment.price_usd),
+                agreeToTerms: 'yes'
+              });
+            } else if (payment.action === 'renew') {
+              await porkbunRequest(`/domain/renew/${payment.domain}`, {
+                years: parseInt(payment.years) || 1
+              });
+            }
+
+            await database.query(
+              'UPDATE domain_payments SET status = "completed", completed_at = NOW() WHERE id = ?',
+              [payment.id]
+            );
+            payment.status = 'completed';
+            console.log(`✅ Domain ${payment.action} completed via polling: ${payment.domain}`);
+          } catch (porkbunError) {
+            console.error(`❌ Erro Porkbun após pagamento: ${porkbunError.message}`);
+            await database.query(
+              'UPDATE domain_payments SET status = "failed", error_message = ? WHERE id = ?',
+              [porkbunError.message, payment.id]
+            );
+            payment.status = 'failed';
+          }
+        } else if (alaudaStatus === 'failed' || alaudaStatus === 'rejected' || alaudaStatus === 'cancelled') {
+          await database.query('UPDATE domain_payments SET status = "failed" WHERE id = ?', [payment.id]);
+          payment.status = 'failed';
+        }
+      } catch (statusError) {
+        console.error('Erro ao verificar status Alauda:', statusError.message);
+      }
+    }
+
+    res.json({ success: true, payment });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao verificar status' });
   }
