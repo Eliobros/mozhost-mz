@@ -9,23 +9,30 @@
     "newArchEnabled": true,
     "scheme": "mozhost",
     "splash": {
+      "image": "./assets/icon.png",
       "backgroundColor": "#1e3a5f",
       "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eliobros.mozhost"
+      "bundleIdentifier": "com.eliobrostech.mozhost"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#1e3a5f"
       },
-      "package": "com.eliobros.mozhost"
+      "package": "com.eliobrostech.mozhost"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dd7504bb-7506-42d9-b140-85313fe17a07"
+      }
+    }
   }
 }

@@ -150,7 +150,7 @@ router.post('/create', async (req, res) => {
           mpesaData,
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-key': ` ${ALAUDA_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
@@ -196,7 +196,7 @@ router.post('/create', async (req, res) => {
           emolaData,
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-Key': `${ALAUDA_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
@@ -249,7 +249,7 @@ router.post('/create', async (req, res) => {
           mpData,
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-Key': ` ${ALAUDA_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
@@ -392,7 +392,7 @@ router.post('/webhook/:method', async (req, res) => {
                 `${ALAUDA_API_URL}/mercadopago/status/${paymentId}`,
                 {
                   headers: {
-                    'Authorization': `ApiKey ${ALAUDA_API_KEY}`
+                    'X-API-Key': ` ${ALAUDA_API_KEY}`
                   }
                 }
               );

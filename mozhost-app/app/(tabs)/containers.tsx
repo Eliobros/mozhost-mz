@@ -12,6 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { api } from '@/services/api';
 import { Colors } from '@/constants/Colors';
 
@@ -30,6 +31,7 @@ type Container = {
 };
 
 export default function ContainersScreen() {
+  const router = useRouter();
   const [containers, setContainers] = useState<Container[]>([]);
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -292,6 +294,36 @@ export default function ContainersScreen() {
                   <Ionicons name="trash" size={16} color={Colors.error} />
                 </TouchableOpacity>
               </View>
+
+              {/* Tools Row */}
+              <View style={styles.cardTools}>
+                <TouchableOpacity
+                  style={styles.toolBtn}
+                  onPress={() => router.push({ pathname: '/terminal', params: { containerId: String(container.id), containerName: container.name } })}>
+                  <Ionicons name="terminal" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.toolBtnText}>Terminal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.toolBtn}
+                  onPress={() => router.push({ pathname: '/files', params: { containerId: String(container.id) } })}>
+                  <Ionicons name="folder" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.toolBtnText}>Arquivos</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.toolBtn}
+                  onPress={() => router.push({ pathname: '/editor', params: { containerId: String(container.id), filePath: 'index.js' } })}>
+                  <Ionicons name="code-slash" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.toolBtnText}>Editor</Text>
+                </TouchableOpacity>
+                {(container.type === 'bot-baileys' || container.type === 'bot-wwebjs') && (
+                  <TouchableOpacity
+                    style={styles.toolBtn}
+                    onPress={() => router.push({ pathname: '/qrcode', params: { containerId: String(container.id) } })}>
+                    <Ionicons name="qr-code" size={16} color={Colors.textSecondary} />
+                    <Text style={styles.toolBtnText}>QR Code</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ))
         )}
@@ -479,7 +511,25 @@ const styles = StyleSheet.create({
   infoItem: {},
   infoLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
   infoValue: { fontSize: 13, fontWeight: '600', color: Colors.text },
-  cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 },
+  cardTools: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 10,
+  },
+  toolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: Colors.surfaceVariant,
+  },
+  toolBtnText: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
   actionChip: {
     flexDirection: 'row',
     alignItems: 'center',

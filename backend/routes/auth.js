@@ -1147,6 +1147,36 @@ router.post('/reset', [
   }
 });
 
+// Alterar senha (usuário autenticado)
+router.put('/change-password', authMiddleware, [
+  body('currentPassword').notEmpty(),
+  body('newPassword').isLength({ min: 6 })
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+    }
+
+    const userId = req.user.userId || req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    const users = await database.query('SELECT password_hash FROM users WHERE id = ?', [userId]);
+    if (!users.length) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    const isValid = await bcrypt.compare(currentPassword, users[0].password_hash);
+    if (!isValid) return res.status(401).json({ error: 'Senha atual incorreta', message: 'Senha atual incorreta' });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await database.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+
+    res.json({ message: 'Senha alterada com sucesso' });
+  } catch (e) {
+    console.error('change-password error:', e);
+    res.status(500).json({ error: 'Falha ao alterar senha' });
+  }
+});
+
 // Gerar token temporário para WhatsApp Bot
 router.post('/whatsapp-token', async (req, res) => {
   try {
@@ -1186,7 +1216,7 @@ router.post('/whatsapp-token', async (req, res) => {
 // GET /api/auth/startup-commands - Obter comandos atuais
 router.get('/startup-commands', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user.id;
 
     const users = await database.query(
       'SELECT startup_command_nodejs, startup_command_python FROM users WHERE id = ?',
@@ -1211,7 +1241,7 @@ router.get('/startup-commands', authMiddleware, async (req, res) => {
 // PUT /api/auth/startup-commands - Atualizar comandos
 router.put('/startup-commands', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user.id;
     const { nodejs, python } = req.body;
 
     // Validação básica
@@ -1251,7 +1281,7 @@ router.put('/startup-commands', authMiddleware, async (req, res) => {
 // POST /api/auth/upgrade-plan - Upgrade do plano do usuário
 router.post('/upgrade-plan', authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user.id;
     const { plan } = req.body;
 
     const validPlans = {

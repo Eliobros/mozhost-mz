@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,10 @@ export default function ProfileScreen() {
   const [couponCode, setCouponCode] = useState('');
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const [couponMessage, setCouponMessage] = useState({ type: '', text: '' });
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState({ type: '', text: '' });
 
   const loadData = useCallback(async () => {
     try {
@@ -60,6 +65,32 @@ export default function ProfileScreen() {
       setCouponMessage({ type: 'error', text: err.message || 'Erro ao resgatar cupom' });
     } finally {
       setRedeemingCoupon(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordForm.new !== passwordForm.confirm) {
+      setPasswordMsg({ type: 'error', text: 'As senhas não coincidem' });
+      return;
+    }
+    if (passwordForm.new.length < 6) {
+      setPasswordMsg({ type: 'error', text: 'A nova senha deve ter pelo menos 6 caracteres' });
+      return;
+    }
+    setSavingPassword(true);
+    setPasswordMsg({ type: '', text: '' });
+    try {
+      await api.put('/auth/change-password', {
+        currentPassword: passwordForm.current,
+        newPassword: passwordForm.new,
+      });
+      setPasswordMsg({ type: 'success', text: 'Senha alterada com sucesso!' });
+      setPasswordForm({ current: '', new: '', confirm: '' });
+      setTimeout(() => setPasswordMsg({ type: '', text: '' }), 5000);
+    } catch (err: any) {
+      setPasswordMsg({ type: 'error', text: err.message || err.error || 'Erro ao alterar senha' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -175,6 +206,39 @@ export default function ProfileScreen() {
             <Text style={styles.infoValue}>{user?.maxStorageMb || 0}MB</Text>
           </View>
         </View>
+      </View>
+
+      {/* Change Password */}
+      <View style={styles.section}>
+        <TouchableOpacity onPress={() => setShowPasswordSection(!showPasswordSection)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.sectionTitle}>Alterar Senha</Text>
+          <Ionicons name={showPasswordSection ? 'chevron-up' : 'chevron-down'} size={20} color={Colors.textMuted} />
+        </TouchableOpacity>
+        {showPasswordSection && (
+          <View style={styles.infoCard}>
+            {passwordMsg.text ? (
+              <View style={[styles.messageBox, passwordMsg.type === 'success' ? styles.successBox : styles.errorBox]}>
+                <Ionicons name={passwordMsg.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={16} color={passwordMsg.type === 'success' ? Colors.success : Colors.error} />
+                <Text style={[styles.messageText, { color: passwordMsg.type === 'success' ? Colors.success : Colors.error }]}>{passwordMsg.text}</Text>
+              </View>
+            ) : null}
+            <TextInput style={styles.couponInput} placeholder="Senha atual" placeholderTextColor={Colors.textMuted} value={passwordForm.current} onChangeText={v => setPasswordForm(p => ({ ...p, current: v }))} secureTextEntry />
+            <TextInput style={[styles.couponInput, { marginTop: 10 }]} placeholder="Nova senha" placeholderTextColor={Colors.textMuted} value={passwordForm.new} onChangeText={v => setPasswordForm(p => ({ ...p, new: v }))} secureTextEntry />
+            <TextInput style={[styles.couponInput, { marginTop: 10 }]} placeholder="Confirmar nova senha" placeholderTextColor={Colors.textMuted} value={passwordForm.confirm} onChangeText={v => setPasswordForm(p => ({ ...p, confirm: v }))} secureTextEntry />
+            <TouchableOpacity
+              style={[styles.couponBtn, { marginTop: 12, paddingVertical: 14, justifyContent: 'center', borderRadius: 10 }]}
+              onPress={handleChangePassword}
+              disabled={savingPassword}
+            >
+              {savingPassword ? <ActivityIndicator color="#fff" size="small" /> : (
+                <>
+                  <Ionicons name="lock-closed" size={18} color="#fff" />
+                  <Text style={styles.couponBtnText}>Salvar Nova Senha</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Logout */}

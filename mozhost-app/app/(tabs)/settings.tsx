@@ -33,6 +33,32 @@ export default function SettingsScreen() {
 
   const sections: { title: string; items: MenuItem[] }[] = [
     {
+      title: 'Ferramentas',
+      items: [
+        {
+          icon: 'terminal',
+          label: 'Terminal',
+          subtitle: 'Acesso direto ao terminal',
+          color: '#22c55e',
+          onPress: () => router.push('/terminal'),
+        },
+        {
+          icon: 'folder',
+          label: 'Arquivos',
+          subtitle: 'Gerenciador de arquivos',
+          color: '#3b82f6',
+          onPress: () => router.push('/files'),
+        },
+        {
+          icon: 'code-slash',
+          label: 'Editor de Código',
+          subtitle: 'Editar arquivos dos containers',
+          color: '#8b5cf6',
+          onPress: () => router.push('/editor'),
+        },
+      ],
+    },
+    {
       title: 'Gestão',
       items: [
         {
@@ -41,6 +67,13 @@ export default function SettingsScreen() {
           subtitle: 'Gerir domínios conectados',
           color: '#0ea5e9',
           onPress: () => router.push('/domains'),
+        },
+        {
+          icon: 'git-branch',
+          label: 'Conexões',
+          subtitle: 'GitHub e integrações',
+          color: '#f97316',
+          onPress: () => router.push('/connections'),
         },
         ...(isAdmin
           ? [

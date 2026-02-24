@@ -142,6 +142,18 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
                 Marcar todas como lidas
               </button>
             )}
+
+
+	  {/* ✨ NOVO: Botão de ativar push */}
+{Notification.permission !== 'granted' && (
+  <button
+    onClick={requestNotificationPermission}
+    className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+  >
+    🔔 Ativar push
+  </button>
+)}
+
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"

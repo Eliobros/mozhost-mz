@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -27,6 +28,12 @@ export default function LoginScreen() {
   const [success, setSuccess] = useState('');
   const [showVerifyStep, setShowVerifyStep] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState('email');
+
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const [formData, setFormData] = useState({
     login: '',
@@ -169,6 +176,26 @@ export default function LoginScreen() {
       setError('Erro ao reenviar código');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) { setForgotMessage('Digite seu email'); setForgotSuccess(false); return; }
+    setForgotLoading(true);
+    setForgotMessage('');
+    try {
+      await fetch('https://api.mozhost.topaziocoin.online/api/auth/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      setForgotSuccess(true);
+      setForgotMessage('Se este email existir, um link de redefinição foi enviado.');
+    } catch {
+      setForgotSuccess(false);
+      setForgotMessage('Erro ao enviar. Tente novamente.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -406,6 +433,12 @@ export default function LoginScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
+
+              {isLogin && (
+                <TouchableOpacity onPress={() => setShowForgotModal(true)} style={{ marginTop: 8, alignItems: 'center' }}>
+                  <Text style={{ color: '#93c5fd', fontSize: 14 }}>Esqueci minha senha</Text>
+                </TouchableOpacity>
+              )}
             </>
           ) : (
             <>
@@ -457,6 +490,32 @@ export default function LoginScreen() {
 
         <Text style={styles.footer}>© 2025 Eliobros Tech • Maputo, Moçambique</Text>
       </ScrollView>
+
+      <Modal visible={showForgotModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#1e293b', borderRadius: 16, padding: 24, width: '85%' }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16 }}>Recuperar Senha</Text>
+            <TextInput
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 14, fontSize: 15, color: '#fff', marginBottom: 12 }}
+              placeholder="Seu email"
+              placeholderTextColor="#94a3b8"
+              value={forgotEmail}
+              onChangeText={setForgotEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            {forgotMessage ? <Text style={{ color: forgotSuccess ? '#22c55e' : '#ef4444', marginBottom: 12, fontSize: 13 }}>{forgotMessage}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={() => { setShowForgotModal(false); setForgotMessage(''); }} style={{ flex: 1, padding: 14, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center' }}>
+                <Text style={{ color: '#94a3b8', fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleForgotPassword} disabled={forgotLoading} style={{ flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#3b82f6', alignItems: 'center' }}>
+                {forgotLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Enviar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

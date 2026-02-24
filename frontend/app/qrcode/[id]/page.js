@@ -198,7 +198,7 @@ export default function QRCodePage() {
     if (wsRef.current) {
       wsRef.current.close();
     }
-    router.push('/containers');
+    router.push('#containers');
   };
 
   return (

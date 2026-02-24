@@ -125,7 +125,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/password', {
+      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/change-password', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

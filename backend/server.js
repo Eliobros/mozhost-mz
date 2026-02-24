@@ -209,7 +209,7 @@ app.use('/api/files', fileRoutes);
 app.use('/proxy', proxyRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/emails', emailRoutes);
-
+app.use('/api/github', require('./routes/github'));
 app.use('/api/payment', paymentRoutes);
 app.use('/api/domains', domainsRoutes);
 app.use('/api/databases', databasesRoutes);
@@ -227,9 +227,9 @@ app.use('/api/qrcode', qrcodeRoutes);
 const registrarRoutes = require('./routes/registrar');
 app.use('/api/registrar', registrarRoutes);
 app.use('/api/billing', billingRoutes);
-// ============================================
-// PROXY DINÂMICO
-// ============================================
+const pushRoutes = require('./routes/push');
+app.use('/api/push', pushRoutes);
+
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];

@@ -28,7 +28,7 @@ import {
   Gift,
   Tag
 } from 'lucide-react';
-import DashboardLayout from './DashboardLayout';
+
 import PaymentModal from './ContainersPage/PaymentModal';
 
 const ProfilePage = () => {
@@ -66,8 +66,7 @@ const ProfilePage = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [coins, setCoins] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  
-  // Estados para cupons
+
   const [couponCode, setCouponCode] = useState('');
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const [couponMessage, setCouponMessage] = useState({ type: '', text: '' });
@@ -135,10 +134,7 @@ const ProfilePage = () => {
       return sum + diffDays;
     }, 0);
 
-    if (totalDays > 0) {
-      return `${totalDays} dias`;
-    }
-    return '0 dias';
+    return totalDays > 0 ? `${totalDays} dias` : '0 dias';
   };
 
   const handleRedeemCoupon = async () => {
@@ -164,14 +160,12 @@ const ProfilePage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setCouponMessage({ 
-          type: 'success', 
-          text: `🎉 ${data.message} Novo saldo: ${data.newBalance} coins` 
+        setCouponMessage({
+          type: 'success',
+          text: `🎉 ${data.message} Novo saldo: ${data.newBalance} coins`
         });
         setCoins(data.newBalance);
         setCouponCode('');
-        
-        // Limpar mensagem após 5 segundos
         setTimeout(() => setCouponMessage({ type: '', text: '' }), 5000);
       } else {
         setCouponMessage({ type: 'error', text: data.message || 'Erro ao resgatar cupom' });
@@ -242,21 +236,19 @@ const ProfilePage = () => {
 
   if (loading) {
     return (
-      <DashboardLayout currentPage="profile">
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando perfil...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando perfil...</p>
         </div>
-      </DashboardLayout>
+      </div>
     );
   }
 
   const planInfo = getPlanInfo(user?.plan);
 
   return (
-    <DashboardLayout currentPage="profile">
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -279,9 +271,7 @@ const ProfilePage = () => {
 
         {/* Message */}
         {message.text && (
-          <div className={`rounded-md p-4 ${
-            message.type === 'success' ? 'bg-green-50' : 'bg-red-50'
-          }`}>
+          <div className={`rounded-md p-4 ${message.type === 'success' ? 'bg-green-50' : 'bg-red-50'}`}>
             <div className="flex">
               {message.type === 'success' ? (
                 <CheckCircle className="h-5 w-5 text-green-400" />
@@ -289,9 +279,7 @@ const ProfilePage = () => {
                 <AlertCircle className="h-5 w-5 text-red-400" />
               )}
               <div className="ml-3">
-                <p className={`text-sm font-medium ${
-                  message.type === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
+                <p className={`text-sm font-medium ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
                   {message.text}
                 </p>
               </div>
@@ -310,9 +298,7 @@ const ProfilePage = () => {
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nome de Usuário
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome de Usuário</label>
                     {editing ? (
                       <input
                         type="text"
@@ -329,9 +315,7 @@ const ProfilePage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     {editing ? (
                       <input
                         type="email"
@@ -350,9 +334,7 @@ const ProfilePage = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Plano Atual
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Plano Atual</label>
                     <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${planInfo.bg} ${planInfo.color}`}>
                       <planInfo.icon className="w-4 h-4 mr-1" />
                       {planInfo.name}
@@ -360,9 +342,7 @@ const ProfilePage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Membro desde
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Membro desde</label>
                     <div className="flex items-center text-gray-900">
                       <Calendar className="w-4 h-4 mr-2" />
                       {new Date(user?.created_at).toLocaleDateString('pt-BR')}
@@ -380,9 +360,7 @@ const ProfilePage = () => {
                 </div>
                 <div className="p-6 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Senha Atual
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Senha Atual</label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
@@ -396,20 +374,14 @@ const ProfilePage = () => {
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute inset-y-0 right-0 pr-3 flex items-center"
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
                       </button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nova Senha
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nova Senha</label>
                       <input
                         type="password"
                         value={formData.newPassword}
@@ -420,9 +392,7 @@ const ProfilePage = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Confirmar Nova Senha
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Confirmar Nova Senha</label>
                       <input
                         type="password"
                         value={formData.confirmPassword}
@@ -464,10 +434,7 @@ const ProfilePage = () => {
                         checked={value}
                         onChange={(e) => setFormData({
                           ...formData,
-                          notifications: {
-                            ...formData.notifications,
-                            [key]: e.target.checked
-                          }
+                          notifications: { ...formData.notifications, [key]: e.target.checked }
                         })}
                         className="sr-only peer"
                       />
@@ -505,7 +472,6 @@ const ProfilePage = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Estatísticas da Conta</h3>
               </div>
               <div className="p-6 space-y-4">
-                {/* Coins */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Coins className="w-5 h-5 text-yellow-600 mr-2" />
@@ -528,20 +494,16 @@ const ProfilePage = () => {
                     <Gift className="w-5 h-5 text-purple-600 mr-2" />
                     <span className="text-sm font-semibold text-gray-700">Resgatar Cupom</span>
                   </div>
-                  
+
                   {couponMessage.text && (
-                    <div className={`mb-3 rounded-md p-3 ${
-                      couponMessage.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                    }`}>
+                    <div className={`mb-3 rounded-md p-3 ${couponMessage.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                       <div className="flex">
                         {couponMessage.type === 'success' ? (
                           <CheckCircle className="h-4 w-4 text-green-400 mt-0.5" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-red-400 mt-0.5" />
                         )}
-                        <p className={`text-xs ml-2 ${
-                          couponMessage.type === 'success' ? 'text-green-800' : 'text-red-800'
-                        }`}>
+                        <p className={`text-xs ml-2 ${couponMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
                           {couponMessage.text}
                         </p>
                       </div>
@@ -553,11 +515,7 @@ const ProfilePage = () => {
                       type="text"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleRedeemCoupon();
-                        }
-                      }}
+                      onKeyPress={(e) => { if (e.key === 'Enter') handleRedeemCoupon(); }}
                       placeholder="CÓDIGO"
                       className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 uppercase"
                       disabled={redeemingCoupon}
@@ -570,15 +528,11 @@ const ProfilePage = () => {
                       {redeemingCoupon ? (
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <>
-                          <Tag className="w-4 h-4 mr-1" /> Usar
-                        </>
+                        <><Tag className="w-4 h-4 mr-1" /> Usar</>
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Digite o código do cupom para ganhar coins grátis!
-                  </p>
+                  <p className="text-xs text-gray-500 mt-2">Digite o código do cupom para ganhar coins grátis!</p>
                 </div>
 
                 <div className="pt-2 border-t border-gray-200"></div>
@@ -629,10 +583,7 @@ const ProfilePage = () => {
                     <span className="text-sm font-bold text-gray-900">{stats.averageCpu.toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-300 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${Math.min(stats.averageCpu, 100)}%` }}
-                    ></div>
+                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${Math.min(stats.averageCpu, 100)}%` }}></div>
                   </div>
                 </div>
 
@@ -642,10 +593,7 @@ const ProfilePage = () => {
                     <span className="text-sm font-bold text-gray-900">{stats.averageMemory.toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-300 rounded-full h-2">
-                    <div
-                      className="bg-green-600 h-2 rounded-full"
-                      style={{ width: `${Math.min(stats.averageMemory, 100)}%` }}
-                    ></div>
+                    <div className="bg-green-600 h-2 rounded-full" style={{ width: `${Math.min(stats.averageMemory, 100)}%` }}></div>
                   </div>
                 </div>
               </div>
@@ -658,20 +606,16 @@ const ProfilePage = () => {
               </div>
               <div className="p-6 space-y-3">
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Segurança da Conta
+                  <Shield className="w-4 h-4 mr-2" /> Segurança da Conta
                 </button>
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Gerenciar Cobrança
+                  <CreditCard className="w-4 h-4 mr-2" /> Gerenciar Cobrança
                 </button>
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
-                  <Bell className="w-4 h-4 mr-2" />
-                  Central de Notificações
+                  <Bell className="w-4 h-4 mr-2" /> Central de Notificações
                 </button>
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Configurações Avançadas
+                  <Settings className="w-4 h-4 mr-2" /> Configurações Avançadas
                 </button>
               </div>
             </div>
@@ -690,8 +634,9 @@ const ProfilePage = () => {
           }}
         />
       )}
-    </DashboardLayout>
+    </>
   );
 };
 
 export default ProfilePage;
+

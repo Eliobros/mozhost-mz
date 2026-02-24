@@ -369,6 +369,24 @@ router.post('/:id/restart', async (req, res) => {
 
     const container = containers[0];
 
+    // Verificar se container Docker existe
+    const containerData = await database.query(
+      'SELECT docker_container_id, type FROM containers WHERE id = ?',
+      [id]
+    );
+
+    if (containerData.length && containerData[0].docker_container_id) {
+      try {
+        const dockerContainer = dockerManager.docker.getContainer(containerData[0].docker_container_id);
+        await dockerContainer.inspect();
+      } catch (inspectError) {
+        return res.status(500).json({
+          error: 'Container Docker não encontrado',
+          message: `O container Docker "${containerData[0].docker_container_id}" não existe mais. Pode ser necessário recriar o container.`
+        });
+      }
+    }
+
     try {
       await dockerManager.stopContainer(id);
     } catch (stopError) {

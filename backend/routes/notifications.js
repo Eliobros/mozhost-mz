@@ -80,4 +80,52 @@ const createNotification = async (userId, { type = 'info', category = 'system', 
 
 router.createNotification = createNotification;
 
+// Guardar Expo Push Token
+router.post('/expo-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token obrigatório' });
+    }
+
+    // Inserir ou atualizar se já existir
+    await db.query(
+      `INSERT INTO expo_push_tokens (user_id, token) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE user_id = ?`,
+      [req.user.userId, token, req.user.userId]
+    );
+
+    console.log(`✅ Expo Push Token guardado para user ${req.user.userId}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Erro ao guardar expo token:', error);
+    res.status(500).json({ error: 'Falha ao guardar token' });
+  }
+});
+
+// Remover Expo Push Token (logout)
+router.delete('/expo-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token obrigatório' });
+    }
+
+    await db.query(
+      'DELETE FROM expo_push_tokens WHERE user_id = ? AND token = ?',
+      [req.user.userId, token]
+    );
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Erro ao remover expo token:', error);
+    res.status(500).json({ error: 'Falha ao remover token' });
+  }
+});
+
+
 module.exports = router;

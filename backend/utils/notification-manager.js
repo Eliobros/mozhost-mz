@@ -1,39 +1,30 @@
 // utils/notification-manager.js
 const database = require('../models/database');
+const { Expo } = require('expo-server-sdk');
+
+const expo = new Expo();
 
 class NotificationManager {
   constructor() {
-    this.io = null; // Socket.IO instance (será configurado no server.js)
-    this.userSockets = new Map(); // Map de userId -> socket.id
+    this.io = null;
+    this.userSockets = new Map();
   }
 
-  /**
-   * Configurar Socket.IO instance
-   */
   setSocketIO(io) {
     this.io = io;
     console.log('✅ NotificationManager: Socket.IO configurado');
   }
 
-  /**
-   * Registrar conexão de usuário
-   */
   registerUserSocket(userId, socketId) {
     this.userSockets.set(userId, socketId);
     console.log(`[NotificationManager] Usuário ${userId} conectado (socket: ${socketId})`);
   }
 
-  /**
-   * Remover conexão de usuário
-   */
   unregisterUserSocket(userId) {
     this.userSockets.delete(userId);
     console.log(`[NotificationManager] Usuário ${userId} desconectado`);
   }
 
-  /**
-   * Criar notificação no banco E enviar via WebSocket
-   */
   async notify(userId, notification) {
     try {
       const { type = 'info', category = 'system', title, message } = notification;
@@ -75,6 +66,68 @@ class NotificationManager {
         console.log(`📤 Notificação enviada via WebSocket para usuário ${userId}`);
       }
 
+      // 4. Enviar via Expo Push Notification (app mobile)
+      try {
+        const tokens = await database.query(
+          'SELECT token FROM expo_push_tokens WHERE user_id = ?',
+          [userId]
+        );
+
+        if (tokens.length > 0) {
+          const messages = tokens
+            .filter(t => Expo.isExpoPushToken(t.token))
+            .map(t => ({
+              to: t.token,
+              sound: 'default',
+              title: title,
+              body: message,
+              data: { type, category, notificationId }
+            }));
+
+          if (messages.length > 0) {
+            const chunks = expo.chunkPushNotifications(messages);
+            for (const chunk of chunks) {
+              try {
+                const receipts = await expo.sendPushNotificationsAsync(chunk);
+                console.log(`📱 Push enviado para ${messages.length} dispositivo(s) do user ${userId}`);
+
+                // Remover tokens inválidos
+                for (let i = 0; i < receipts.length; i++) {
+                  if (receipts[i].status === 'error') {
+                    console.error(`❌ Erro no push: ${receipts[i].message}`);
+                    if (receipts[i].details?.error === 'DeviceNotRegistered') {
+                      await database.query(
+                        'DELETE FROM expo_push_tokens WHERE token = ?',
+                        [chunk[i].to]
+                      );
+                      console.log(`🗑️ Token inválido removido: ${chunk[i].to}`);
+                    }
+                  }
+                }
+              } catch (pushError) {
+                console.error('❌ Erro ao enviar push chunk:', pushError);
+              }
+            }
+          }
+        }
+      } catch (pushError) {
+        console.error('❌ Erro ao buscar tokens expo:', pushError);
+      }
+
+      // 5. Enviar via Web Push (browser)
+      try {
+        const { sendPushToUser } = require('../routes/push');
+        await sendPushToUser(userId, {
+          title: title,
+          message: message,
+          icon: '/mozhost.png',
+          url: '/',
+          tag: `mozhost-${notificationId}`
+        });
+      } catch (pushError) {
+        console.error('❌ Erro ao enviar Web Push:', pushError.message);
+      }
+
       return fullNotification;
 
     } catch (error) {
@@ -83,11 +136,6 @@ class NotificationManager {
     }
   }
 
-  /**
-   * Notificações específicas por tipo de evento
-   */
-
-  // Container parou
   async notifyContainerStopped(userId, containerName, containerId) {
     return await this.notify(userId, {
       type: 'warning',
@@ -97,7 +145,6 @@ class NotificationManager {
     });
   }
 
-  // Container iniciado
   async notifyContainerStarted(userId, containerName, containerId) {
     return await this.notify(userId, {
       type: 'success',
@@ -107,7 +154,6 @@ class NotificationManager {
     });
   }
 
-  // Container com erro
   async notifyContainerError(userId, containerName, errorMessage) {
     return await this.notify(userId, {
       type: 'error',
@@ -117,7 +163,6 @@ class NotificationManager {
     });
   }
 
-  // Deploy completado
   async notifyDeploySuccess(userId, containerName) {
     return await this.notify(userId, {
       type: 'success',
@@ -127,7 +172,6 @@ class NotificationManager {
     });
   }
 
-  // Subscription expirando
   async notifySubscriptionExpiring(userId, containerName, daysLeft) {
     return await this.notify(userId, {
       type: 'warning',
@@ -137,7 +181,6 @@ class NotificationManager {
     });
   }
 
-  // Subscription expirada
   async notifySubscriptionExpired(userId, containerName) {
     return await this.notify(userId, {
       type: 'error',
@@ -147,7 +190,6 @@ class NotificationManager {
     });
   }
 
-  // RAM/CPU alta
   async notifyHighResourceUsage(userId, containerName, resource, percentage) {
     return await this.notify(userId, {
       type: 'warning',
@@ -157,7 +199,6 @@ class NotificationManager {
     });
   }
 
-  // Pagamento aprovado
   async notifyPaymentSuccess(userId, amount, coins) {
     return await this.notify(userId, {
       type: 'success',
@@ -167,7 +208,6 @@ class NotificationManager {
     });
   }
 
-  // Pagamento falhou
   async notifyPaymentFailed(userId, amount) {
     return await this.notify(userId, {
       type: 'error',
@@ -177,7 +217,6 @@ class NotificationManager {
     });
   }
 
-  // Boas-vindas
   async notifyWelcome(userId, username) {
     return await this.notify(userId, {
       type: 'success',
@@ -187,7 +226,6 @@ class NotificationManager {
     });
   }
 
-  // Container criado
   async notifyContainerCreated(userId, containerName, domain) {
     return await this.notify(userId, {
       type: 'success',
@@ -197,7 +235,6 @@ class NotificationManager {
     });
   }
 
-  // Container deletado
   async notifyContainerDeleted(userId, containerName) {
     return await this.notify(userId, {
       type: 'info',
@@ -207,33 +244,23 @@ class NotificationManager {
     });
   }
 
-  /**
-   * Enviar notificação para todos os usuários conectados (broadcast)
-   */
   async notifyAll(notification) {
     if (!this.io) {
       console.error('❌ Socket.IO não configurado');
       return;
     }
-
     this.io.emit('notification', notification);
     console.log('📢 Notificação broadcast enviada para todos os usuários');
   }
 
-  /**
-   * Obter número de usuários conectados
-   */
   getConnectedUsersCount() {
     return this.userSockets.size;
   }
 
-  /**
-   * Verificar se usuário está conectado
-   */
   isUserConnected(userId) {
     return this.userSockets.has(userId);
   }
 }
 
-// Exportar instância única (singleton)
 module.exports = new NotificationManager();
+

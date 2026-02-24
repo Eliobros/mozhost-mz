@@ -61,6 +61,20 @@ export const api = {
     return data;
   },
 
+  async patch(endpoint: string, body?: any) {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PATCH',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw { status: response.status, ...data };
+    }
+    return data;
+  },
+
   async delete(endpoint: string, body?: any) {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
