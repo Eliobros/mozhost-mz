@@ -1,0 +1,428 @@
+1️⃣ Notificações de Containers
+// Quando criar um container
+await whatsapp.sendWhatsAppMessage({
+  phone: user.phone,
+  message: `🎉 Container criado!
+
+📦 Nome: ${containerName}
+🔗 URL: https://${domain}
+⚡ Status: Ativo
+💾 Memória: ${memory}MB
+
+Acesse agora: ${url}`
+});
+2️⃣ Alertas de Pagamento
+// Fatura gerada
+await whatsapp.sendWhatsAppMessage({
+  phone: user.phone,
+  message: `💳 Nova fatura MozHost
+
+📄 Valor: ${amount} MT
+📅 Vencimento: ${dueDate}
+🔗 Pagar: ${paymentLink}
+
+Pague até a data para não perder acesso!`
+});
+3️⃣ Códigos de Verificação 2FA
+const code = Math.floor(100000 + Math.random() * 900000);
+await whatsapp.sendWhatsAppMessage({
+  phone: user.phone,
+  message: `🔐 Código de Verificação MozHost
+
+Seu código: *${code}*
+
+⏰ Válido por 15 minutos
+🔒 Não compartilhe com ninguém`
+});
+4️⃣ Alertas de Domínio
+// Domínio ativo
+await whatsapp.sendWhatsAppMessage({
+  phone: user.phone,
+  message: `✅ Domínio ativo!
+
+🌐 ${domain}
+🎯 Apontando para: ${ip}
+⚡ Status: Propagado
+
+Seu site já está no ar! 🚀`
+});
+5️⃣ Avisos de Expiração
+// 3 dias antes de expirar
+await whatsapp.sendWhatsAppMessage({
+  phone: user.phone,
+  message: `⚠️ Atenção!
+
+Seu plano expira em 3 dias:
+📅 Data: ${expiryDate}
+💳 Renovar: ${renewLink}
+
+Renove agora para não perder:
+📦 ${containerCount} containers
+🌐 ${domainCount} domínios`
+});
+
+Você pode adicionar VÁRIOS comandos:
+sock.ev.on('messages.upsert', async ({ messages }) => {
+  for (const msg of messages) {
+    if (msg.key.fromMe) continue;
+    
+    const from = msg.key.remoteJid;
+    const text = msg.message?.conversation || 
+                 msg.message?.extendedTextMessage?.text;
+    
+    // Comando 1: Status dos containers
+    if (text === '/status') {
+      const containers = await getContainersByPhone(from);
+      await sock.sendMessage(from, {
+        text: `📊 Status:\n\n${containers.map(c => 
+          `📦 ${c.name}: ${c.status}`
+        ).join('\n')}`
+      });
+    }
+    
+    // Comando 2: Ajuda
+    else if (text === '/ajuda' || text === '/help') {
+      await sock.sendMessage(from, {
+        text: `🤖 *Comandos Disponíveis:*
+
+/status - Ver status dos containers
+/plano - Ver detalhes do seu plano
+/fatura - Ver última fatura
+/dominios - Listar seus domínios
+/suporte - Falar com suporte
+/ajuda - Ver esta mensagem`
+      });
+    }
+    
+    // Comando 3: Ver plano
+    else if (text === '/plano') {
+      const plan = await getUserPlan(from);
+      await sock.sendMessage(from, {
+        text: `💳 *Seu Plano:*
+
+📦 Plano: ${plan.name}
+💰 Valor: ${plan.price} MT/mês
+📅 Próximo pagamento: ${plan.nextBilling}
+⚡ Containers: ${plan.containerCount}/${plan.containerLimit}`
+      });
+    }
+    
+    // Comando 4: Última fatura
+    else if (text === '/fatura') {
+      const invoice = await getLastInvoice(from);
+      await sock.sendMessage(from, {
+        text: `💳 *Última Fatura:*
+
+📄 ID: #${invoice.id}
+💰 Valor: ${invoice.amount} MT
+📅 Vencimento: ${invoice.dueDate}
+✅ Status: ${invoice.status}
+
+🔗 Pagar: ${invoice.paymentLink}`
+      });
+    }
+    
+    // Comando 5: Domínios
+    else if (text === '/dominios') {
+      const domains = await getUserDomains(from);
+      await sock.sendMessage(from, {
+        text: `🌐 *Seus Domínios:*\n\n${domains.map(d => 
+          `🔗 ${d.name}\n   Status: ${d.status}\n   Expira: ${d.expiryDate}`
+        ).join('\n\n')}`
+      });
+    }
+    
+    // Comando 6: Suporte
+    else if (text === '/suporte') {
+      await sock.sendMessage(from, {
+        text: `💬 *Suporte MozHost*
+
+📧 Email: suporte@mozhost.com
+📱 WhatsApp: +258 84 000 0000
+🌐 Site: https://mozhost.com/suporte
+
+Responda esta mensagem e nossa equipe irá atendê-lo em breve!`
+      });
+    }
+    
+    // Comando desconhecido
+    else if (text?.startsWith('/')) {
+      await sock.sendMessage(from, {
+        text: `❌ Comando não reconhecido.\n\nDigite /ajuda para ver os comandos disponíveis.`
+      });
+    }
+  }
+});
+
+
+Perfeito! Você já tem uma interface completa de vinculação de WhatsApp! Agora vou te ajudar a implementar o **backend completo** para fazer isso funcionar. 
+
+## 🎯 O que seu frontend faz:
+
+1. ✅ Usuário envia `!vincular` no WhatsApp
+2. ✅ Bot gera um código (ex: `MOZH-AB12CD`)
+3. ✅ Usuário digita o código no painel
+4. ✅ Sistema vincula WhatsApp com conta MozHost
+5. ✅ Usuário pode usar comandos no WhatsApp
+
+---
+
+## 🚀 Vamos implementar o backend completo:
+
+### **1. Adicionar tabela no banco de dados**
+
+```bash
+cd ~/mozhost-mz/backend
+nano migrations/add_whatsapp_links.sql
+```
+
+Cole este SQL:
+
+```sql
+-- Tabela para códigos de vinculação
+CREATE TABLE IF NOT EXISTS whatsapp_link_codes (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  code VARCHAR(20) NOT NULL UNIQUE,
+  whatsapp_number VARCHAR(20) NOT NULL,
+  used BOOLEAN DEFAULT false,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_code (code),
+  INDEX idx_whatsapp (whatsapp_number),
+  INDEX idx_expires (expires_at)
+);
+
+-- Tabela para vinculações ativas
+CREATE TABLE IF NOT EXISTS whatsapp_links (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  whatsapp_number VARCHAR(20) NOT NULL UNIQUE,
+  linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_active BOOLEAN DEFAULT true,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user (user_id),
+  INDEX idx_whatsapp (whatsapp_number)
+);
+```
+
+Execute a migration:
+
+```bash
+mysql -u root -p mozhost < migrations/add_whatsapp_links.sql
+```
+
+---
+
+### **2. Atualizar `utils/whatsapp.js` com o sistema de comandos**
+
+```bash
+nano utils/whatsapp.js
+```
+
+Adicione este código **DENTRO da função `initializeWhatsApp()`**, após `sock.ev.on('creds.update', saveCreds);`:
+
+```javascript
+      // ============================================
+      // 🤖 SISTEMA DE COMANDOS BOT
+      // ============================================
+      sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        for (const msg of messages) {
+          // Ignorar mensagens enviadas por você
+          if (msg.key.fromMe) continue;
+          
+          const from = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+          const text = msg.message?.conversation || 
+                       msg.message?.extendedTextMessage?.text;
+          
+          if (!text) continue;
+          
+          const command = text.trim().toLowerCase();
+          
+          console.log(`📩 Mensagem recebida de ${from}: ${command}`);
+          
+          try {
+            // ========== COMANDO: !vincular ==========
+            if (command === '!vincular') {
+              // Verificar se já está vinculado
+              const existingLink = await database.query(
+                'SELECT user_id FROM whatsapp_links WHERE whatsapp_number = ? AND is_active = true',
+                [from]
+              );
+              
+              if (existingLink.length > 0) {
+                const user = await database.query(
+                  'SELECT username, email FROM users WHERE id = ?',
+                  [existingLink[0].user_id]
+                );
+                
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: `✅ *WhatsApp já vinculado!*\n\n` +
+                        `👤 Usuário: ${user[0].username}\n` +
+                        `📧 Email: ${user[0].email}\n\n` +
+                        `Digite *!menu* para ver os comandos disponíveis.`
+                });
+                continue;
+              }
+              
+              // Gerar código único
+              const code = `MOZH-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+              const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+              
+              // Salvar código temporário (sem user_id ainda)
+              await database.query(
+                'INSERT INTO whatsapp_link_codes (user_id, code, whatsapp_number, expires_at, used) VALUES (0, ?, ?, ?, false)',
+                [code, from, expiresAt]
+              );
+              
+              await sock.sendMessage(msg.key.remoteJid, {
+                text: `🔐 *Código de Vinculação MozHost*\n\n` +
+                      `Seu código: *${code}*\n\n` +
+                      `⏰ Válido por 15 minutos\n\n` +
+                      `📱 Acesse o painel MozHost e digite este código na seção "Vincular WhatsApp"\n\n` +
+                      `🔗 https://mozhost.topaziocoin.online/whatsapp-link`
+              });
+            }
+            
+            // ========== COMANDO: !menu ==========
+            else if (command === '!menu' || command === '!ajuda' || command === '!help') {
+              await sock.sendMessage(msg.key.remoteJid, {
+                text: `🤖 *MozHost Bot - Comandos*\n\n` +
+                      `*Vinculação:*\n` +
+                      `!vincular - Gerar código de vinculação\n\n` +
+                      `*Conta:*\n` +
+                      `!saldo - Ver seus coins\n` +
+                      `!plano - Ver detalhes do plano\n\n` +
+                      `*Containers:*\n` +
+                      `!containers - Listar containers\n` +
+                      `!status - Status dos containers\n\n` +
+                      `*Pagamento:*\n` +
+                      `!pagamento - Comprar coins\n` +
+                      `!faturas - Ver faturas\n\n` +
+                      `*Suporte:*\n` +
+                      `!suporte - Falar com suporte\n` +
+                      `!ajuda - Ver este menu`
+              });
+            }
+            
+            // ========== COMANDO: !saldo ==========
+            else if (command === '!saldo') {
+              const link = await database.query(
+                'SELECT user_id FROM whatsapp_links WHERE whatsapp_number = ? AND is_active = true',
+                [from]
+              );
+              
+              if (link.length === 0) {
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: `❌ WhatsApp não vinculado!\n\nEnvie *!vincular* para vincular sua conta.`
+                });
+                continue;
+              }
+              
+              const user = await database.query(
+                'SELECT username, coins FROM users WHERE id = ?',
+                [link[0].user_id]
+              );
+              
+              await sock.sendMessage(msg.key.remoteJid, {
+                text: `💰 *Saldo de Coins*\n\n` +
+                      `👤 ${user[0].username}\n` +
+                      `🪙 Coins: *${user[0].coins}*\n\n` +
+                      `Digite *!pagamento* para comprar mais coins.`
+              });
+            }
+            
+            // ========== COMANDO: !containers ==========
+            else if (command === '!containers' || command === '!status') {
+              const link = await database.query(
+                'SELECT user_id FROM whatsapp_links WHERE whatsapp_number = ? AND is_active = true',
+                [from]
+              );
+              
+              if (link.length === 0) {
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: `❌ WhatsApp não vinculado!\n\nEnvie *!vincular* para vincular sua conta.`
+                });
+                continue;
+              }
+              
+              const containers = await database.query(
+                'SELECT name, status, domain FROM containers WHERE user_id = ? ORDER BY created_at DESC LIMIT 10',
+                [link[0].user_id]
+              );
+              
+              if (containers.length === 0) {
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: `📦 *Seus Containers*\n\nVocê ainda não tem containers.\n\nAcesse o painel para criar: https://mozhost.topaziocoin.online`
+                });
+              } else {
+                const statusEmoji = { running: '🟢', stopped: '🔴', error: '⚠️', starting: '🟡' };
+                const containerList = containers.map(c => 
+                  `${statusEmoji[c.status] || '⚪'} *${c.name}*\n   Status: ${c.status}\n   ${c.domain ? `🔗 ${c.domain}` : ''}`
+                ).join('\n\n');
+                
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: `📦 *Seus Containers*\n\n${containerList}`
+                });
+              }
+            }
+            
+            // ========== COMANDO: !pagamento ==========
+            else if (command === '!pagamento' || command === '!comprar') {
+              await sock.sendMessage(msg.key.remoteJid, {
+                text: `💳 *Comprar Coins*\n\n` +
+                      `*Pacotes disponíveis:*\n\n` +
+                      `🪙 100 Coins - 100 MT\n` +
+                      `🪙 500 Coins - 450 MT (10% desconto)\n` +
+                      `🪙 1000 Coins - 800 MT (20% desconto)\n\n` +
+                      `📱 Acesse o painel para comprar:\n` +
+                      `https://mozhost.topaziocoin.online/billing`
+              });
+            }
+            
+            // ========== COMANDO DESCONHECIDO ==========
+            else if (text.startsWith('!')) {
+              await sock.sendMessage(msg.key.remoteJid, {
+                text: `❌ Comando não reconhecido.\n\nDigite *!menu* para ver os comandos disponíveis.`
+              });
+            }
+            
+          } catch (error) {
+            console.error('❌ Erro ao processar comando:', error);
+            await sock.sendMessage(msg.key.remoteJid, {
+              text: `❌ Erro ao processar comando. Tente novamente.`
+            });
+          }
+        }
+      });
+```
+
+Salve (Ctrl+X, Y, Enter)
+
+---
+
+### **3. Verificar se as rotas já existem**
+
+```bash
+cat routes/whatsapp-link.js
+```
+
+Se o arquivo não existir ou estiver incompleto, me mostre o resultado e eu te passo o código completo.
+
+---
+
+## 🧪 Testar agora:
+
+```bash
+pm2 restart 0
+pm2 logs 0 --lines 50
+```
+
+Agora envie `!vincular` no WhatsApp e veja se funciona!
+
+Me mostre o que aparece nos logs! 📱✨
+
+
+

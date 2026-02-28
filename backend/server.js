@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const whatsappLinkRoutes = require('./routes/whatsapp-link');
 const { adminRouter } = require('./routes/auth');
 const alexaRoutes = require('./routes/alexa');
+const aiRoutes = require('./routes/ai');
 
 const containerRoutes = require('./routes/containers');
 const couponRoutes = require('./routes/coupons');
@@ -216,6 +217,7 @@ app.use('/api/databases', databasesRoutes);
 app.use('/api', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/alexa', alexaRoutes);
+app.use('/api/ai', aiRoutes);
 const terminalRoutes = require('./routes/terminal');
 app.use('/api/terminal', terminalRoutes);
 const logsRoutes = require('./routes/logs');
@@ -229,7 +231,8 @@ app.use('/api/registrar', registrarRoutes);
 app.use('/api/billing', billingRoutes);
 const pushRoutes = require('./routes/push');
 app.use('/api/push', pushRoutes);
-
+const whatsappRoutes = require('./routes/whatsapp');
+app.use('/api/whatsapp', whatsappRoutes);
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
@@ -313,6 +316,10 @@ async function startServer() {
 
     console.log('🧹 Cleaning up orphaned containers...');
     await cleanupOrphanedContainers();
+
+    console.log('🤖 Initializing MozHost AI...');
+    const mozhostAi = require('./services/mozhostAiService');
+    mozhostAi.initialize();
 
     console.log('📱 Initializing WhatsApp...');
     startWhatsApp();

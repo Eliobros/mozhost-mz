@@ -128,6 +128,24 @@ class NotificationManager {
         console.error('❌ Erro ao enviar Web Push:', pushError.message);
       }
 
+      // 6. Enviar via WhatsApp (se vinculado)
+      try {
+        const waAccounts = await database.query(
+          'SELECT whatsapp_number FROM whatsapp_accounts WHERE user_id = ? AND verified = TRUE',
+          [userId]
+        );
+
+        if (waAccounts.length > 0) {
+          const { sendWhatsAppMessage } = require('./whatsapp');
+          await sendWhatsAppMessage({
+            phone: waAccounts[0].whatsapp_number,
+            message: `*${title}*\n\n${message}`
+          });
+        }
+      } catch (waError) {
+        console.error('❌ Erro ao enviar WhatsApp:', waError.message);
+      }
+
       return fullNotification;
 
     } catch (error) {

@@ -18,6 +18,7 @@ import {
   Link2
 } from 'lucide-react';
 import NotificationsSystem from './NotificationsSystem';
+import MozhostChat from './MozhostChat';
 
 const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -253,6 +254,9 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
         onClose={() => setShowNotifications(false)}
         onUnreadChange={(n) => setNotifications(n)}
       />
+
+      {/* Chat IA MozHost */}
+      <MozhostChat />
 
       {/* Profile Modal */}
       {showProfile && (

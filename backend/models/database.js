@@ -320,6 +320,25 @@ console.log('✅ Email tables initialized successfully');
 
       console.log('✅ Domain payments table initialized successfully');
 
+      // Tabela de contas WhatsApp vinculadas
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS whatsapp_accounts (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NULL,
+          whatsapp_number VARCHAR(20) NOT NULL,
+          verification_code VARCHAR(20),
+          code_expires_at TIMESTAMP NULL,
+          verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_wa_number (whatsapp_number),
+          INDEX idx_wa_user (user_id),
+          INDEX idx_wa_code (verification_code)
+        )
+      `);
+
+      console.log('✅ WhatsApp accounts table initialized successfully');
+
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing database:', error);

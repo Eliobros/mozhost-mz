@@ -20,7 +20,7 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushNotifications() {
-  if (!Device.isDevice) return; // Não funciona em emulador
+  if (!Device.isDevice) return; // Não funciona em emulador/simulador
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -57,13 +57,15 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isLoading) return;
+
     const inAuthGroup = segments[0] === '(auth)';
+
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, segments, router]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -92,5 +94,28 @@ function RootLayoutNav() {
         <Stack.Screen name="connections" options={{ headerShown: true }} />
       </Stack>
     </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.background, // ajuste se tiver cor de fundo global
+  },
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+});
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <NotificationsProvider>
+        <RootLayoutNav />
+      </NotificationsProvider>
+    </AuthProvider>
   );
 }
