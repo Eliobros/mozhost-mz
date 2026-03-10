@@ -21,7 +21,7 @@ router.post('/chat', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Mensagem muito longa (máximo 5000 caracteres)' });
     }
 
-    const result = await mozhostAi.chat(userId, message);
+    const result = await mozhostAi.chat(userId, message, req.user);
 
     if (!result.success) {
       return res.status(503).json({ error: result.error });

@@ -4,20 +4,20 @@ const axios = require('axios');
 const sendSMS = async ({ phone, message }) => {
   try {
     const response = await axios.post(
-      'https://api.mozesms.com/v2/sms/send',
+      'https://hdxqelinqivwgmggolhs.supabase.co/functions/v1/api-gateway/sms/send',
       {
-        phone: phone,
+        to: phone,
         message: message,
-        sender_id: 'MozHost' // ou o sender_id que você registrou
+        sender_id: process.env.TSEMBA_SENDER_ID || 'MOZHOST'
       },
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.MOZESMS_API_KEY}`
+          'x-api-key': process.env.TSEMBA_API_KEY
         }
       }
     );
-    
+
     return response.data;
   } catch (error) {
     console.error('SMS send error:', error.response?.data || error.message);
@@ -25,11 +25,13 @@ const sendSMS = async ({ phone, message }) => {
   }
 };
 
-const formatSMSVerificationMessage = (code) => {
-  return `MozHost - Seu código de verificação: ${code}. Válido por 15 minutos.`;
+const formatSMSVerificationMessage = (code, nome) => {
+  const saudacao = nome ? `Olá ${nome}, ` : '';
+  return `${saudacao}seu código de verificação MozHost: ${code}. Válido por 15 minutos.`;
 };
 
 module.exports = {
   sendSMS,
   formatSMSVerificationMessage
 };
+

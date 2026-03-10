@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const database = require('../models/database');
 const authMiddleware = require('../middleware/auth');
+const passport = require('../utils/passport');
 
 const router = express.Router();
 const { sendEmail, generateCode } = require('../utils/email');
@@ -109,7 +110,7 @@ router.post('/register', [
         );
 
         const fullPhone = countryCode + phone;
-        const message = formatSMSVerificationMessage(code);
+        const message = formatSMSVerificationMessage(code, username);
         await sendSMS({
           phone: fullPhone,
           message: message
@@ -156,9 +157,9 @@ router.post('/register', [
         plan: 'free',
         maxContainers: 2,
         coins: 250,
-        emailVerified: false,
-        whatsappVerified: false,
-        smsVerified: false,
+        emailVerified: preferredVerificationMethod === 'email' ? false : null,
+        whatsappVerified: preferredVerificationMethod === 'whatsapp' ? false : null,
+        smsVerified: preferredVerificationMethod === 'sms' ? false : null,
         preferredVerificationMethod: preferredVerificationMethod || 'email'
       },
       token
@@ -170,6 +171,305 @@ router.post('/register', [
       error: 'Registration failed',
       message: 'Internal server error'
     });
+  }
+});
+
+// ============================================
+// OAUTH - Google & GitHub Login
+// ============================================
+
+// Google OAuth
+router.get('/google', (req, res, next) => {
+  const state = req.query.redirect_uri ? Buffer.from(JSON.stringify({ redirect_uri: req.query.redirect_uri })).toString('base64') : undefined;
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false,
+    state
+  })(req, res, next);
+});
+
+router.get('/google/callback', (req, res, next) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+  
+  // Check if this is a mobile OAuth flow
+  let mobileRedirectUri = null;
+  if (req.query.state) {
+    try {
+      const stateData = JSON.parse(Buffer.from(req.query.state, 'base64').toString());
+      mobileRedirectUri = stateData.redirect_uri;
+    } catch (e) { /* ignore */ }
+  }
+
+  passport.authenticate('google', { session: false }, async (err, user, info) => {
+    try {
+      if (err || !user) {
+        console.error('Google OAuth error:', err || info);
+        if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=google_failed`);
+        return res.redirect(`${frontendUrl}/#login?error=google_failed`);
+      }
+
+      const jwt = require('jsonwebtoken');
+      const token = jwt.sign(
+        { userId: user.id, username: user.username, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      // Bonus for first verification (OAuth users get email verified automatically)
+      if (!user.verification_bonus_awarded) {
+        await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
+      }
+
+      const needsProfile = !user.profile_completed;
+
+      // Mobile app: redirect back to app with deep link
+      if (mobileRedirectUri) {
+        return res.redirect(`${mobileRedirectUri}?token=${token}&needsProfile=${needsProfile}&provider=google`);
+      }
+      
+      res.redirect(`${frontendUrl}/#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=google`);
+    } catch (error) {
+      console.error('Google callback error:', error);
+      if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=google_failed`);
+      res.redirect(`${frontendUrl}/#login?error=google_failed`);
+    }
+  })(req, res, next);
+});
+
+// GitHub OAuth
+router.get('/github', (req, res, next) => {
+  const state = req.query.redirect_uri ? Buffer.from(JSON.stringify({ redirect_uri: req.query.redirect_uri })).toString('base64') : undefined;
+  passport.authenticate('github', { 
+    scope: ['user:email'],
+    session: false,
+    state
+  })(req, res, next);
+});
+
+router.get('/github/callback', (req, res, next) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+
+  // Check if this is a mobile OAuth flow
+  let mobileRedirectUri = null;
+  if (req.query.state) {
+    try {
+      const stateData = JSON.parse(Buffer.from(req.query.state, 'base64').toString());
+      mobileRedirectUri = stateData.redirect_uri;
+    } catch (e) { /* ignore */ }
+  }
+
+  passport.authenticate('github', { session: false }, async (err, user, info) => {
+    try {
+      if (err || !user) {
+        console.error('GitHub OAuth error:', err || info);
+        if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=github_failed`);
+        return res.redirect(`${frontendUrl}/#login?error=github_failed`);
+      }
+
+      const jwt = require('jsonwebtoken');
+      const token = jwt.sign(
+        { userId: user.id, username: user.username, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      if (!user.verification_bonus_awarded) {
+        await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
+      }
+
+      const needsProfile = !user.profile_completed;
+
+      // Mobile app: redirect back to app with deep link
+      if (mobileRedirectUri) {
+        return res.redirect(`${mobileRedirectUri}?token=${token}&needsProfile=${needsProfile}&provider=github`);
+      }
+      
+      res.redirect(`${frontendUrl}/#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=github`);
+    } catch (error) {
+      console.error('GitHub callback error:', error);
+      if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=github_failed`);
+      res.redirect(`${frontendUrl}/#login?error=github_failed`);
+    }
+  })(req, res, next);
+});
+
+// Complete profile after OAuth signup
+router.post('/complete-profile', [
+  body('username')
+    .isLength({ min: 3, max: 50 })
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage('Username must be 3-50 characters and contain only letters, numbers, _ or -')
+], authMiddleware, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+    }
+
+    const { username } = req.body;
+    const userId = req.user.userId;
+
+    // Check if username is already taken
+    const existing = await database.query('SELECT id FROM users WHERE username = ? AND id != ?', [username, userId]);
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Username already taken', message: 'Este nome de usuário já está em uso' });
+    }
+
+    // Update username and mark profile as completed
+    await database.query(
+      'UPDATE users SET username = ?, profile_completed = true WHERE id = ?',
+      [username, userId]
+    );
+
+    // Get updated user
+    const users = await database.query(
+      'SELECT id, username, email, plan, max_containers, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method, oauth_provider, profile_completed FROM users WHERE id = ?',
+      [userId]
+    );
+
+    const user = users[0];
+
+    // Generate new token with updated username
+    const jwtModule = require('jsonwebtoken');
+    const newToken = jwtModule.sign(
+      { userId: user.id, username: user.username, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      message: 'Profile completed successfully',
+      token: newToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        plan: user.plan,
+        maxContainers: user.max_containers,
+        coins: user.coins,
+        emailVerified: !!user.email_verified,
+        whatsappVerified: !!user.whatsapp_verified,
+        smsVerified: !!user.sms_verified,
+        oauthProvider: user.oauth_provider,
+        profileCompleted: !!user.profile_completed
+      }
+    });
+  } catch (error) {
+    console.error('Complete profile error:', error);
+    res.status(500).json({ error: 'Failed to complete profile' });
+  }
+});
+
+// OAuth login for mobile app (token exchange)
+router.post('/oauth-login', async (req, res) => {
+  try {
+    const { provider, accessToken } = req.body;
+    
+    if (!provider || !accessToken) {
+      return res.status(400).json({ error: 'Provider and accessToken are required' });
+    }
+
+    let email, name, providerId, avatarUrl;
+
+    if (provider === 'google') {
+      // Verify Google token
+      const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!response.ok) return res.status(401).json({ error: 'Invalid Google token' });
+      const profile = await response.json();
+      email = profile.email;
+      name = profile.name;
+      providerId = profile.sub;
+      avatarUrl = profile.picture;
+    } else if (provider === 'github') {
+      // Verify GitHub token
+      const response = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'MozHost' }
+      });
+      if (!response.ok) return res.status(401).json({ error: 'Invalid GitHub token' });
+      const profile = await response.json();
+      
+      // Get email
+      const emailResp = await fetch('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'MozHost' }
+      });
+      const emails = await emailResp.json();
+      const primaryEmail = emails.find(e => e.primary) || emails[0];
+      
+      email = primaryEmail ? primaryEmail.email : null;
+      name = profile.login;
+      providerId = profile.id.toString();
+      avatarUrl = profile.avatar_url;
+    } else {
+      return res.status(400).json({ error: 'Invalid provider. Use google or github' });
+    }
+
+    // Find or create user (same logic as passport strategies)
+    let users = await database.query(
+      'SELECT * FROM users WHERE oauth_provider = ? AND oauth_provider_id = ?',
+      [provider, providerId]
+    );
+
+    let user;
+    let isNewUser = false;
+
+    if (users.length > 0) {
+      user = users[0];
+    } else if (email) {
+      users = await database.query('SELECT * FROM users WHERE email = ?', [email]);
+      if (users.length > 0) {
+        await database.query(
+          'UPDATE users SET oauth_provider = ?, oauth_provider_id = ?, avatar_url = ?, email_verified = true WHERE id = ?',
+          [provider, providerId, avatarUrl, users[0].id]
+        );
+        user = (await database.query('SELECT * FROM users WHERE id = ?', [users[0].id]))[0];
+      }
+    }
+
+    if (!user) {
+      isNewUser = true;
+      const tempUsername = `${provider}_${providerId.substring(0, 10)}_${Date.now().toString(36)}`;
+      const result = await database.query(
+        `INSERT INTO users (username, email, password_hash, oauth_provider, oauth_provider_id, avatar_url, email_verified, profile_completed, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
+         VALUES (?, ?, NULL, ?, ?, ?, true, false, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+        [tempUsername, email || `${tempUsername}@oauth.temp`, provider, providerId, avatarUrl]
+      );
+      user = (await database.query('SELECT * FROM users WHERE id = ?', [result.insertId]))[0];
+    }
+
+    // Bonus
+    if (!user.verification_bonus_awarded) {
+      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      message: isNewUser ? 'Account created via OAuth' : 'Login successful',
+      token,
+      needsProfile: !user.profile_completed,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        plan: user.plan,
+        maxContainers: user.max_containers,
+        coins: user.coins,
+        emailVerified: true,
+        whatsappVerified: false,
+        smsVerified: false,
+        oauthProvider: user.oauth_provider,
+        profileCompleted: !!user.profile_completed
+      }
+    });
+  } catch (error) {
+    console.error('OAuth login error:', error);
+    res.status(500).json({ error: 'OAuth login failed' });
   }
 });
 
@@ -266,7 +566,9 @@ router.post('/login', [
         maxRamMb: user.max_ram_mb,
         maxStorageMb: user.max_storage_mb,
         freeTrialEnds: user.free_trial_ends,
-        createdAt: user.created_at
+        createdAt: user.created_at,
+        oauthProvider: user.oauth_provider || null,
+        profileCompleted: user.profile_completed !== undefined ? !!user.profile_completed : true,
       },
       token
     });
@@ -284,7 +586,7 @@ router.post('/login', [
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const user = await database.query(
-      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method, free_trial_ends, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, country_code, plan, max_containers, max_ram_mb, max_storage_mb, coins, email_verified, whatsapp_verified, sms_verified, preferred_verification_method, oauth_provider, profile_completed, free_trial_ends, created_at FROM users WHERE id = ?',
       [req.user.userId]
     );
 
@@ -311,6 +613,8 @@ router.get('/verify', authMiddleware, async (req, res) => {
         whatsappVerified: !!user[0].whatsapp_verified,
         smsVerified: !!user[0].sms_verified,
         preferredVerificationMethod: user[0].preferred_verification_method,
+        oauthProvider: user[0].oauth_provider || null,
+        profileCompleted: user[0].profile_completed !== undefined ? !!user[0].profile_completed : true,
         freeTrialEnds: user[0].free_trial_ends,
         createdAt: user[0].created_at
       }
@@ -546,7 +850,7 @@ router.post('/resend-code', [
       );
 
       const fullPhone = info[0].country_code + info[0].phone;
-      const message = formatSMSVerificationMessage(code);
+      const message = formatSMSVerificationMessage(code, info[0].username);
       await sendSMS({
         phone: fullPhone,
         message: message

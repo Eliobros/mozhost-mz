@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
 
     const u = data.user;
-    const needsVerification = !u.emailVerified && !u.whatsappVerified && !u.smsVerified;
+    const needsVerification = u.emailVerified === false || u.whatsappVerified === false || u.smsVerified === false;
 
     if (needsVerification) {
       setUser(u);

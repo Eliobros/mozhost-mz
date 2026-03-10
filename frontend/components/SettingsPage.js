@@ -158,32 +158,40 @@ const SettingsPage = () => {
   };
 
   const saveStartupCommands = async () => {
-    setSaving({ ...saving, startup: true });
-    setError('');
-    setSuccess('');
+  setSaving({ ...saving, startup: true });
+  setError('');
+  setSuccess('');
 
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/startup-commands', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(startupCommands)
-      });
-
-      if (response.ok) {
-        setSuccess('Comandos de inicialização salvos!');
-      } else {
-        setError('Erro ao salvar comandos');
-      }
-    } catch (err) {
-      setError('Erro de conexão');
-    } finally {
-      setSaving({ ...saving, startup: false });
-    }
+  // Corrigir npm build -> npm run build automaticamente
+  const correctedCommands = {
+    nodejs: startupCommands.nodejs.replace(/\bnpm build\b/g, 'npm run build'),
+    python: startupCommands.python.replace(/\bnpm build\b/g, 'npm run build')
   };
+
+  setStartupCommands(correctedCommands);
+
+  try {
+    const token = localStorage.getItem('mozhost_token');
+    const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/startup-commands', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(correctedCommands) // aqui usa correctedCommands e não startupCommands
+    });
+
+    if (response.ok) {
+      setSuccess('Comandos de inicialização salvos!');
+    } else {
+      setError('Erro ao salvar comandos');
+    }
+  } catch (err) {
+    setError('Erro de conexão');
+  } finally {
+    setSaving({ ...saving, startup: false });
+  }
+};
 
   const exportData = async () => {
     try {

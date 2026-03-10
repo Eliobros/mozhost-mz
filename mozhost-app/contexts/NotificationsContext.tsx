@@ -1,6 +1,7 @@
 // contexts/NotificationsContext.tsx
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { notificationsService, Notification } from '@/services/notifications';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NotificationsContextData {
   notifications: Notification[];
@@ -15,24 +16,24 @@ interface NotificationsContextData {
 const NotificationsContext = createContext<NotificationsContextData>({} as NotificationsContextData);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Carregar notificações
   const refresh = async () => {
+    if (!isAuthenticated) return;
     try {
       setLoading(true);
       const data = await notificationsService.getAll();
-      
-      // Verificar se data existe antes de acessar
+
       if (data && data.notifications) {
         setNotifications(data.notifications);
         setUnreadCount(data.unreadCount || 0);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
-      // Se der erro, deixa vazio
       setNotifications([]);
       setUnreadCount(0);
     } finally {
@@ -41,12 +42,18 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
     refresh();
 
     // Atualizar a cada 30 segundos
     const interval = setInterval(refresh, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   // Marcar como lida
   const markAsRead = async (id: number) => {
@@ -104,4 +111,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export const useNotifications = () => useContext(NotificationsContext);
+export function useNotifications() {
+  return useContext(NotificationsContext);
+}
+

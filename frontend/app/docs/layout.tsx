@@ -102,7 +102,7 @@ export default function DocsLayout({
                   </li>
                   <li>
                     <Link 
-                      href="/docs/cli/upload" 
+                      href="/docs/cli/deploy" 
                       className="block text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded transition"
                     >
                       Deploy via CLI
@@ -163,6 +163,14 @@ export default function DocsLayout({
                       className="block text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded transition"
                     >
                       Variáveis de Ambiente
+                    </Link>
+                  </li>
+                  <li>
+                    <Link 
+                      href="/docs/email-service" 
+                      className="block text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded transition"
+                    >
+                      📧 Email Service
                     </Link>
                   </li>
                 </ul>

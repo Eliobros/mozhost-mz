@@ -313,7 +313,9 @@ router.post('/connect', auth, async (req, res) => {
 
     // Limpar pasta e clonar
     const repoUrlWithToken = repo_url.replace('https://', `https://oauth2:${access_token}@`);
-    await execInContainer(container, ['bash', '-c', `rm -rf /app/* && git clone -b ${branch} ${repoUrlWithToken} /app`]);
+    await execInContainer(container, ['bash', '-c', 
+  `if [ -d "/app/code/.git" ]; then cd /app/code && git pull origin ${branch}; else rm -rf /app/code/* /app/code/.* 2>/dev/null; git clone -b ${branch} ${repoUrlWithToken} /app/code; fi`
+]);
 
     // Salvar no banco
     const existing = await database.query(
@@ -395,11 +397,11 @@ router.post('/webhook', async (req, res) => {
         const container = docker.getContainer(repo.docker_container_id);
 
         // Git pull
-        const pullOutput = await execInContainer(container, ['bash', '-c', `cd /app && git pull origin ${repo.branch}`]);
+        const pullOutput = await execInContainer(container, ['bash', '-c', `cd /app/code && git pull origin ${repo.branch}`]);
 
         // Instalar dependências se necessário
-        await execInContainer(container, ['bash', '-c', 'cd /app && [ -f package.json ] && npm install --production || true']);
-        await execInContainer(container, ['bash', '-c', 'cd /app && [ -f requirements.txt ] && pip install -r requirements.txt || true']);
+        await execInContainer(container, ['bash', '-c', 'cd /app/code && [ -f package.json ] && npm install --production || true']);
+        await execInContainer(container, ['bash', '-c', 'cd /app/code && [ -f requirements.txt ] && pip install -r requirements.txt || true']);
 
         // Reiniciar container
         await container.restart();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,10 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
 import * as Notifications from 'expo-notifications';
-import { api } from '@/services/api';
+import { api, setToken } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 const EXPO_PROJECT_ID = 'dd7504bb-7506-42d9-b140-85313fe17a07';
 
 // Função para registar o token push
@@ -50,6 +53,8 @@ export default function LoginScreen() {
   const [showVerifyStep, setShowVerifyStep] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState('email');
 
+  const [showCompleteProfile, setShowCompleteProfile] = useState(false);
+  const [oauthUsername, setOauthUsername] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -231,11 +236,84 @@ export default function LoginScreen() {
     }
   };
 
+  const handleOAuthLogin = async (provider: 'google' | 'github') => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const redirectUri = Linking.createURL('oauth-callback');
+      const oauthUrl = `https://api.mozhost.topaziocoin.online/api/auth/${provider}?mobile=true&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+      const result = await WebBrowser.openAuthSessionAsync(oauthUrl, redirectUri);
+
+      if (result.type === 'success' && result.url) {
+        const parsed = Linking.parse(result.url);
+        const token = parsed.queryParams?.token as string | undefined;
+
+        if (token) {
+          await handleOAuthToken(token, provider);
+        } else {
+          setError('Token não recebido. Tente novamente.');
+        }
+      } else if (result.type === 'cancel') {
+        setError('Login cancelado.');
+      }
+    } catch (err) {
+      setError('Erro ao abrir autenticação');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOAuthToken = async (token: string, provider: string) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await setToken(token);
+      const data = await api.verifyToken();
+      await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
+
+      if (!data.user.profileCompleted) {
+        setShowCompleteProfile(true);
+        setSuccess(`Conectado com ${provider === 'google' ? 'Google' : 'GitHub'}! Escolha seu nome de usuário.`);
+      } else {
+        await registerPushToken(api);
+        setSuccess('Login realizado com sucesso! 🎉');
+        setTimeout(() => router.replace('/(tabs)'), 500);
+      }
+    } catch (err: any) {
+      setError('Token inválido ou expirado');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteProfile = async () => {
+    if (!oauthUsername.trim() || oauthUsername.length < 3) {
+      setError('Nome de usuário deve ter pelo menos 3 caracteres');
+      return;
+    }
+    setIsLoading(true);
+    setError('');
+    try {
+      const data = await api.post('/auth/complete-profile', { username: oauthUsername.trim() });
+      await setToken(data.token);
+      await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
+      await registerPushToken(api);
+      setSuccess('Perfil completo! 🎉');
+      setTimeout(() => router.replace('/(tabs)'), 500);
+    } catch (err: any) {
+      setError(err.message || err.error || 'Erro ao completar perfil');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const toggleMode = () => {
     setIsLogin(!isLogin);
     setError('');
     setSuccess('');
     setShowVerifyStep(false);
+    setShowCompleteProfile(false);
     setFormData({
       login: '',
       username: '',
@@ -307,8 +385,61 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          {!showVerifyStep ? (
+          {showCompleteProfile ? (
             <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Escolha seu nome de usuário *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nome de usuário"
+                  placeholderTextColor={Colors.textMuted}
+                  value={oauthUsername}
+                  onChangeText={(v) => { setOauthUsername(v); setError(''); }}
+                  autoCapitalize="none"
+                />
+                <Text style={styles.hint}>Mínimo 3 caracteres, letras, números, _ ou -</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.submitBtn, isLoading && styles.disabledBtn]}
+                onPress={handleCompleteProfile}
+                disabled={isLoading}>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitText}>Continuar</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : !showVerifyStep ? (
+            <>
+              {/* OAuth Buttons */}
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: '#fff', marginBottom: 10 }]}
+                onPress={() => handleOAuthLogin('google')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="logo-google" size={20} color="#4285F4" />
+                  <Text style={{ color: '#333', fontSize: 15, fontWeight: '600' }}>
+                    {isLogin ? 'Entrar com Google' : 'Cadastrar com Google'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: '#24292e', marginBottom: 16 }]}
+                onPress={() => handleOAuthLogin('github')}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="logo-github" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+                    {isLogin ? 'Entrar com GitHub' : 'Cadastrar com GitHub'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                <Text style={{ color: '#93c5fd', paddingHorizontal: 12, fontSize: 13 }}>ou</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+              </View>
+
               {!isLogin && (
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Nome de Usuário *</Text>

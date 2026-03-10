@@ -313,6 +313,30 @@ const functionDeclarations = [
       },
       required: ['comando', 'container_id']
     }
+  },
+  {
+    name: 'minha_conta',
+    description: 'Retorna informações da conta do usuário autenticado atual (dados, plano, coins, etc.)',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: 'meus_containers',
+    description: 'Lista todos os containers do usuário autenticado atual',
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['todos', 'running', 'stopped', 'error', 'building'],
+          description: 'Filtrar por status (padrão: todos)'
+        }
+      },
+      required: []
+    }
   }
 ];
 
@@ -748,6 +772,69 @@ const functionImplementations = {
         usuario: n.username,
         lida: !!n.read_at,
         data: n.created_at
+      }))
+    };
+  },
+
+  async minha_conta(_args, userId) {
+    const user = await database.query(
+      `SELECT id, username, email, plan, coins, is_active, email_verified, created_at, updated_at
+       FROM users WHERE id = ?`,
+      [userId]
+    );
+
+    if (user.length === 0) {
+      return { erro: 'Usuário não encontrado' };
+    }
+
+    const u = user[0];
+    const containerCount = await database.query(
+      'SELECT COUNT(*) as total FROM containers WHERE user_id = ?',
+      [userId]
+    );
+
+    return {
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      plano: u.plan,
+      coins: u.coins,
+      ativo: u.is_active,
+      email_verificado: u.email_verified,
+      total_containers: containerCount[0].total,
+      cadastrado_em: u.created_at,
+      atualizado_em: u.updated_at
+    };
+  },
+
+  async meus_containers({ status } = {}, userId) {
+    let where = 'WHERE c.user_id = ?';
+    const params = [userId];
+
+    if (status && status !== 'todos') {
+      where += ' AND c.status = ?';
+      params.push(status);
+    }
+
+    const containers = await database.query(
+      `SELECT c.id, c.name, c.status, c.type, c.port, c.domain, c.created_at
+       FROM containers c
+       ${where}
+       ORDER BY c.created_at DESC`,
+      params
+    );
+
+    return {
+      total: containers.length,
+      filtro_status: status || 'todos',
+      containers: containers.map(c => ({
+        id: c.id,
+        nome: c.name,
+        status: c.status,
+        tipo: c.type,
+        porta: c.port,
+        dominio: c.domain,
+        criado_em: c.created_at
       }))
     };
   },

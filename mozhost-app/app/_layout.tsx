@@ -32,7 +32,9 @@ async function registerForPushNotifications() {
 
   if (finalStatus !== 'granted') return;
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const token = (await Notifications.getExpoPushTokenAsync({
+    projectId: 'dd7504bb-7506-42d9-b140-85313fe17a07',
+  })).data;
 
   // Enviar token para o backend
   try {

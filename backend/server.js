@@ -10,6 +10,9 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+// Passport OAuth
+const passport = require('./utils/passport');
+
 // Importar módulos
 const database = require('./models/database');
 const authRoutes = require('./routes/auth');
@@ -119,6 +122,9 @@ const limiter = rateLimit({
   }
 });
 app.use('/api/', limiter);
+
+// Passport OAuth
+app.use(passport.initialize());
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

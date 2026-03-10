@@ -83,6 +83,32 @@ class Database {
         await this.query(`UPDATE users SET free_trial_ends = DATE_ADD(created_at, INTERVAL 30 DAY) WHERE plan = 'free' AND free_trial_ends IS NULL`);
       } catch (e) {}
 
+      // OAuth columns
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN oauth_provider VARCHAR(20) NULL`);
+        console.log('✅ Added oauth_provider column');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN oauth_provider_id VARCHAR(255) NULL`);
+        console.log('✅ Added oauth_provider_id column');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL`);
+        console.log('✅ Added avatar_url column');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN profile_completed BOOLEAN DEFAULT true`);
+        console.log('✅ Added profile_completed column');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE users MODIFY COLUMN password_hash VARCHAR(255) NULL`);
+        console.log('✅ Made password_hash nullable for OAuth users');
+      } catch (e) {}
+
       // Verificar e corrigir a tabela de containers
       try {
         await this.query(`

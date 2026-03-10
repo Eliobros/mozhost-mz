@@ -45,14 +45,14 @@ class MozhostAiService {
   /**
    * Envia mensagem para a IA e processa Function Calls
    */
-  async chat(userId, message) {
+  async chat(userId, message, userInfo) {
     if (!this.enabled) {
       return { success: false, error: 'IA não configurada (falta GEMINI_API_KEY)' };
     }
 
     try {
       // Obter ou criar chat para este usuário
-      const chat = this.getOrCreateChat(userId);
+      const chat = this.getOrCreateChat(userId, userInfo);
 
       // Enviar mensagem
       let result = await chat.sendMessage(message);
@@ -105,16 +105,27 @@ class MozhostAiService {
   /**
    * Cria ou reutiliza um chat para o usuário
    */
-  getOrCreateChat(userId) {
+  getOrCreateChat(userId, userInfo) {
     const key = String(userId);
 
     if (this.chats.has(key)) {
       return this.chats.get(key);
     }
 
+    // Incluir contexto do usuário autenticado no system instruction
+    const userContext = userInfo
+      ? `\n\nUSUÁRIO AUTENTICADO ATUAL:
+- ID: ${userInfo.userId}
+- Username: ${userInfo.username}
+- Email: ${userInfo.email}
+- Plano: ${userInfo.plan}
+
+Quando o usuário perguntar sobre "meus containers", "minha conta", "meus dados", etc., use o ID ${userInfo.userId} ou username "${userInfo.username}" para buscar os dados dele. Use a função "minha_conta" para dados da conta e "meus_containers" para listar os containers dele.`
+      : '';
+
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: SYSTEM_INSTRUCTION + userContext,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 2000,
