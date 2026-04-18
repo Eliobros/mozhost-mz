@@ -57,7 +57,7 @@ const SettingsPage = () => {
   const loadUserData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/verify', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -83,7 +83,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/profile', {
+      const response = await fetch('https://api.mozhost.shop/api/user/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -125,7 +125,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/change-password', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/change-password', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -158,7 +158,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/startup-commands', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/startup-commands', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -182,7 +182,7 @@ const SettingsPage = () => {
   const exportData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/export', {
+      const response = await fetch('https://api.mozhost.shop/api/user/export', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -215,7 +215,7 @@ const SettingsPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/user/delete', {
+      const response = await fetch('https://api.mozhost.shop/api/user/delete', {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

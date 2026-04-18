@@ -33,7 +33,7 @@ async function resolveContainer(identifier, userId) {
 
 /**
  * WebSocket endpoint para terminal interativo
- * ws://api.mozhost.topaziocoin.online/api/terminal/:containerId?token=XXX
+ * ws://api.mozhost.shop/api/terminal/:containerId?token=XXX
  *
  * Aceita tanto ID quanto NOME do container
  */

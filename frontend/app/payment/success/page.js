@@ -23,7 +23,7 @@ function PaymentSuccessContent() {
   const confirmPayment = async (paymentId) => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/payment/confirm`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/payment/confirm`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -1,4 +1,5 @@
 // server.js
+require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,7 +9,7 @@ const { Server } = require('socket.io');
 const expressWs = require('express-ws');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
+
 
 // Passport OAuth
 const passport = require('./utils/passport');
@@ -247,7 +248,7 @@ app.use('*', async (req, res, next) => {
     return next();
   }
 
-  if (!host || !host.endsWith('.mozhost.topaziocoin.online') || host === 'api.mozhost.topaziocoin.online' || host.startsWith('api.')) {
+  if (!host || !host.endsWith('.mozhost.topaziocoin.online') || host === 'api.mozhost.shop' || host.startsWith('api.')) {
     return next();
   }
 

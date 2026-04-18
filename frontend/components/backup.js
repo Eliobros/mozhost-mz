@@ -54,7 +54,7 @@ const ContainersPage = () => {
   const loadContainers = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+      const response = await fetch('https://api.mozhost.shop/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -81,7 +81,7 @@ const ContainersPage = () => {
     }
     try {
       const token = localStorage.getItem('mozhost_token');
-      const resp = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${containerId}/upgrade-storage`, {
+      const resp = await fetch(`https://api.mozhost.shop/api/containers/${containerId}/upgrade-storage`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -107,7 +107,7 @@ const ContainersPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${containerId}/${action}`, {
+      const response = await fetch(`https://api.mozhost.shop/api/containers/${containerId}/${action}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -134,7 +134,7 @@ const ContainersPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+      const response = await fetch('https://api.mozhost.shop/api/containers', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,7 +166,7 @@ const ContainersPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`https://api.mozhost.topaziocoin.online/api/containers/${container.id}`, {
+      const response = await fetch(`https://api.mozhost.shop/api/containers/${container.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

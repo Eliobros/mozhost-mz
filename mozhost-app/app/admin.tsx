@@ -16,7 +16,7 @@ import { Stack } from 'expo-router';
 import { api, getToken } from '@/services/api';
 import { Colors } from '@/constants/Colors';
 
-const API_BASE = 'https://api.mozhost.topaziocoin.online/api';
+const API_BASE = 'https://api.mozhost.shop/api';
 
 type AdminStats = {
   users: { total: number; active: number; verified: number; byPlan: { plan: string; count: number }[] };

@@ -49,7 +49,7 @@ const LogsPage = ({
 
   const connectWebSocket = () => {
     const token = getAuthToken();
-    const wsUrl = `wss://api.mozhost.topaziocoin.online/api/logs/${containerId}?token=${token}`;
+    const wsUrl = `wss://api.mozhost.shop/api/logs/${containerId}?token=${token}`;
 
     console.log('[Logs] Conectando ao WebSocket:', wsUrl);
 

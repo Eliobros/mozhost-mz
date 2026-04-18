@@ -18,7 +18,7 @@ const WhatsAppLink = () => {
       const token = localStorage.getItem('mozhost_token');
       if (!token) return;
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/whatsapp-link/status', {
+      const response = await fetch('https://api.mozhost.shop/api/whatsapp-link/status', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -48,7 +48,7 @@ const WhatsAppLink = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/whatsapp-link/verify-code', {
+      const response = await fetch('https://api.mozhost.shop/api/whatsapp-link/verify-code', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,7 +88,7 @@ const WhatsAppLink = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/whatsapp-link/unlink', {
+      const response = await fetch('https://api.mozhost.shop/api/whatsapp-link/unlink', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

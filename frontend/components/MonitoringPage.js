@@ -73,7 +73,7 @@ const MonitoringPage = () => {
   const loadContainers = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+      const response = await fetch('https://api.mozhost.shop/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -91,7 +91,7 @@ const MonitoringPage = () => {
   const loadInitialMetrics = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+      const response = await fetch('https://api.mozhost.shop/api/monitoring/system/metrics', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -135,7 +135,7 @@ const MonitoringPage = () => {
   const updateRealTimeData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+      const response = await fetch('https://api.mozhost.shop/api/monitoring/system/metrics', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -565,7 +565,7 @@ const ContainerMetricCard = ({ container }) => {
       try {
         const token = localStorage.getItem('mozhost_token');
         const response = await fetch(
-          `https://api.mozhost.topaziocoin.online/api/monitoring/containers/${container.id}/stats`,
+          `https://api.mozhost.shop/api/monitoring/containers/${container.id}/stats`,
           {
             headers: { 'Authorization': `Bearer ${token}` }
           }

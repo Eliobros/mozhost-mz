@@ -17,7 +17,7 @@ export default function APIReferencePage() {
       <section className="mb-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Base URL</h2>
         <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-          <pre className="text-sm">https://api.mozhost.topaziocoin.online</pre>
+          <pre className="text-sm">https://api.mozhost.shop</pre>
         </div>
       </section>
 
@@ -49,7 +49,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Autentica o usuário e retorna um token JWT.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg mb-3">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/auth/login \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/auth/login \\
   -H "Content-Type: application/json" \\
   -d '{"username": "meu_user", "password": "minha_senha"}'`}</pre>
           </div>
@@ -77,7 +77,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Cria uma nova conta na MozHost.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/auth/register \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/auth/register \\
   -H "Content-Type: application/json" \\
   -d '{
     "username": "novo_user",
@@ -100,7 +100,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Lista todos os containers do usuário autenticado.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg mb-3">
-            <pre className="text-sm">{`curl https://api.mozhost.topaziocoin.online/api/containers \\
+            <pre className="text-sm">{`curl https://api.mozhost.shop/api/containers \\
   -H "Authorization: Bearer SEU_TOKEN"`}</pre>
           </div>
           <p className="font-medium text-gray-900 mb-2">Resposta:</p>
@@ -129,7 +129,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Cria um novo container. Custo: 500 coins.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/containers \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/containers \\
   -H "Authorization: Bearer SEU_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "meu-bot", "type": "nodejs"}'`}</pre>
@@ -149,7 +149,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Para um container em execução.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/containers/abc-123/start \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/containers/abc-123/start \\
   -H "Authorization: Bearer SEU_TOKEN"`}</pre>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Envia um email transacional.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/emails/send \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/emails/send \\
   -H "Authorization: Bearer SEU_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -228,7 +228,7 @@ export default function APIReferencePage() {
           </div>
           <p className="text-gray-700 mb-4">Cria um novo database. Custo: 5 coins/dia.</p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
-            <pre className="text-sm">{`curl -X POST https://api.mozhost.topaziocoin.online/api/databases \\
+            <pre className="text-sm">{`curl -X POST https://api.mozhost.shop/api/databases \\
   -H "Authorization: Bearer SEU_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "meu-db", "type": "mysql"}'`}</pre>

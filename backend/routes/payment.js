@@ -239,7 +239,7 @@ router.post('/create', async (req, res) => {
             failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/failure`,
             pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/pending`
           },
-          notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/payment/webhook/mercadopago`
+          notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/payment/webhook/mercadopago`
         };
 
         console.log(`📤 Enviando para Alauda MercadoPago:`, mpData);

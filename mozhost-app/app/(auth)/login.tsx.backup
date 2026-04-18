@@ -184,7 +184,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotMessage('');
     try {
-      await fetch('https://api.mozhost.topaziocoin.online/api/auth/forgot', {
+      await fetch('https://api.mozhost.shop/api/auth/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() }),

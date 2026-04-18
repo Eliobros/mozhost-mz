@@ -1,5 +1,5 @@
 // admin/utils/api.ts
-const API_BASE = 'https://api.mozhost.topaziocoin.online/api/admin';
+const API_BASE = 'https://api.mozhost.shop/api/admin';
 
 export const adminAPI = {
   // Stats

@@ -27,7 +27,7 @@ const MySQLPage = () => {
         return;
       }
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/mysql/credentials', {
+      const response = await fetch('https://api.mozhost.shop/api/mysql/credentials', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -56,7 +56,7 @@ const MySQLPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/mysql/create', {
+      const response = await fetch('https://api.mozhost.shop/api/mysql/create', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -80,7 +80,7 @@ const MySQLPage = () => {
     
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/mysql/test', {
+      const response = await fetch('https://api.mozhost.shop/api/mysql/test', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       

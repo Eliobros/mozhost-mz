@@ -64,8 +64,8 @@ const LoginPage = () => {
 
     try {
       const url = isLogin 
-        ? 'https://api.mozhost.topaziocoin.online/api/auth/login' 
-        : 'https://api.mozhost.topaziocoin.online/api/auth/register';
+        ? 'https://api.mozhost.shop/api/auth/login' 
+        : 'https://api.mozhost.shop/api/auth/register';
 
  	const body = isLogin
   ? { login: formData.login, password: formData.password }
@@ -162,7 +162,7 @@ const LoginPage = () => {
                        method === 'sms' ? 'verify-sms' : 
                        'verify-email';
 
-      const resp = await fetch(`https://api.mozhost.topaziocoin.online/api/auth/${endpoint}`, {
+      const resp = await fetch(`https://api.mozhost.shop/api/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ code: formData.verifyCode.trim() })
@@ -193,7 +193,7 @@ const LoginPage = () => {
       const user = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
       const method = user.preferredVerificationMethod || 'email';
 
-      const resp = await fetch('https://api.mozhost.topaziocoin.online/api/auth/resend-code', {
+      const resp = await fetch('https://api.mozhost.shop/api/auth/resend-code', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -288,7 +288,7 @@ router.post('/connect', auth, async (req, res) => {
 
     // Registrar webhook no repositório
     const [owner, repo] = repo_name.split('/');
-    const webhookUrl = `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/github/webhook`;
+    const webhookUrl = `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/github/webhook`;
     const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || 'mozhost_secret';
 
     let webhookId = null;

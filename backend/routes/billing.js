@@ -213,7 +213,7 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
               failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/billing?status=failure`,
               pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/billing?status=pending`
             },
-            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/billing/webhook/mercadopago`
+            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/billing/webhook/mercadopago`
           },
           {
             headers: {

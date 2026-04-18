@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://api.mozhost.topaziocoin.online/api';
+const API_BASE_URL = 'https://api.mozhost.shop/api';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('mozhost_token');

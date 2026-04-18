@@ -9,7 +9,7 @@ import {
   Copy, Sparkles
 } from 'lucide-react';
 
-const API = 'https://api.mozhost.topaziocoin.online';
+const API = 'https://api.mozhost.shop';
 
 const hdrs = () => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mozhost_token') : '';

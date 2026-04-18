@@ -9,7 +9,7 @@ import {
   Smartphone, CreditCard
 } from 'lucide-react';
 
-const API = 'https://api.mozhost.topaziocoin.online';
+const API = 'https://api.mozhost.shop';
 const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
 
 // ===== HELPERS =====

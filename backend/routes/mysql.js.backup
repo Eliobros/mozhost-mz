@@ -50,7 +50,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       if (pma_domain) {
         pmaUrl = `https://${pma_domain}`;
       } else if (pma_port) {
-        pmaUrl = `https://api.mozhost.topaziocoin.online:${pma_port}`;
+        pmaUrl = `https://api.mozhost.shop:${pma_port}`;
       }
     }
 
@@ -99,7 +99,7 @@ router.get('/credentials', authMiddleware, async (req, res) => {
       if (pma_domain) {
         pmaUrl = `https://${pma_domain}`;
       } else if (pma_port) {
-        pmaUrl = `https://api.mozhost.topaziocoin.online:${pma_port}`;
+        pmaUrl = `https://api.mozhost.shop:${pma_port}`;
       }
     }
 

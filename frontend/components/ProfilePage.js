@@ -79,7 +79,7 @@ const ProfilePage = () => {
   const loadUserData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/me', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -102,7 +102,7 @@ const ProfilePage = () => {
   const loadUserStats = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+      const response = await fetch('https://api.mozhost.shop/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -148,7 +148,7 @@ const ProfilePage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/coupons/redeem', {
+      const response = await fetch('https://api.mozhost.shop/api/coupons/redeem', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -201,7 +201,7 @@ const ProfilePage = () => {
         preferences: formData.preferences
       };
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/profile', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

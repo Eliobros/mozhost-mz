@@ -128,7 +128,7 @@ const ContainersPage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/containers/${containerId}/renew`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/containers/${containerId}/renew`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

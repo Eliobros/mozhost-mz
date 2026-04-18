@@ -232,7 +232,7 @@ export default function FilesScreen() {
       const newPath = currentPath ? `${currentPath}/${newName}` : newName;
       try {
         const token = await (await import('@/services/api')).getToken();
-        await fetch(`https://api.mozhost.topaziocoin.online/api/files/${selectedContainer!.id}/${file.path}`, {
+        await fetch(`https://api.mozhost.shop/api/files/${selectedContainer!.id}/${file.path}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ newPath }),
@@ -252,7 +252,7 @@ export default function FilesScreen() {
       if (!newPath.trim() || newPath === file.path) return;
       try {
         const token = await (await import('@/services/api')).getToken();
-        await fetch(`https://api.mozhost.topaziocoin.online/api/files/${selectedContainer!.id}/${file.path}`, {
+        await fetch(`https://api.mozhost.shop/api/files/${selectedContainer!.id}/${file.path}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ newPath }),

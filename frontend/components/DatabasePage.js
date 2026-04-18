@@ -33,7 +33,7 @@ const DatabasePage = () => {
         return;
       }
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/databases', {
+      const response = await fetch('https://api.mozhost.shop/api/databases', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -91,7 +91,7 @@ const DatabasePage = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/databases', {
+      const response = await fetch('https://api.mozhost.shop/api/databases', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

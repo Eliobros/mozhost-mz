@@ -51,7 +51,7 @@ const App = () => {
         return;
       }
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/verify', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

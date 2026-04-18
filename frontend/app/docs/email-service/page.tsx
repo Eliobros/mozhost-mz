@@ -166,7 +166,7 @@ export default function EmailServicePage() {
 {`const fetch = require('node-fetch');
 
 async function enviarEmail() {
-  const response = await fetch('https://api.mozhost.topaziocoin.online/api/emails/send', {
+  const response = await fetch('https://api.mozhost.shop/api/emails/send', {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer SUA_MOZHOST_API_KEY',
@@ -196,7 +196,7 @@ enviarEmail();`}
               <pre className="text-sm">
 {`import requests
 
-url = 'https://api.mozhost.topaziocoin.online/api/emails/send'
+url = 'https://api.mozhost.shop/api/emails/send'
 
 headers = {
     'Authorization': 'Bearer SUA_MOZHOST_API_KEY',
@@ -244,7 +244,7 @@ print(response.json())`}
           </p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
             <pre className="text-sm">
-{`curl https://api.mozhost.topaziocoin.online/api/emails/quota \\
+{`curl https://api.mozhost.shop/api/emails/quota \\
   -H "Authorization: Bearer SUA_MOZHOST_API_KEY"`}
             </pre>
           </div>
@@ -273,7 +273,7 @@ print(response.json())`}
           </p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
             <pre className="text-sm">
-{`curl https://api.mozhost.topaziocoin.online/api/emails/stats \\
+{`curl https://api.mozhost.shop/api/emails/stats \\
   -H "Authorization: Bearer SUA_MOZHOST_API_KEY"`}
             </pre>
           </div>
@@ -305,7 +305,7 @@ print(response.json())`}
           </p>
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
             <pre className="text-sm">
-{`curl "https://api.mozhost.topaziocoin.online/api/emails/logs?page=1&limit=20" \\
+{`curl "https://api.mozhost.shop/api/emails/logs?page=1&limit=20" \\
   -H "Authorization: Bearer SUA_MOZHOST_API_KEY"`}
             </pre>
           </div>

@@ -13,7 +13,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const [paymentResult, setPaymentResult] = useState(null);
   const [mercadoPagoUrl, setMercadoPagoUrl] = useState('');
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
   const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
 
   // Configuração de moedas

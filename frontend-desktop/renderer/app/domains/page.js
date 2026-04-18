@@ -16,7 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-const API_BASE_URL = 'https://api.mozhost.topaziocoin.online';
+const API_BASE_URL = 'https://api.mozhost.shop';
 
 export default function DomainsPage() {
   const [domains, setDomains] = useState([]);

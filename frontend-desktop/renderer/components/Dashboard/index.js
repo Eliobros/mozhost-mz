@@ -50,7 +50,7 @@ const Dashboard = () => {
         return;
       }
 
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+      const response = await fetch('https://api.mozhost.shop/api/containers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

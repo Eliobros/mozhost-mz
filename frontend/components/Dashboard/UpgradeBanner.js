@@ -52,7 +52,7 @@ const UpgradeBanner = ({ user, containers }) => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/upgrade-plan', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/upgrade-plan', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

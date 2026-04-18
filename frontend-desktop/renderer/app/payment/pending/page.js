@@ -25,7 +25,7 @@ function PaymentPendingContent() {
   const checkPaymentStatus = async (paymentId) => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/payment/status/${paymentId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/payment/status/${paymentId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

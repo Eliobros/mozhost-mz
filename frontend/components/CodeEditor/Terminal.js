@@ -128,7 +128,7 @@ const Terminal = ({
     console.log('[Terminal] Token:', token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN!');
 
     // Construir URL do WebSocket do terminal
-    const wsUrl = `wss://api.mozhost.topaziocoin.online/api/terminal/${containerId}?token=${token}`;
+    const wsUrl = `wss://api.mozhost.shop/api/terminal/${containerId}?token=${token}`;
     
     console.log('[Terminal] WebSocket URL completa:', wsUrl);
     console.log('[Terminal] Iniciando conexão WebSocket...');

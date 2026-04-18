@@ -88,7 +88,7 @@ npm start
   return templates[ext] || `// ${filename}\n// Criado na MozHost 🚀\n\n`;
 };
 
-export const API_BASE_URL = 'https://api.mozhost.topaziocoin.online/api';
+export const API_BASE_URL = 'https://api.mozhost.shop/api';
 
 export const getAuthHeaders = () => {
   const token = localStorage.getItem('mozhost_token');

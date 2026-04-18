@@ -40,7 +40,7 @@ const Dashboard = () => {
     try {
       const token = localStorage.getItem('mozhost_token');
       if (token) {
-        const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/verify', {
+        const response = await fetch('https://api.mozhost.shop/api/auth/verify', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -70,10 +70,10 @@ const Dashboard = () => {
 
       // Buscar containers e métricas reais em paralelo
       const [containersRes, metricsRes] = await Promise.all([
-        fetch('https://api.mozhost.topaziocoin.online/api/containers', {
+        fetch('https://api.mozhost.shop/api/containers', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('https://api.mozhost.topaziocoin.online/api/monitoring/system/metrics', {
+        fetch('https://api.mozhost.shop/api/monitoring/system/metrics', {
           headers: { 'Authorization': `Bearer ${token}` }
         }).catch(() => null)
       ]);

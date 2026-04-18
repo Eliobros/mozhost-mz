@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Server, Zap, Shield, Globe, Mail, MessageCircle, MessageSquare } from 'lucide-react';
 import CountrySelector from './CountrySelector';
 
-const API_URL = 'https://api.mozhost.topaziocoin.online';
+const API_URL = 'https://api.mozhost.shop';
 
 const LoginPage = () => {
   const [isLogin, setIsLogin] = useState(true);

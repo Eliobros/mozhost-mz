@@ -29,7 +29,7 @@ export default function ResetPasswordPage() {
     setError('');
 
     try {
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/forgot', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/auth/reset', {
+      const response = await fetch('https://api.mozhost.shop/api/auth/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword })

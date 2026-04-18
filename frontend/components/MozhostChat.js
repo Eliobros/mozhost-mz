@@ -35,7 +35,7 @@ const MozhostChat = () => {
 
     try {
       const token = localStorage.getItem('mozhost_token');
-      const res = await fetch('https://api.mozhost.topaziocoin.online/api/ai/chat', {
+      const res = await fetch('https://api.mozhost.shop/api/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +61,7 @@ const MozhostChat = () => {
   const resetChat = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
-      await fetch('https://api.mozhost.topaziocoin.online/api/ai/reset', {
+      await fetch('https://api.mozhost.shop/api/ai/reset', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

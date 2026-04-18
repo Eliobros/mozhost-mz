@@ -10,7 +10,7 @@ const nextConfig = {
   
   // Se usa variáveis de ambiente
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop',
   },
   
   // Trailing slash (compatibilidade Electron)

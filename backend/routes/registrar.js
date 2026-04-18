@@ -403,7 +403,7 @@ router.post('/pay', auth, async (req, res) => {
               failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=failure`,
               pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/domains?payment=pending`
             },
-            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.topaziocoin.online'}/api/registrar/webhook/mercadopago`
+            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/registrar/webhook/mercadopago`
           },
           { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}`, 'Content-Type': 'application/json' } }
         );

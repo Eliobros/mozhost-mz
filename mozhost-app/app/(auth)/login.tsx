@@ -221,7 +221,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotMessage('');
     try {
-      await fetch('https://api.mozhost.topaziocoin.online/api/auth/forgot', {
+      await fetch('https://api.mozhost.shop/api/auth/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() }),
@@ -241,7 +241,7 @@ export default function LoginScreen() {
     setError('');
     try {
       const redirectUri = Linking.createURL('oauth-callback');
-      const oauthUrl = `https://api.mozhost.topaziocoin.online/api/auth/${provider}?mobile=true&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const oauthUrl = `https://api.mozhost.shop/api/auth/${provider}?mobile=true&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, redirectUri);
 

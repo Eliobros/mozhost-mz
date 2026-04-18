@@ -47,7 +47,7 @@ router.post('/create', authMiddleware, async (req, res) => {
     let pmaUrl = null;
     if (containerInfo.length > 0 && containerInfo[0].pma_port) {
       // Sempre usar porta ao invés de domínio
-      pmaUrl = `http://api.mozhost.topaziocoin.online:${containerInfo[0].pma_port}`;
+      pmaUrl = `http://api.mozhost.shop:${containerInfo[0].pma_port}`;
     }
 
     res.json({
@@ -92,7 +92,7 @@ router.get('/credentials', authMiddleware, async (req, res) => {
     let pmaUrl = null;
     if (containerInfo.length > 0 && containerInfo[0].pma_port) {
       // Sempre usar porta ao invés de domínio
-      pmaUrl = `http://api.mozhost.topaziocoin.online:${containerInfo[0].pma_port}`;
+      pmaUrl = `http://api.mozhost.shop:${containerInfo[0].pma_port}`;
     }
 
     console.log('🔍 Debug phpMyAdmin:');

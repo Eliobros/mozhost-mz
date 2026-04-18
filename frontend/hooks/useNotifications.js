@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);

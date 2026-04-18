@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const API_BASE_URL = 'https://api.mozhost.topaziocoin.online/api';
+const API_BASE_URL = 'https://api.mozhost.shop/api';
 
 export const getToken = async (): Promise<string | null> => {
   return await SecureStore.getItemAsync('mozhost_token');

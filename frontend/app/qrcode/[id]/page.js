@@ -48,7 +48,7 @@ export default function QRCodePage() {
     try {
       const token = localStorage.getItem('mozhost_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.topaziocoin.online'}/api/containers/${containerId}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/containers/${containerId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -67,7 +67,7 @@ export default function QRCodePage() {
 
   const connectWebSocket = () => {
     const token = localStorage.getItem('mozhost_token');
-    const wsUrl = `wss://api.mozhost.topaziocoin.online/api/qrcode/${containerId}?token=${token}`;
+    const wsUrl = `wss://api.mozhost.shop/api/qrcode/${containerId}?token=${token}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

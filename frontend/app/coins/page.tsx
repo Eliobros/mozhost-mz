@@ -145,7 +145,7 @@ const CoinsPurchase = () => {
       // Simular chamada ao backend
       const token = localStorage.getItem('mozhost_token');
       
-      const response = await fetch('https://api.mozhost.topaziocoin.online/api/payment/create', {
+      const response = await fetch('https://api.mozhost.shop/api/payment/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

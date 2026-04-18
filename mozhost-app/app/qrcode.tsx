@@ -13,7 +13,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { getToken } from '@/services/api';
 import { Colors } from '@/constants/Colors';
 
-const WS_BASE = 'wss://api.mozhost.topaziocoin.online/api';
+const WS_BASE = 'wss://api.mozhost.shop/api';
 
 type ConnectionState = 'waiting' | 'qr' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
