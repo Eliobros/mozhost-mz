@@ -1,3 +1,5 @@
+"use client"
+
 // components/ResetPasswordPage.js
 import { useState, useEffect } from 'react';
 

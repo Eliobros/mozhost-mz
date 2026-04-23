@@ -1,3 +1,5 @@
+"use client"
+
 // components/MySQLPage.js
 
 import React, { useState, useEffect } from 'react';

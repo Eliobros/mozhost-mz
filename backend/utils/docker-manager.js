@@ -48,11 +48,14 @@ class DockerManager {
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
 
-      const domain = `${subdomain}.mozhost.topaziocoin.online`;
+      const domain = `${subdomain}.mozhost.shop`;
 
       let result;
-
-      if (type === 'php') {
+      if (type === 'static') {
+  result = await this.createStaticContainer(
+    userId, containerId, containerPath, port,
+    name, type, domain)
+} else if (type === 'php') {
         result = await this.createPHPContainer(
           userId, containerId, containerPath, port,
           name, type, subdomain, domain, username
@@ -94,8 +97,8 @@ class DockerManager {
       containerPath, dbInfo.dbUser, dbInfo.dbPassword, dbInfo.dbName
     );
 
-    const pmaDomain = `pma-${subdomain}.mozhost.topaziocoin.online`;
-    const mysqlDomain = `mysql.${subdomain}.mozhost.topazioverse.com.br`;
+    const pmaDomain = `pma-${subdomain}.mozhost.shop`;
+    const mysqlDomain = `mysql.${subdomain}.mozhost.shop`;
 
     await this.fileManager.createInitialFiles(path.join(containerPath, 'php'), type);
 
@@ -426,6 +429,14 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
 
   await this.fileManager.createInitialFiles(containerPath, type);
 
+
+ // No final de createNodePythonContainer antes do return:
+try {
+  await this.nginxManager.createSiteNginxConfig(containerId, domain, port);
+} catch (error) {
+  console.error('⚠️ Erro ao criar Nginx config:', error.message);
+}
+ 
   return {
     id: containerId,
     dockerId: container.id,
@@ -433,6 +444,70 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
     domain,
     path: containerPath,
     status: 'stopped'
+  };
+}
+
+async createStaticContainer(userId, containerId, containerPath, port, name, type, domain) {
+  // Criar pasta html onde o cliente vai colocar os arquivos
+  const htmlPath = path.join(containerPath, 'html');
+  await this.fileManager.createContainerDir(htmlPath);
+
+  // Criar index.html padrão
+  await fs.writeFile(
+    path.join(htmlPath, 'index.html'),
+    `<h1>Site no ar! Faça upload dos seus arquivos.</h1>`
+  );
+
+  // Config nginx que serve a pasta html
+  const nginxConf = `
+server {
+  listen 80;
+  root /usr/share/nginx/html;
+  index index.html;
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}`;
+
+  await fs.writeFile(path.join(containerPath, 'nginx.conf'), nginxConf);
+
+  const containerConfig = {
+    Image: 'nginx:alpine',
+    name: `mozhost_${containerId}`,
+    ExposedPorts: { '80/tcp': {} },
+    HostConfig: {
+      PortBindings: { '80/tcp': [{ HostPort: port.toString() }] },
+      Binds: [
+        `${htmlPath}:/usr/share/nginx/html:rw`,
+        `${containerPath}/nginx.conf:/etc/nginx/conf.d/default.conf:ro`
+      ],
+      RestartPolicy: { Name: 'unless-stopped' },
+      NetworkMode: 'bridge'
+    }
+  };
+
+  const container = await this.docker.createContainer(containerConfig);
+  await container.start();
+
+  await database.query(`
+    INSERT INTO containers (id, user_id, name, type, docker_container_id, port, domain, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'running')
+  `, [containerId, userId, name, type, container.id, port, domain]);
+
+   try {
+  await this.nginxManager.createSiteNginxConfig(containerId, domain, port);
+} catch (error) {
+  console.error('⚠️ Erro ao criar Nginx config:', error.message);
+}
+
+
+  return {
+    id: containerId,
+    dockerId: container.id,
+    port,
+    domain,
+    path: containerPath,
+    status: 'running'
   };
 }
 
@@ -658,7 +733,12 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
       image: 'python:3.11-alpine',
       internalPort: 8000,
       cmd: ['sh', '-c', 'cd /app/code && pip install -r requirements.txt && python main.py']
-    }
+    },
+    static: {
+      image: 'nginx:alpine',
+      internalPort: 80,
+      cmd: ['nginx', '-g', 'daemon off;']
+}
   };
 
   return configs[type] || configs.nodejs;
@@ -677,12 +757,13 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
 
       const container = this.docker.getContainer(containerInfo[0].docker_container_id);
       const stats = await container.stats({ stream: false });
+      const maxRam = parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024;
 
       return {
         cpu: this.calculateCpuPercent(stats),
         memory: {
           used: stats.memory_stats.usage,
-          limit: stats.memory_stats.limit,
+          limit: maxRam,
           percent: (stats.memory_stats.usage / stats.memory_stats.limit) * 100
         },
         network: stats.networks

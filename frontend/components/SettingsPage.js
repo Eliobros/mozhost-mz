@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
 import { 
   User, 
@@ -26,6 +28,8 @@ const SettingsPage = () => {
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [passkeys, setPasskeys] = useState([]);
+const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
     username: '',
@@ -58,6 +62,7 @@ const SettingsPage = () => {
   useEffect(() => {
     loadUserData();
     loadContainers();
+    loadPasskeys();
   }, []);
 
   const loadUserData = async () => {
@@ -260,6 +265,84 @@ const SettingsPage = () => {
       console.error('Erro ao carregar containers:', err);
     }
   };
+
+const loadPasskeys = async () => {
+  try {
+    const token = localStorage.getItem('mozhost_token');
+    const response = await fetch('https://api.mozhost.shop/api/passkeys', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      setPasskeys(data.passkeys || []);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar passkeys:', err);
+  }
+};
+
+const registerPasskey = async () => {
+  setPasskeyLoading(true);
+  setError('');
+  setSuccess('');
+  try {
+    const token = localStorage.getItem('mozhost_token');
+
+    // 1. Obter opções do servidor
+    const optionsRes = await fetch('https://api.mozhost.shop/api/passkeys/register/start', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data  = await optionsRes.json();
+
+    // 2. Criar credencial no dispositivo
+    const { startRegistration } = await import('@simplewebauthn/browser');
+    const credential = await startRegistration(data.options);
+
+    // 3. Verificar no servidor
+    const verifyRes = await fetch('https://api.mozhost.shop/api/passkeys/register/finish', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({credential})
+    });
+
+    if (verifyRes.ok) {
+      setSuccess('Passkey registada com sucesso!');
+      loadPasskeys();
+    } else {
+      const err = await verifyRes.json();
+      setError(err.message || 'Erro ao registar passkey');
+    }
+  } catch (err) {
+    setError('Erro ao registar passkey: ' + err.message);
+  } finally {
+    setPasskeyLoading(false);
+  }
+};
+
+const deletePasskey = async (passkeyId) => {
+  if (!confirm('Remover esta passkey?')) return;
+  try {
+    const token = localStorage.getItem('mozhost_token');
+    const response = await fetch(`https://api.mozhost.shop/api/passkeys/${passkeyId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (response.ok) {
+      setSuccess('Passkey removida!');
+      loadPasskeys();
+    }
+  } catch (err) {
+    setError('Erro ao remover passkey');
+  }
+};
+
 
   const loadContainerEnv = async (containerId) => {
     if (!containerId) {
@@ -523,6 +606,59 @@ const SettingsPage = () => {
                 </div>
               </div>
             </div>
+
+	  {/* Passkeys */}
+<div className="bg-white shadow rounded-lg">
+  <div className="px-6 py-4 border-b border-gray-200">
+    <h3 className="text-lg font-medium text-gray-900 flex items-center">
+      <Shield className="w-5 h-5 mr-2" />
+      Passkeys
+    </h3>
+    <p className="text-sm text-gray-500 mt-1">
+      Faça login sem senha usando biometria ou PIN do dispositivo
+    </p>
+  </div>
+  <div className="px-6 py-4 space-y-4">
+    {passkeys.length === 0 ? (
+      <div className="text-center py-4 text-gray-400">
+        <Shield className="w-10 h-10 mx-auto mb-2 opacity-50" />
+        <p className="text-sm">Nenhuma passkey registada</p>
+      </div>
+    ) : (
+      <div className="space-y-2">
+        {passkeys.map((pk) => (
+          <div key={pk.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{pk.device_name || 'Dispositivo'}</p>
+              <p className="text-xs text-gray-500">
+                Registada em {new Date(pk.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            <button
+              onClick={() => deletePasskey(pk.id)}
+              className="p-1 text-red-500 hover:bg-red-50 rounded"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
+
+    <button
+      onClick={registerPasskey}
+      disabled={passkeyLoading}
+      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+    >
+      {passkeyLoading ? (
+        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+      ) : (
+        <Shield className="w-4 h-4 mr-2" />
+      )}
+      Registar Passkey
+    </button>
+  </div>
+</div>
 
             {/* Startup Commands */}
             <div className="bg-white shadow rounded-lg">

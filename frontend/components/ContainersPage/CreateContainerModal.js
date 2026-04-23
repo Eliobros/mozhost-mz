@@ -62,7 +62,7 @@ const CreateContainerModal = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               O que deseja criar?
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3  gap-3">
               <button
                 type="button"
                 onClick={() => setForm({ ...form, projectType: 'api', type: 'api', template: 'api' })}
@@ -91,8 +91,27 @@ const CreateContainerModal = ({
                 <div className="text-2xl mb-2">🤖</div>
                 <div className="font-medium text-sm">BOT</div>
                 <div className="text-xs text-gray-500 mt-1">Bot WhatsApp</div>
-              </button>
+              </button >
+
+	    {/* ← adiciona aqui o card Site */}
+<button
+  type="button"
+  onClick={() => setForm({ ...form, projectType: 'static', type: 'static', template: 'static' })}
+  disabled={isCreating}
+  className={`p-4 border-2 rounded-lg text-center transition-all ${
+    form.projectType === 'static'
+      ? 'border-blue-500 bg-blue-50'
+      : 'border-gray-300 hover:border-blue-300'
+  } disabled:opacity-50 disabled:cursor-not-allowed`}
+>
+  <div className="text-2xl mb-2">🌐</div>
+  <div className="font-medium text-sm">Site</div>
+  <div className="text-xs text-gray-500 mt-1">HTML, CSS, JS</div>
+</button>
             </div>
+
+	
+
           </div>
 
           {/* Template de BOT (apenas se BOT selecionado) */}

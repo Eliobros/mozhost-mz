@@ -1,3 +1,5 @@
+"use client"
+
 // components/TermsConditionsPage.js
 import React from 'react';
 import { ArrowLeft, Shield, AlertTriangle, CheckCircle, FileText, Clock, Scale } from 'lucide-react';

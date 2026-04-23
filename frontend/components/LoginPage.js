@@ -194,10 +194,11 @@ const LoginPage = () => {
           setSuccess(`Conta criada com sucesso! Bem-vindo à MozHost, ${data.user.username}! 🎉`);
         }
 
-        setTimeout(() => {
-          window.location.hash = 'dashboard';
-          window.location.reload();
-        }, 1000);
+        // ISSO VAI RESOLVER
+setTimeout(() => {
+  window.location.href = '/dashboard'; 
+}, 1000);
+
 
       } else {
         if (response.status === 409) {

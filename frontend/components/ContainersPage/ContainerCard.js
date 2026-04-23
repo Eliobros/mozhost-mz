@@ -21,7 +21,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, onRenew, isNearLimit }) => {
+const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, onRenew, isNearLimit, stats }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const statusConfig = {
@@ -126,6 +126,46 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
               </a>
             </div>
           )}
+
+	  {/* Métricas - só para containers running */}
+{container.status === 'running' && stats && (
+  <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+    <p className="text-xs font-semibold text-gray-700 mb-2">📊 Métricas</p>
+    <div className="space-y-2">
+      {/* CPU */}
+      <div>
+        <div className="flex justify-between text-xs text-gray-600 mb-1">
+          <span>CPU</span>
+          <span>{stats.cpu.toFixed(1)}%</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div
+            className={`h-1.5 rounded-full ${stats.cpu > 80 ? 'bg-red-500' : stats.cpu > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+            style={{ width: `${Math.min(stats.cpu, 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* RAM */}
+      <div>
+        <div className="flex justify-between text-xs text-gray-600 mb-1">
+          <span>RAM</span>
+          <span>
+            {(stats.memory.used / 1024 / 1024).toFixed(0)}MB
+            / {(stats.memory.limit / 1024 / 1024).toFixed(0)}MB
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-1.5">
+          <div
+            className={`h-1.5 rounded-full ${stats.memory.percent > 80 ? 'bg-red-500' : stats.memory.percent > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+            style={{ width: `${Math.min(stats.memory.percent, 100)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
           {/* MySQL Credentials - COM CONEXÃO EXTERNA */}
           {(container.type === 'php' || container.type === 'PHP') && (container.db_name || container.database_name) && (

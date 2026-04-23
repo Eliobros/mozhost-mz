@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, CheckCircle, AlertCircle, X, Smartphone, Unlink } from 'lucide-react';
 

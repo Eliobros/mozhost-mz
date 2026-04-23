@@ -1,3 +1,5 @@
+"use client"
+
 import React from 'react';
 import Link from 'next/link';
 import { Mail, MessageCircle, Users, BookOpen, Youtube, Clock, CheckCircle } from 'lucide-react';

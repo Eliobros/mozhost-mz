@@ -1,3 +1,5 @@
+"use client"
+
 // components/DatabasePage.js
 import React, { useState, useEffect } from 'react';
 import { Database, Copy, ExternalLink, Trash2, Check, AlertCircle, Eye, EyeOff, Plus, RefreshCw } from 'lucide-react';

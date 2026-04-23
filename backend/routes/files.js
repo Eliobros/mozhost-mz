@@ -20,6 +20,18 @@ async function writeFileWithPermissions(filePath, content, encoding = 'utf8') {
   await fs.chmod(filePath, 0o666);
 }
 
+// Helper: retorna a subpasta de deploy baseada no tipo do container
+async function getDeployFolder(containerId) {
+  const info = await database.query(
+    'SELECT type FROM containers WHERE id = ?',
+    [containerId]
+  );
+  const type = info[0]?.type;
+  if (type === 'static') return 'html';
+  if (type === 'php') return 'php';
+  return '';
+}
+
 // Upload simples para CLI (não conflita com a interface web)
 router.post('/:containerId/cli-upload', [
   body('path').notEmpty().withMessage('Path is required'),
@@ -42,7 +54,10 @@ router.post('/:containerId/cli-upload', [
     }
 
     const containerPath = getContainerPath(containerId);
-    const fullPath = path.join(containerPath, filePath);
+    const deployFolder = await getDeployFolder(containerId);
+    const fullPath = deployFolder
+      ? path.join(containerPath, deployFolder, filePath)
+      : path.join(containerPath, filePath);
 
     // Verificar segurança do caminho
     if (!fullPath.startsWith(containerPath)) {
@@ -91,7 +106,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     // Permitir ZIP para rota específica
     if (req.path.includes('/upload-zip')) {
-      if (file.mimetype === 'application/zip' || 
+      if (file.mimetype === 'application/zip' ||
           file.mimetype === 'application/x-zip-compressed' ||
           file.originalname.endsWith('.zip')) {
         return cb(null, true);
@@ -99,7 +114,7 @@ const upload = multer({
         return cb(new Error('Only ZIP files allowed for this endpoint'), false);
       }
     }
-    
+
     // Filtros normais para outras rotas
     const allowedMimes = [
       'text/plain',
@@ -403,7 +418,7 @@ router.put('/:containerId/*', [
     // Verificar cota (considerar delta opcionalmente; aqui usamos tamanho novo)
     const newBytes = Buffer.byteLength(content, 'utf8');
     await ensureStorageAllowance(containerId, req.user.userId, newBytes);
-    
+
     // CORRIGIDO: Usar writeFileWithPermissions
     await writeFileWithPermissions(fullPath, content, 'utf8');
 
@@ -521,7 +536,7 @@ router.patch('/:containerId/*', [
 });
 
 // Nova rota: Upload e extração de ZIP
-router.post('/:containerId/upload-zip', 
+router.post('/:containerId/upload-zip',
   upload.single('zipfile'),
   async (req, res) => {
     try {
@@ -542,7 +557,10 @@ router.post('/:containerId/upload-zip',
       }
 
       const containerPath = getContainerPath(containerId);
-      const extractPath = path.join(containerPath, targetPath);
+      const deployFolder = await getDeployFolder(containerId);
+      const extractPath = deployFolder
+        ? path.join(containerPath, deployFolder, targetPath)
+        : path.join(containerPath, targetPath);
 
       // Segurança
       if (!extractPath.startsWith(containerPath)) {
@@ -636,7 +654,10 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
     }
 
     const containerPath = getContainerPath(containerId);
-    const uploadPath = path.join(containerPath, targetPath);
+    const deployFolder = await getDeployFolder(containerId);
+    const uploadPath = deployFolder
+      ? path.join(containerPath, deployFolder, targetPath)
+      : path.join(containerPath, targetPath);
 
     // Verificar segurança
     if (!uploadPath.startsWith(containerPath)) {
@@ -941,3 +962,4 @@ router.post('/:containerId/backup', async (req, res) => {
 });
 
 module.exports = router;
+

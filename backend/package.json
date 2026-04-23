@@ -21,6 +21,7 @@
     "@getbrevo/brevo": "^2.5.0",
     "@google/generative-ai": "^0.24.1",
     "@sendinblue/client": "^3.3.1",
+    "@simplewebauthn/server": "^13.3.0",
     "adm-zip": "^0.5.16",
     "archiver": "^5.3.2",
     "axios": "^1.13.2",

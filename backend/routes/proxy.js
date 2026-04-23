@@ -26,7 +26,7 @@ const resolveContainerPort = async (req, res, next) => {
     // Primeiro, tentar buscar por domain customizado
     container = await database.query(
       'SELECT * FROM containers WHERE domain = ? AND status = "running"',
-      [`${subdomain}.mozhost.topaziocoin.online`]
+      [`${subdomain}.mozhost.shop`]
     );
 
     // Se não encontrar, tentar buscar por padrão usuario-container
@@ -164,7 +164,7 @@ router.get('/:subdomain/_info', resolveContainerPort, (req, res) => {
     proxy: {
       subdomain: req.params.subdomain,
       target: `http://localhost:${containerInfo.port}`,
-      domain: `${req.params.subdomain}.mozhost.topaziocoin.online`
+      domain: `${req.params.subdomain}.mozhost.shop`
     },
     server: {
       timestamp: new Date().toISOString(),

@@ -1,4 +1,8 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Server,
   Plus,
@@ -21,6 +25,7 @@ import NotificationsSystem from './NotificationsSystem';
 import MozhostChat from './MozhostChat';
 
 const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [notifications, setNotifications] = useState(0);
@@ -37,20 +42,20 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const handleLogout = () => {
     localStorage.removeItem('mozhost_token');
     localStorage.removeItem('mozhost_user');
-    window.location.href = '/';
+    router.push('/login');
   };
 
   const navigation = [
-    { name: 'Dashboard', href: '#dashboard', icon: Home, current: currentPage === 'dashboard' },
-    { name: 'Containers', href: '#containers', icon: Server, current: currentPage === 'containers' },
-    { name: 'Database', href: '#database', icon: Database, current: currentPage === 'database' },
-    { name: 'Editor', href: '#files', icon: FileText, current: currentPage === 'files' },
-//    { name: 'Terminal', href: '#terminal', icon: Terminal, current: currentPage === 'terminal' },
-//    { name: 'Monitoramento', href: '#monitoring', icon: Activity, current: currentPage === 'monitoring' },
-    { name: 'Connections', href: '#whatsapp', icon: Link2, current: currentPage === 'whatsapp' },
-    { name: 'Suporte', href: '#suporte', icon: MessageCircle, current: currentPage === 'suporte' },
-    { name: 'Perfil', href: '#profile', icon: User, current: currentPage === 'profile' },
-    { name: 'Configurações', href: '#settings', icon: Settings, current: currentPage === 'settings' },
+    { name: 'Dashboard',     href: '/dashboard',  icon: Home,          current: currentPage === 'dashboard' },
+    { name: 'Containers',    href: '/containers', icon: Server,        current: currentPage === 'containers' },
+    { name: 'Database',      href: '/database',   icon: Database,      current: currentPage === 'database' },
+    { name: 'Editor',        href: '/files',      icon: FileText,      current: currentPage === 'files' },
+    // { name: 'Terminal',   href: '/terminal',   icon: Terminal,      current: currentPage === 'terminal' },
+    // { name: 'Monitoramento', href: '/monitoring', icon: Activity,   current: currentPage === 'monitoring' },
+    { name: 'Connections',   href: '/whatsapp',   icon: Link2,         current: currentPage === 'whatsapp' },
+    { name: 'Suporte',       href: '/support',    icon: MessageCircle, current: currentPage === 'suporte' },
+    { name: 'Perfil',        href: '/profile',    icon: User,          current: currentPage === 'profile' },
+    { name: 'Configurações', href: '/settings',   icon: Settings,      current: currentPage === 'settings' },
   ];
 
   return (
@@ -165,25 +170,19 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                 <h3 className="text-white font-semibold text-sm mb-4">Empresa</h3>
                 <ul className="space-y-3 text-sm">
                   <li>
-                    <button
-                      onClick={() => window.location.hash = '#termos'}
-                      className="text-gray-400 hover:text-white transition"
-                    >
+                    <Link href="/terms" className="text-gray-400 hover:text-white transition">
                       Termos e Condições
-                    </button>
+                    </Link>
                   </li>
                   <li>
-                    <button
-                      onClick={() => window.location.hash = '#privacidade'}
-                      className="text-gray-400 hover:text-white transition"
-                    >
+                    <Link href="/privacy" className="text-gray-400 hover:text-white transition">
                       Política de Privacidade
-                    </button>
+                    </Link>
                   </li>
                   <li>
-                    <a href="/docs/faq" className="text-gray-400 hover:text-white transition">
+                    <Link href="/docs/faq" className="text-gray-400 hover:text-white transition">
                       FAQ
-                    </a>
+                    </Link>
                   </li>
                 </ul>
               </div>
@@ -193,22 +192,19 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                 <h3 className="text-white font-semibold text-sm mb-4">Recursos</h3>
                 <ul className="space-y-3 text-sm">
                   <li>
-                    <a href="/docs" className="text-gray-400 hover:text-white transition">
+                    <Link href="/docs" className="text-gray-400 hover:text-white transition">
                       📚 Documentação
-                    </a>
+                    </Link>
                   </li>
                   <li>
-                    <button
-                      onClick={() => window.location.hash = '#comprar-coins'}
-                      className="text-gray-400 hover:text-white transition"
-                    >
+                    <Link href="/coins" className="text-gray-400 hover:text-white transition">
                       🪙 Comprar Coins
-                    </button>
+                    </Link>
                   </li>
                   <li>
-                    <a href="/docs/cli" className="text-gray-400 hover:text-white transition">
+                    <Link href="/docs/cli" className="text-gray-400 hover:text-white transition">
                       ⚡ CLI MozHost
-                    </a>
+                    </Link>
                   </li>
                 </ul>
               </div>
@@ -228,12 +224,9 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                     </a>
                   </li>
                   <li>
-                    <button
-                      onClick={() => window.location.hash = '#suporte'}
-                      className="text-gray-400 hover:text-white transition"
-                    >
+                    <Link href="/support" className="text-gray-400 hover:text-white transition">
                       🎧 Suporte
-                    </button>
+                    </Link>
                   </li>
                 </ul>
               </div>
@@ -284,7 +277,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                 <button
                   onClick={() => {
                     setShowProfile(false);
-                    window.location.hash = 'profile';
+                    router.push('/profile');
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center"
                 >
@@ -294,7 +287,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                 <button
                   onClick={() => {
                     setShowProfile(false);
-                    window.location.hash = 'notifications';
+                    router.push('/settings');
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md flex items-center"
                 >
@@ -358,7 +351,7 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
           <ul role="list" className="-mx-2 space-y-1">
             {navigation.map((item) => (
               <li key={item.name}>
-                <a
+                <Link
                   href={item.href}
                   className={`
                     group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors
@@ -370,7 +363,7 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
                 >
                   <item.icon className="h-6 w-6 shrink-0" />
                   {item.name}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
@@ -379,10 +372,13 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
         {/* Quick Actions */}
         <li className="mt-auto">
           <div className="bg-white/5 rounded-lg p-4">
-            <button className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-all">
+            <Link
+              href="/containers"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-all"
+            >
               <Plus className="w-4 h-4" />
               Novo Container
-            </button>
+            </Link>
           </div>
 
           <button
@@ -399,4 +395,3 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
 );
 
 export default DashboardLayout;
-

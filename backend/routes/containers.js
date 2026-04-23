@@ -51,6 +51,45 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Obter stats de todos os containers running
+router.get('/stats/all', async (req, res) => {
+  try {
+    const containers = await database.query(
+      `SELECT id, name, type FROM containers 
+       WHERE user_id = ? AND status = 'running'`,
+      [req.user.userId]
+    );
+
+    const statsPromises = containers.map(async (container) => {
+      try {
+        const stats = await dockerManager.getContainerStats(container.id);
+        return {
+          id: container.id,
+          name: container.name,
+          type: container.type,
+          stats
+        };
+      } catch {
+        return {
+          id: container.id,
+          name: container.name,
+          type: container.type,
+          stats: null
+        };
+      }
+    });
+
+    const results = await Promise.all(statsPromises);
+
+    res.json({ stats: results });
+
+  } catch (error) {
+    console.error('Error getting all stats:', error);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+
 // Upgrade de armazenamento usando coins
 router.post('/:id/upgrade-storage', [
   body('addMb').isInt({ min: 100, max: 10240 }).withMessage('addMb deve ser entre 100 e 10240')
@@ -149,12 +188,12 @@ router.post('/', [
     .matches(/^[a-zA-Z0-9_-\s]+$/)
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
-  .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs'])
-  .withMessage('Type must be nodejs, python, php, api, bot-baileys or bot-wwebjs'),
+  .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'static'])
+  .withMessage('Type must be nodejs, python, php, api, bot-baileys,  bot-wwebjs, or static'),
 body('template')
   .optional()
-  .isIn(['api', 'bot-baileys', 'bot-wwebjs'])
-  .withMessage('Template must be api, bot-baileys or bot-wwebjs'),
+  .isIn(['api', 'bot-baileys', 'bot-wwebjs', 'static'])
+  .withMessage('Template must be api, bot-baileys, bot-wwebjs or static'),
   body('environment')
     .optional()
     .isObject()

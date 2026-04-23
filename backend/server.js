@@ -240,6 +240,10 @@ const pushRoutes = require('./routes/push');
 app.use('/api/push', pushRoutes);
 const whatsappRoutes = require('./routes/whatsapp');
 app.use('/api/whatsapp', whatsappRoutes);
+const emailForwarding = require('./routes/emailForwarding');
+const passkeysRouter = require('./routes/passkeys');
+app.use('/api/passkeys', passkeysRouter);
+app.use('/api/email-forwarding', emailForwarding);
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];

@@ -2,6 +2,8 @@ import type { NextConfig } from 'next'
 import withPWA from 'next-pwa'
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["109.199.126.125"],
+  turbopack: {},
   images: {
     unoptimized: true,
   },

@@ -1,9 +1,11 @@
+
 // routes/github.js
 // Integração GitHub OAuth + Deploy automático via webhook
 
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const { execSync } = require('child_process');
 const auth = require('../middleware/auth');
 const database = require('../models/database');
 const Docker = require('dockerode');
@@ -13,6 +15,8 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
+
+const USER_DATA_PATH = process.env.USER_DATA_PATH || '/root/mozhost/user-data';
 
 // ===== FUNÇÕES AUXILIARES =====
 
@@ -47,29 +51,38 @@ async function execInContainer(container, cmd) {
   });
 }
 
+function getAppPath(containerType) {
+  return containerType === 'static' ? '/usr/share/nginx/html' : '/app/code';
+}
+
+function getHostHtmlPath(containerId) {
+  return `${USER_DATA_PATH}/containers/${containerId}/html`;
+}
+
+function cloneToHost(repoUrlWithToken, branch, containerId) {
+  const hostHtmlPath = getHostHtmlPath(containerId);
+  const tmpDir = `/tmp/mozhost_${containerId}_${Date.now()}`;
+  execSync(`rm -rf ${tmpDir} && git clone -b ${branch} ${repoUrlWithToken} ${tmpDir} && rm -rf ${hostHtmlPath}/* ${hostHtmlPath}/.* 2>/dev/null; cp -r ${tmpDir}/. ${hostHtmlPath}/ && rm -rf ${tmpDir}`);
+  return `Clonado para ${hostHtmlPath}`;
+}
+
 // ===== OAUTH WEB =====
 
-// GET /api/github/auth - Iniciar OAuth (para plataforma web)
 router.get('/auth', auth, (req, res) => {
   const userId = req.user.userId || req.user.id;
   const state = Buffer.from(JSON.stringify({ userId, source: 'web' })).toString('base64');
-
   const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo,admin:repo_hook&state=${state}&redirect_uri=${GITHUB_CALLBACK_URL}`;
-
   res.json({ success: true, url });
 });
 
-// GET /api/github/callback - Callback OAuth do GitHub
 router.get('/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
-
     if (!code) return res.status(400).json({ error: 'Code não fornecido' });
 
     const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-    const { userId, source } = stateData;
+    const { userId } = stateData;
 
-    // Trocar code por access_token
     const tokenRes = await axios.post('https://github.com/login/oauth/access_token', {
       client_id: GITHUB_CLIENT_ID,
       client_secret: GITHUB_CLIENT_SECRET,
@@ -82,10 +95,8 @@ router.get('/callback', async (req, res) => {
     const { access_token } = tokenRes.data;
     if (!access_token) return res.status(400).json({ error: 'Falha ao obter token' });
 
-    // Buscar dados do usuário no GitHub
     const githubUser = await githubRequest('/user', access_token);
 
-    // Salvar ou atualizar no banco
     const existing = await database.query('SELECT id FROM github_accounts WHERE user_id = ?', [userId]);
 
     if (existing.length) {
@@ -102,7 +113,6 @@ router.get('/callback', async (req, res) => {
 
     console.log(`✅ GitHub conectado: user ${userId} → @${githubUser.login}`);
 
-    // Redirecionar para o frontend
     const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
     res.redirect(`${frontendUrl}/connections?github=success`);
 
@@ -114,7 +124,6 @@ router.get('/callback', async (req, res) => {
 
 // ===== DEVICE FLOW (CLI) =====
 
-// POST /api/github/device/start - Iniciar Device Flow para CLI
 router.post('/device/start', auth, async (req, res) => {
   try {
     const response = await axios.post('https://github.com/login/device/code', {
@@ -142,7 +151,6 @@ router.post('/device/start', auth, async (req, res) => {
   }
 });
 
-// POST /api/github/device/poll - Verificar se usuário autorizou (CLI faz polling)
 router.post('/device/poll', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -160,26 +168,13 @@ router.post('/device/poll', auth, async (req, res) => {
 
     const { access_token, error: oauthError } = tokenRes.data;
 
-    if (oauthError === 'authorization_pending') {
-      return res.json({ success: false, status: 'pending' });
-    }
+    if (oauthError === 'authorization_pending') return res.json({ success: false, status: 'pending' });
+    if (oauthError === 'slow_down') return res.json({ success: false, status: 'slow_down' });
+    if (oauthError === 'expired_token') return res.status(400).json({ error: 'Código expirado. Inicie novamente.' });
+    if (!access_token) return res.status(400).json({ error: 'Falha ao obter token' });
 
-    if (oauthError === 'slow_down') {
-      return res.json({ success: false, status: 'slow_down' });
-    }
-
-    if (oauthError === 'expired_token') {
-      return res.status(400).json({ error: 'Código expirado. Inicie novamente.' });
-    }
-
-    if (!access_token) {
-      return res.status(400).json({ error: 'Falha ao obter token' });
-    }
-
-    // Buscar dados do GitHub
     const githubUser = await githubRequest('/user', access_token);
 
-    // Salvar no banco
     const existing = await database.query('SELECT id FROM github_accounts WHERE user_id = ?', [userId]);
 
     if (existing.length) {
@@ -196,11 +191,7 @@ router.post('/device/poll', auth, async (req, res) => {
 
     console.log(`✅ GitHub CLI conectado: user ${userId} → @${githubUser.login}`);
 
-    res.json({
-      success: true,
-      status: 'connected',
-      github_username: githubUser.login
-    });
+    res.json({ success: true, status: 'connected', github_username: githubUser.login });
 
   } catch (error) {
     console.error('Erro device poll:', error);
@@ -210,7 +201,6 @@ router.post('/device/poll', auth, async (req, res) => {
 
 // ===== REPOSITÓRIOS =====
 
-// GET /api/github/repos - Listar repositórios do usuário
 router.get('/repos', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -218,9 +208,7 @@ router.get('/repos', auth, async (req, res) => {
     const accounts = await database.query('SELECT * FROM github_accounts WHERE user_id = ?', [userId]);
     if (!accounts.length) return res.status(404).json({ error: 'GitHub não conectado' });
 
-    const { access_token } = accounts[0];
-
-    const repos = await githubRequest('/user/repos?per_page=100&sort=updated', access_token);
+    const repos = await githubRequest('/user/repos?per_page=100&sort=updated', accounts[0].access_token);
 
     res.json({
       success: true,
@@ -241,7 +229,6 @@ router.get('/repos', auth, async (req, res) => {
   }
 });
 
-// GET /api/github/repos/:owner/:repo/branches - Listar branches
 router.get('/repos/:owner/:repo/branches', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -263,7 +250,7 @@ router.get('/repos/:owner/:repo/branches', auth, async (req, res) => {
   }
 });
 
-// POST /api/github/connect - Conectar repositório a um container
+// POST /api/github/connect
 router.post('/connect', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -273,20 +260,18 @@ router.post('/connect', auth, async (req, res) => {
       return res.status(400).json({ error: 'container_id, repo_url e repo_name são obrigatórios' });
     }
 
-    // Verificar se container pertence ao usuário
     const containers = await database.query(
       'SELECT * FROM containers WHERE id = ? AND user_id = ?',
       [container_id, userId]
     );
     if (!containers.length) return res.status(404).json({ error: 'Container não encontrado' });
 
-    // Buscar token do GitHub
     const accounts = await database.query('SELECT * FROM github_accounts WHERE user_id = ?', [userId]);
     if (!accounts.length) return res.status(404).json({ error: 'GitHub não conectado' });
 
     const { access_token } = accounts[0];
+    const containerType = containers[0].type;
 
-    // Registrar webhook no repositório
     const [owner, repo] = repo_name.split('/');
     const webhookUrl = `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/github/webhook`;
     const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || 'mozhost_secret';
@@ -297,27 +282,27 @@ router.post('/connect', auth, async (req, res) => {
         name: 'web',
         active: true,
         events: ['push'],
-        config: {
-          url: webhookUrl,
-          content_type: 'json',
-          secret: webhookSecret
-        }
+        config: { url: webhookUrl, content_type: 'json', secret: webhookSecret }
       });
       webhookId = String(webhook.id);
     } catch (webhookError) {
       console.error('Erro ao criar webhook:', webhookError.message);
     }
 
-    // Fazer git clone inicial no container
-    const container = docker.getContainer(containers[0].docker_container_id);
-
-    // Limpar pasta e clonar
     const repoUrlWithToken = repo_url.replace('https://', `https://oauth2:${access_token}@`);
-    await execInContainer(container, ['bash', '-c', 
-  `if [ -d "/app/code/.git" ]; then cd /app/code && git pull origin ${branch}; else rm -rf /app/code/* /app/code/.* 2>/dev/null; git clone -b ${branch} ${repoUrlWithToken} /app/code; fi`
-]);
 
-    // Salvar no banco
+    if (containerType === 'static') {
+      // Clonar no host direto na pasta html que está montada no container
+      cloneToHost(repoUrlWithToken, branch, container_id);
+    } else {
+      // Clonar dentro do container via execInContainer
+      const container = docker.getContainer(containers[0].docker_container_id);
+      await execInContainer(container, ['sh', '-c',
+        `rm -rf /app/code/* /app/code/.git 2>/dev/null; git clone -b ${branch} ${repoUrlWithToken} /tmp/mozhost_repo && cp -r /tmp/mozhost_repo/. /app/code/ && rm -rf /tmp/mozhost_repo`
+      ]);
+      await container.restart();
+    }
+
     const existing = await database.query(
       'SELECT id FROM github_repos WHERE container_id = ?',
       [container_id]
@@ -325,20 +310,17 @@ router.post('/connect', auth, async (req, res) => {
 
     if (existing.length) {
       await database.query(
-        'UPDATE github_repos SET repo_url = ?, repo_name = ?, branch = ?, webhook_id = ? WHERE container_id = ?',
+        'UPDATE github_repos SET repo_url = ?, repo_name = ?, branch = ?, webhook_id = ?, auto_deploy = 1 WHERE container_id = ?',
         [repo_url, repo_name, branch, webhookId, container_id]
       );
     } else {
       await database.query(
-        'INSERT INTO github_repos (user_id, container_id, repo_url, repo_name, branch, webhook_id) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO github_repos (user_id, container_id, repo_url, repo_name, branch, webhook_id, auto_deploy) VALUES (?, ?, ?, ?, ?, ?, 1)',
         [userId, container_id, repo_url, repo_name, branch, webhookId]
       );
     }
 
-    // Reiniciar container
-    await container.restart();
-
-    console.log(`✅ GitHub repo conectado: ${repo_name}@${branch} → container ${container_id}`);
+    console.log(`✅ GitHub repo conectado: ${repo_name}@${branch} → container ${container_id} (${containerType})`);
 
     res.json({
       success: true,
@@ -355,7 +337,6 @@ router.post('/connect', auth, async (req, res) => {
 
 // ===== WEBHOOK =====
 
-// POST /api/github/webhook - Receber push do GitHub
 router.post('/webhook', async (req, res) => {
   try {
     const payload = req.body;
@@ -368,17 +349,18 @@ router.post('/webhook', async (req, res) => {
 
     console.log(`📥 GitHub webhook: ${repoFullName}@${branch} - ${commitSha}`);
 
-    // Buscar repos conectados a esse repositório e branch
     const repos = await database.query(
-      'SELECT gr.*, c.docker_container_id FROM github_repos gr JOIN containers c ON gr.container_id = c.id WHERE gr.repo_name = ? AND gr.branch = ? AND gr.auto_deploy = 1',
+      `SELECT gr.*, c.docker_container_id, c.type as container_type
+       FROM github_repos gr
+       JOIN containers c ON gr.container_id = c.id
+       WHERE gr.repo_name = ? AND gr.branch = ? AND gr.auto_deploy = 1`,
       [repoFullName, branch]
     );
 
     if (!repos.length) return res.sendStatus(200);
 
-    res.sendStatus(200); // Responde logo pro GitHub não dar timeout
+    res.sendStatus(200);
 
-    // Processar deploys em background
     for (const repo of repos) {
       const deployLog = await database.query(
         'INSERT INTO deploy_logs (user_id, container_id, repo_id, commit_sha, commit_message, status, triggered_by) VALUES (?, ?, ?, ?, ?, "running", "push")',
@@ -387,26 +369,34 @@ router.post('/webhook', async (req, res) => {
       const deployId = deployLog.insertId;
 
       try {
-        // Buscar token do usuário
         const accounts = await database.query('SELECT access_token FROM github_accounts WHERE user_id = ?', [repo.user_id]);
         if (!accounts.length) throw new Error('GitHub token não encontrado');
 
         const { access_token } = accounts[0];
         const repoUrlWithToken = repo.repo_url.replace('https://', `https://oauth2:${access_token}@`);
 
-        const container = docker.getContainer(repo.docker_container_id);
+        let pullOutput;
 
-        // Git pull
-        const pullOutput = await execInContainer(container, ['bash', '-c', `cd /app/code && git pull origin ${repo.branch}`]);
+        if (repo.container_type === 'static') {
+          // Clone no host direto na pasta html montada no container
+          pullOutput = cloneToHost(repoUrlWithToken, repo.branch, repo.container_id);
+        } else {
+          const container = docker.getContainer(repo.docker_container_id);
 
-        // Instalar dependências se necessário
-        await execInContainer(container, ['bash', '-c', 'cd /app/code && [ -f package.json ] && npm install --production || true']);
-        await execInContainer(container, ['bash', '-c', 'cd /app/code && [ -f requirements.txt ] && pip install -r requirements.txt || true']);
+          pullOutput = await execInContainer(container, ['bash', '-c',
+            `cd /app/code && git pull origin ${repo.branch}`
+          ]);
 
-        // Reiniciar container
-        await container.restart();
+          await execInContainer(container, ['bash', '-c',
+            `cd /app/code && [ -f package.json ] && npm install --production || true`
+          ]);
+          await execInContainer(container, ['bash', '-c',
+            `cd /app/code && [ -f requirements.txt ] && pip install -r requirements.txt || true`
+          ]);
 
-        // Atualizar deploy log
+          await container.restart();
+        }
+
         await database.query(
           'UPDATE deploy_logs SET status = "success", log = ?, finished_at = NOW() WHERE id = ?',
           [pullOutput, deployId]
@@ -414,7 +404,7 @@ router.post('/webhook', async (req, res) => {
 
         await database.query('UPDATE github_repos SET last_deploy_at = NOW() WHERE id = ?', [repo.id]);
 
-        console.log(`✅ Deploy success: ${repoFullName}@${branch} → container ${repo.container_id}`);
+        console.log(`✅ Deploy success: ${repoFullName}@${branch} → container ${repo.container_id} (${repo.container_type})`);
 
       } catch (deployError) {
         console.error(`❌ Deploy failed: ${deployError.message}`);
@@ -431,7 +421,7 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-// GET /api/github/status - Verificar se GitHub está conectado
+// GET /api/github/status
 router.get('/status', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -451,7 +441,7 @@ router.get('/status', auth, async (req, res) => {
   }
 });
 
-// GET /api/github/deploys/:container_id - Histórico de deploys
+// GET /api/github/deploys/:container_id
 router.get('/deploys/:container_id', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -469,7 +459,7 @@ router.get('/deploys/:container_id', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/github/disconnect - Desconectar GitHub
+// DELETE /api/github/disconnect
 router.delete('/disconnect', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;

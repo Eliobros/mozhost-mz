@@ -4,16 +4,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Alert,
-  NativeSyntheticEvent,
-  TextInputSelectionChangeEventData,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { WebView } from 'react-native-webview';
 import { api } from '@/services/api';
 import { Colors } from '@/constants/Colors';
 
@@ -26,6 +23,106 @@ const getLanguageLabel = (filename: string): string => {
     sh: 'Shell', txt: 'Text',
   };
   return map[ext || ''] || 'Text';
+};
+
+const getCodeMirrorMode = (lang: string): string => {
+  const map: Record<string, string> = {
+    'JavaScript': 'javascript',
+    'TypeScript': 'javascript',
+    'HTML': 'xml',
+    'CSS': 'css',
+    'Python': 'python',
+    'Shell': 'shell',
+    'JSON': 'javascript',
+    'Markdown': 'markdown',
+    'YAML': 'yaml',
+  };
+  return map[lang] || 'text';
+};
+
+const getEditorHTML = (code: string, lang: string, fontSize: number) => {
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const mode = getCodeMirrorMode(lang);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #1e1e1e; overflow: hidden; }
+  .CodeMirror {
+    height: 100vh;
+    font-size: ${fontSize}px;
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+    background: #1e1e1e !important;
+  }
+  .CodeMirror-scroll { padding-bottom: 300px; }
+  .CodeMirror-gutters { background: #1e1e1e !important; border-right: 1px solid #333; }
+  .CodeMirror-linenumber { color: #555; }
+</style>
+</head>
+<body>
+<textarea id="editor">${escaped}</textarea>
+<script>
+  const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+    mode: '${mode}',
+    theme: 'dracula',
+    lineNumbers: true,
+    indentWithTabs: false,
+    tabSize: 2,
+    lineWrapping: true,
+    autofocus: true,
+  });
+
+  let changeTimeout;
+  editor.on('change', () => {
+    clearTimeout(changeTimeout);
+    changeTimeout = setTimeout(() => {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'change',
+        content: editor.getValue()
+      }));
+    }, 300);
+  });
+
+  editor.on('cursorActivity', () => {
+    const cursor = editor.getCursor();
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'cursor',
+      line: cursor.line + 1,
+      col: cursor.ch + 1
+    }));
+  });
+
+  window.setFontSize = (size) => {
+    document.querySelector('.CodeMirror').style.fontSize = size + 'px';
+    editor.refresh();
+  };
+
+  window.getValue = () => {
+    return editor.getValue();
+  };
+</script>
+</body>
+</html>`;
 };
 
 export default function EditorScreen() {
@@ -41,7 +138,7 @@ export default function EditorScreen() {
   const [cursorLine, setCursorLine] = useState(1);
   const [cursorCol, setCursorCol] = useState(1);
 
-  const inputRef = useRef<TextInput>(null);
+  const webViewRef = useRef<WebView>(null);
 
   const fileName = filePath?.split('/').pop() || 'file';
   const language = getLanguageLabel(fileName);
@@ -68,6 +165,12 @@ export default function EditorScreen() {
     loadFile();
   }, [loadFile]);
 
+  useEffect(() => {
+    if (!loading) {
+      webViewRef.current?.injectJavaScript(`window.setFontSize(${fontSize}); true;`);
+    }
+  }, [fontSize, loading]);
+
   const handleSave = async () => {
     if (!containerId || !filePath) return;
     setSaving(true);
@@ -80,14 +183,6 @@ export default function EditorScreen() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleSelectionChange = (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
-    const { start } = e.nativeEvent.selection;
-    const textBefore = content.substring(0, start);
-    const lines = textBefore.split('\n');
-    setCursorLine(lines.length);
-    setCursorCol((lines[lines.length - 1]?.length || 0) + 1);
   };
 
   const handleBack = () => {
@@ -103,6 +198,17 @@ export default function EditorScreen() {
     } else {
       router.back();
     }
+  };
+
+  const handleMessage = (e: any) => {
+    try {
+      const data = JSON.parse(e.nativeEvent.data);
+      if (data.type === 'change') setContent(data.content);
+      if (data.type === 'cursor') {
+        setCursorLine(data.line);
+        setCursorCol(data.col);
+      }
+    } catch {}
   };
 
   if (loading) {
@@ -185,28 +291,20 @@ export default function EditorScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Editor */}
-      <KeyboardAvoidingView
-        style={styles.editorWrapper}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <TextInput
-          ref={inputRef}
-          style={[styles.editor, { fontSize }]}
-          value={content}
-          onChangeText={setContent}
-          onSelectionChange={handleSelectionChange}
-          multiline
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="off"
-          spellCheck={false}
-          textAlignVertical="top"
-          placeholder="// Empty file"
-          placeholderTextColor="#555"
+      {/* Editor WebView */}
+      <View style={styles.editorWrapper}>
+        <WebView
+          ref={webViewRef}
+          source={{ html: getEditorHTML(content, language, fontSize) }}
+          onMessage={handleMessage}
+          scrollEnabled={true}
+          keyboardDisplayRequiresUserAction={false}
+          style={{ flex: 1, backgroundColor: '#1e1e1e' }}
+          originWhitelist={['*']}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
         />
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Status Bar */}
       <View style={styles.statusBar}>
@@ -245,10 +343,7 @@ export default function EditorScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1e1e1e',
-  },
+  container: { flex: 1, backgroundColor: '#1e1e1e' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -259,161 +354,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#e0e0e0',
-    fontFamily: 'monospace',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
-  },
-  saveBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  saveBtnActive: {
-    backgroundColor: Colors.primary,
-  },
+  headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '600', color: '#e0e0e0', fontFamily: 'monospace' },
+  headerSubtitle: { fontSize: 11, color: '#888', marginTop: 2 },
+  saveBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  saveBtnActive: { backgroundColor: Colors.primary },
   unsavedDot: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#f59e0b',
-    zIndex: 1,
+    position: 'absolute', top: 6, right: 6,
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#f59e0b', zIndex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#888',
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#e0e0e0',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  loadingText: { fontSize: 14, color: '#888' },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
+  errorTitle: { fontSize: 18, fontWeight: '700', color: '#e0e0e0' },
+  errorText: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
   retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 8,
-    marginTop: 8,
+    paddingHorizontal: 20, paddingVertical: 10,
+    borderRadius: 8, gap: 8, marginTop: 8,
   },
-  retryBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  editorWrapper: {
-    flex: 1,
-  },
-  editor: {
-    flex: 1,
-    color: '#d4d4d4',
-    fontFamily: 'monospace',
-    padding: 16,
-    lineHeight: 22,
-  },
+  retryBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  editorWrapper: { flex: 1 },
   statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#007acc',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
     paddingBottom: Platform.OS === 'ios' ? 24 : 6,
   },
-  statusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statusText: {
-    fontSize: 11,
-    color: '#fff',
-    fontFamily: 'monospace',
-  },
-  statusUnsaved: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statusUnsavedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#f59e0b',
-  },
-  statusUnsavedText: {
-    fontSize: 11,
-    color: '#fde68a',
-  },
-  statusRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statusLang: {
-    fontSize: 11,
-    color: '#fff',
-  },
-  fontControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
+  statusLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusText: { fontSize: 11, color: '#fff', fontFamily: 'monospace' },
+  statusUnsaved: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statusUnsavedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#f59e0b' },
+  statusUnsavedText: { fontSize: 11, color: '#fde68a' },
+  statusRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusLang: { fontSize: 11, color: '#fff' },
+  fontControls: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   fontBtn: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 4,
+    width: 24, height: 24, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 4,
   },
-  fontSizeText: {
-    fontSize: 11,
-    color: '#fff',
-    fontFamily: 'monospace',
-    minWidth: 18,
-    textAlign: 'center',
-  },
+  fontSizeText: { fontSize: 11, color: '#fff', fontFamily: 'monospace', minWidth: 18, textAlign: 'center' },
 });

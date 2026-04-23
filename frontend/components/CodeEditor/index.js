@@ -1,3 +1,5 @@
+"use client"
+
 // WebTerminal/index.js (ATUALIZADO - Com fix SSR)
 import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';

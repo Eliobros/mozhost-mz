@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
 import {
   Server,
@@ -32,10 +34,16 @@ const ContainersPage = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [storageAlerts, setStorageAlerts] = useState([]);
   const REQUIRED_COINS = 500;
+  const [statsMap, setStatsMap] = useState({});
 
-  useEffect(() => {
-    loadContainers();
-  }, []);
+ useEffect(() => {
+  loadContainers();
+  loadStats();
+  const interval = setInterval(loadStats, 30000);
+  return () => clearInterval(interval);
+}, []); 
+
+
 
   const loadContainers = async () => {
     try {
@@ -49,6 +57,24 @@ const ContainersPage = () => {
       setLoading(false);
     }
   };
+
+ const loadStats = async () => {
+  try {
+    const token = localStorage.getItem('mozhost_token');
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/containers/stats/all`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    if (data.stats) {
+      const map = {};
+      data.stats.forEach(s => { map[s.id] = s.stats; });
+      setStatsMap(map);
+    }
+  } catch (error) {
+    console.error('Erro ao carregar stats:', error);
+  }
+};
+
 
   const handleUpgradeStorage = async (containerId) => {
     const input = prompt('Adicionar quanto de armazenamento? (em MB, mínimo 100)');
@@ -333,6 +359,7 @@ const ContainersPage = () => {
               <ContainerCard
                 key={container.id}
                 container={container}
+		stats={statsMap[container.id]} 
                 actionLoading={actionLoading[container.id]}
                 onAction={handleContainerAction}
                 onDelete={() => handleDeleteContainer(container)}
