@@ -8,6 +8,8 @@ import {
   Plus,
   MessageCircle,
   Settings,
+  Info,
+  Globe,
   User,
   LogOut,
   Menu,
@@ -56,6 +58,8 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
     { name: 'Suporte',       href: '/support',    icon: MessageCircle, current: currentPage === 'suporte' },
     { name: 'Perfil',        href: '/profile',    icon: User,          current: currentPage === 'profile' },
     { name: 'Configurações', href: '/settings',   icon: Settings,      current: currentPage === 'settings' },
+    { name: 'Dominios',      href: '/domains',    icon: Globe,         current: currentPage === 'domains' },
+    { name: 'Sobre nós',	     href: '/about',      icon: Info,          current: currentPage === 'sobre' }
   ];
 
   return (
@@ -235,7 +239,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
 
             {/* Bottom bar */}
             <div className="mt-10 pt-6 border-t border-gray-800 text-sm text-gray-500">
-              © 2025 Eliobros Tech. Todos os direitos reservados.
+              © {new Date().getFullYear()}  Eliobros Tech. Todos os direitos reservados.
             </div>
           </div>
         </footer>

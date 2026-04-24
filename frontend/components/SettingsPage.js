@@ -297,10 +297,11 @@ const registerPasskey = async () => {
       }
     });
     const data  = await optionsRes.json();
+    console.log('RESPOSTA DO SERVIDOR:', JSON.stringify(data, null, 2)); // 👈 adiciona isto
 
     // 2. Criar credencial no dispositivo
     const { startRegistration } = await import('@simplewebauthn/browser');
-    const credential = await startRegistration(data.options);
+    const credential = await startRegistration({ optionsJSON: data.options });
 
     // 3. Verificar no servidor
     const verifyRes = await fetch('https://api.mozhost.shop/api/passkeys/register/finish', {

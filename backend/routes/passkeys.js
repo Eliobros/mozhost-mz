@@ -52,7 +52,7 @@ router.post('/register/start', auth, async (req, res) => {
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
       rpID: RP_ID,
-      userID: String(userId),
+      userID: Buffer.from(String(user.id)),
       userName: user.username,
       userDisplayName: user.username,
       attestationType: 'none',
@@ -105,20 +105,26 @@ router.post('/register/finish', auth, async (req, res) => {
       return res.status(400).json({ error: 'Verificação falhou' });
     }
 
-    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
 
-    // Guardar passkey no banco
-    await database.query(
-      `INSERT INTO passkeys (user_id, credential_id, public_key, counter, device_name, created_at)
-       VALUES (?, ?, ?, ?, ?, NOW())`,
-      [
-        userId,
-        Buffer.from(credentialID).toString('base64url'),
-        Buffer.from(credentialPublicKey).toString('base64url'),
-        counter,
-        deviceName || 'Dispositivo',
-      ]
-    );
+    const { credential: cred } = verification.registrationInfo;
+const counter = cred.counter; 
+
+    console.log('registrationInfo:', JSON.stringify(verification.registrationInfo, null, 2));
+console.log('cred:', cred);
+console.log('counter:', counter);
+
+
+await database.query(
+  `INSERT INTO passkeys (user_id, credential_id, public_key, counter, device_name, created_at)
+   VALUES (?, ?, ?, ?, ?, NOW())`,
+  [
+    userId,
+    Buffer.from(cred.id).toString('base64url'),
+    Buffer.from(cred.publicKey).toString('base64url'),
+    counter,
+    deviceName || 'Dispositivo',
+  ]
+);
 
     // Limpar challenge
     challengeStore.delete(`reg_${userId}`);
