@@ -32,12 +32,9 @@ const LoginPage = () => {
   // Handle OAuth callback
   useEffect(() => {
     const hash = window.location.hash;
-    if (hash.startsWith('#oauth-callback')) {
-      const params = new URLSearchParams(hash.replace('#oauth-callback?', ''));
-      const token = params.get('token');
-      const needsProfile = params.get('needsProfile') === 'true';
-      const provider = params.get('provider');
+    const search = window.location.search;
 
+    const handleToken = (token, needsProfile, provider) => {
       if (token) {
         localStorage.setItem('mozhost_token', token);
         if (needsProfile) {
@@ -51,15 +48,32 @@ const LoginPage = () => {
             headers: { 'Authorization': `Bearer ${token}` }
           }).then(r => r.json()).then(data => {
             if (data.user) localStorage.setItem('mozhost_user', JSON.stringify(data.user));
-            window.location.href = '/#dashboard';
-            
+            window.location.href = '/dashboard';
           }).catch(() => {
-            window.location.href = '/#dashboard';
-            
+            window.location.href = '/dashboard';
           });
         }
       }
+    };
+
+    // Support both fragment-style callbacks and querystring callbacks
+    if (search.includes('token=')) {
+      const params = new URLSearchParams(search);
+      const token = params.get('token');
+      const needsProfile = params.get('needsProfile') === 'true';
+      const provider = params.get('provider');
+      handleToken(token, needsProfile, provider);
+      // remove query params from URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    } else if (hash.startsWith('#oauth-callback')) {
+      const params = new URLSearchParams(hash.replace('#oauth-callback?', ''));
+      const token = params.get('token');
+      const needsProfile = params.get('needsProfile') === 'true';
+      const provider = params.get('provider');
+      handleToken(token, needsProfile, provider);
     }
+
     if (hash.includes('error=google_failed') || hash.includes('error=github_failed')) {
       setError('Falha na autenticação. Tente novamente.');
       window.location.href = '/login';
@@ -86,7 +100,7 @@ const LoginPage = () => {
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
         setSuccess('Perfil completo! Redirecionando... 🎉');
         setTimeout(() => {
-          window.location.href = '/#dashboard';
+          window.location.href = '/dashboard';
           
         }, 800);
       } else {
@@ -196,7 +210,7 @@ const LoginPage = () => {
 
         // ISSO VAI RESOLVER
 setTimeout(() => {
-  window.location.href = '/#dashboard'; 
+  window.location.href = '/dashboard'; 
 }, 1000);
 
 
@@ -291,7 +305,7 @@ setTimeout(() => {
         const methodName = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'Email';
         setSuccess(`${methodName} verificado com sucesso${bonus}! Redirecionando...`);
         setTimeout(() => {
-          window.location.href = '/#dashboard';
+          window.location.href = '/dashboard';
          // window.location.reload();
         }, 800);
       } else {
