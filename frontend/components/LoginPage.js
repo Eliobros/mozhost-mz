@@ -51,18 +51,18 @@ const LoginPage = () => {
             headers: { 'Authorization': `Bearer ${token}` }
           }).then(r => r.json()).then(data => {
             if (data.user) localStorage.setItem('mozhost_user', JSON.stringify(data.user));
-            window.location.hash = 'dashboard';
-            window.location.reload();
+            window.location.href = '/#dashboard';
+            
           }).catch(() => {
-            window.location.hash = 'dashboard';
-            window.location.reload();
+            window.location.href = '/#dashboard';
+            
           });
         }
       }
     }
     if (hash.includes('error=google_failed') || hash.includes('error=github_failed')) {
       setError('Falha na autenticação. Tente novamente.');
-      window.location.hash = '';
+      window.location.href = '/login';
     }
   }, []);
 
@@ -86,8 +86,8 @@ const LoginPage = () => {
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
         setSuccess('Perfil completo! Redirecionando... 🎉');
         setTimeout(() => {
-          window.location.hash = 'dashboard';
-          window.location.reload();
+          window.location.href = '/#dashboard';
+          
         }, 800);
       } else {
         setError(data.message || data.error || 'Erro ao completar perfil');
@@ -196,7 +196,7 @@ const LoginPage = () => {
 
         // ISSO VAI RESOLVER
 setTimeout(() => {
-  window.location.href = '/dashboard'; 
+  window.location.href = '/#dashboard'; 
 }, 1000);
 
 
@@ -291,8 +291,8 @@ setTimeout(() => {
         const methodName = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'Email';
         setSuccess(`${methodName} verificado com sucesso${bonus}! Redirecionando...`);
         setTimeout(() => {
-          window.location.hash = 'dashboard';
-          window.location.reload();
+          window.location.href = '/#dashboard';
+         // window.location.reload();
         }, 800);
       } else {
         setError(data.error || 'Código inválido ou expirado');
