@@ -1,4 +1,4 @@
-appId: mz.co.mozhost
+appId: mz.eliobros.mozhost
 productName: MozHost
 copyright: Copyright © 2026 MozHost
 directories:
@@ -11,3 +11,12 @@ files:
       - main
       - renderer/out
 publish: null
+
+win:
+  target:
+    - nsis
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

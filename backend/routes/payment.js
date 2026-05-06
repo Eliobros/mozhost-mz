@@ -710,4 +710,45 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================
+// POST /api/payment/internal/credit-coins - Crédito interno via Alauda
+// ============================================
+router.post('/internal/credit-coins', async (req, res) => {
+  try {
+    const key = req.headers['x-internal-key']
+    
+    if (!key || key !== process.env.INTERNAL_SECRET_KEY) {
+      return res.status(401).json({ error: 'Não autorizado' })
+    }
+
+    const { userId, coins } = req.body
+
+    if (!userId || !coins) {
+      return res.status(400).json({ error: 'userId e coins são obrigatórios' })
+    }
+
+    // Credita coins ao utilizador
+    await database.query(
+      'UPDATE users SET coins = coins + ? WHERE id = ?',
+      [coins, userId]
+    )
+
+    // Regista o pagamento como completed
+    await database.query(
+      `UPDATE payments SET status = 'completed', completed_at = NOW() 
+       WHERE user_id = ? AND status = 'pending' 
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    )
+
+    console.log(`✅ ${coins} coins creditados ao utilizador ${userId} via Alauda`)
+
+    res.json({ success: true, userId, coins })
+
+  } catch (error) {
+    console.error('❌ Erro ao creditar coins:', error)
+    res.status(500).json({ error: 'Erro ao creditar coins' })
+  }
+})
+
 module.exports = router;

@@ -14,7 +14,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const [mercadoPagoUrl, setMercadoPagoUrl] = useState('');
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
-  const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
+  const ALAUDA_API_URL = 'https://alauda-api.mozhost.shop';
 
   // Configuração de moedas
   const currencies = {
@@ -197,7 +197,7 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       if (paymentMethod === 'mercadopago') {
         await handleMercadoPagoPayment(token, userId);
       } else {
-        await handleMobilePayment(token, userId);
+        await handleMobilePayment(token, userData);
       }
 
     } catch (err) {
@@ -258,20 +258,33 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     setLoading(false);
   };
 
-  const handleMobilePayment = async (token, userId) => {
-    const response = await fetch(`${ALAUDA_API_URL}/api/payment/${paymentMethod}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || 'sua_api_key'}`,
-        'Content-Type': 'application/json',
-	 'X-API-Key': process.env.NEXT_PUBLIC_MOZHOST_API_KEY || 'sua_api_key_aqui'
-      },
-      body: JSON.stringify({
-        valor: amount,
-        numero_celular: phoneNumber,
-        usuario_id: userId?.toString() || 'guest'
-      })
-    });
+  const handleMobilePayment = async (token, userData) => {
+  console.log('👤 userData:', JSON.stringify(userData)) // 
+  // Se for M-Pesa usa API direta
+  const url = paymentMethod === 'mpesa'
+  ? `${ALAUDA_API_URL}/api/payment/mpesa/direct`  // ← ALAUDA + sem 's'
+  : `${ALAUDA_API_URL}/api/payment/${paymentMethod}`
+
+const headers = paymentMethod === 'mpesa'
+  ? {
+      'Authorization': `Bearer ${token}`,
+      'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  : {
+      'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+
+const response = await fetch(url, {
+  method: 'POST',
+  headers: headers,
+  body: JSON.stringify({
+    valor: amount,
+    numero_celular: phoneNumber,
+    usuario_id: userData.email || userData.username || userData.phone || userData.celular || String(userData.id)
+  })
+  })
 
     const data = await response.json();
 
@@ -282,10 +295,10 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     setPaymentResult(data);
 
     // ADICIONA AQUI:
-const transactionId = data.data?.payment?.transaction_id;
-if (transactionId) {
-  setPaymentId(transactionId);
-  console.log('💾 Transaction ID salvo:', transactionId);
+const transactionRef = data.data?.payment?.transaction_reference;
+if (transactionRef) {
+  setPaymentId(transactionRef);
+  console.log('💾 Transaction Ref salvo:', transactionRef);
 }
 
     await fetch(`${API_URL}/api/payment/initiate`, {
@@ -306,43 +319,61 @@ if (transactionId) {
       })
     });
 
-    setTimeout(() => checkPaymentStatus(), 3000);
+    const ref = data.data?.payment?.transaction_reference;
+setTimeout(() => checkPaymentStatus(ref), 3000);
   };
 
-  const checkPaymentStatus = async () => {
-    const maxAttempts = 60;
-    let attempts = 0;
+  const checkPaymentStatus = async (transactionRef) => {
+  if (!transactionRef) {
+    setError('Referência não encontrada');
+    setStep('error');
+    setLoading(false);
+    return;
+  }
 
-    const interval = setInterval(async () => {
-      attempts++;
+  let attempts = 0;
+  const maxAttempts = 36; // 3 minutos
 
-      try {
-        const token = localStorage.getItem('mozhost_token');
+  const interval = setInterval(async () => {
+  attempts++;
+  try {
+    const res = await fetch(
+      `${ALAUDA_API_URL}/api/payment/mpesa/check/${transactionRef}`,
+      { headers: { 'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY } }
+    );
 
-        const response = await fetch(`${API_URL}/api/payment/check-status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+    // Se der 500, ignora e continua tentando
+    if (!res.ok) {
+      console.log(`[Poll #${attempts}] Erro temporário, continuando...`);
+      return;
+    }
 
-        const data = await response.json();
+    const json = await res.json();
+    const code = json?.data?.output_ResponseCode;
 
-        if (data.status === 'completed') {
-          clearInterval(interval);
-          setStep('success');
-          setLoading(false);
-          setTimeout(() => {
-            onSuccess(data.coinsAdded);
-          }, 2000);
-        } else if (data.status === 'failed' || attempts >= maxAttempts) {
-          clearInterval(interval);
-          setError('Pagamento expirou ou foi cancelado. Tente novamente.');
-          setStep('error');
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Erro ao verificar status:', err);
-      }
-    }, 5000);
-  };
+    console.log(`[Poll #${attempts}] ResponseCode:`, code);
+
+    if (json.data?.status === 'completed') {
+      clearInterval(interval);
+      setStep('success');
+      setLoading(false);
+      setTimeout(() => onSuccess(getCoinsFromAmount(amount)), 2000);
+    } else if (['INS-1', 'INS-9', 'INS-10'].includes(code)) {
+      clearInterval(interval);
+      setError('Pagamento cancelado ou recusado.');
+      setStep('error');
+      setLoading(false);
+    } else if (attempts >= maxAttempts) {
+      clearInterval(interval);
+      setError('Tempo esgotado. Tenta novamente.');
+      setStep('error');
+      setLoading(false);
+    }
+  } catch (err) {
+    console.log(`[Poll #${attempts}] Catch error, continuando...`);
+  }
+}, 5000);
+};
 
   const downloadReceipt = async () => {
   try {

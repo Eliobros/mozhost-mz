@@ -53,16 +53,55 @@ router.post('/register', [
 
     // Verificar se usuário já existe
     const existingUser = await database.query(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
-      [username, email]
+  'SELECT id, username, email, email_verified, whatsapp_verified, sms_verified, preferred_verification_method FROM users WHERE username = ? OR email = ?',
+  [username, email]
+);
+
+if (existingUser.length > 0) {
+  const user = existingUser[0];
+  const isVerified = user.email_verified || user.whatsapp_verified || user.sms_verified;
+
+  // Se existe mas não verificou, reenviar código e retornar token
+  if (!isVerified && user.email === email) {
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    if (existingUser.length > 0) {
-      return res.status(409).json({
-        error: 'User already exists',
-        message: 'Username or email already taken'
-      });
-    }
+    // Reenviar código
+    const code = generateCode(6);
+    const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
+    await database.query(
+      'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
+      [code, expiresAt, user.id]
+    );
+    await sendEmail({
+      toEmail: user.email,
+      toName: user.username,
+      subject: 'MozHost - Novo código de verificação',
+      htmlContent: `<h2>Novo código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
+      textContent: `Seu novo código: ${code} (válido por 15 minutos)`
+    });
+
+    return res.status(200).json({
+      message: 'Account already exists but not verified. New code sent.',
+      redirect: 'verify',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        preferredVerificationMethod: user.preferred_verification_method
+      },
+      token
+    });
+  }
+
+  return res.status(409).json({
+    error: 'User already exists',
+    message: 'Username or email already taken'
+  });
+}
 
     // Hash da senha
     const saltRounds = 12;
@@ -124,7 +163,7 @@ router.post('/register', [
           [code, expiresAt, userId]
         );
 
-        if (process.env.BREVO_API_KEY) {
+        if (process.env.RESEND_API_KEY) {
           await sendEmail({
             toEmail: email,
             toName: username,
@@ -177,7 +216,6 @@ router.post('/register', [
 // ============================================
 // OAUTH - Google & GitHub Login
 // ============================================
-
 // Google OAuth
 router.get('/google', (req, res, next) => {
   const state = req.query.redirect_uri ? Buffer.from(JSON.stringify({ redirect_uri: req.query.redirect_uri })).toString('base64') : undefined;
@@ -189,9 +227,8 @@ router.get('/google', (req, res, next) => {
 });
 
 router.get('/google/callback', (req, res, next) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
   
-  // Check if this is a mobile OAuth flow
   let mobileRedirectUri = null;
   if (req.query.state) {
     try {
@@ -205,7 +242,7 @@ router.get('/google/callback', (req, res, next) => {
       if (err || !user) {
         console.error('Google OAuth error:', err || info);
         if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=google_failed`);
-        return res.redirect(`${frontendUrl}/#login?error=google_failed`);
+        return res.redirect(`${frontendUrl}/login#error=google_failed`);
       }
 
       const jwt = require('jsonwebtoken');
@@ -215,23 +252,21 @@ router.get('/google/callback', (req, res, next) => {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
-      // Bonus for first verification (OAuth users get email verified automatically)
       if (!user.verification_bonus_awarded) {
         await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
       }
 
       const needsProfile = !user.profile_completed;
 
-      // Mobile app: redirect back to app with deep link
       if (mobileRedirectUri) {
         return res.redirect(`${mobileRedirectUri}?token=${token}&needsProfile=${needsProfile}&provider=google`);
       }
       
-      res.redirect(`${frontendUrl}/#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=google`);
+      res.redirect(`${frontendUrl}/login#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=google`);
     } catch (error) {
       console.error('Google callback error:', error);
       if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=google_failed`);
-      res.redirect(`${frontendUrl}/#login?error=google_failed`);
+      res.redirect(`${frontendUrl}/login#error=google_failed`);
     }
   })(req, res, next);
 });
@@ -247,9 +282,8 @@ router.get('/github', (req, res, next) => {
 });
 
 router.get('/github/callback', (req, res, next) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
 
-  // Check if this is a mobile OAuth flow
   let mobileRedirectUri = null;
   if (req.query.state) {
     try {
@@ -263,7 +297,7 @@ router.get('/github/callback', (req, res, next) => {
       if (err || !user) {
         console.error('GitHub OAuth error:', err || info);
         if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=github_failed`);
-        return res.redirect(`${frontendUrl}/#login?error=github_failed`);
+        return res.redirect(`${frontendUrl}/login#error=github_failed`);
       }
 
       const jwt = require('jsonwebtoken');
@@ -279,20 +313,18 @@ router.get('/github/callback', (req, res, next) => {
 
       const needsProfile = !user.profile_completed;
 
-      // Mobile app: redirect back to app with deep link
       if (mobileRedirectUri) {
         return res.redirect(`${mobileRedirectUri}?token=${token}&needsProfile=${needsProfile}&provider=github`);
       }
       
-      res.redirect(`${frontendUrl}/#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=github`);
+      res.redirect(`${frontendUrl}/login#oauth-callback?token=${token}&needsProfile=${needsProfile}&provider=github`);
     } catch (error) {
       console.error('GitHub callback error:', error);
       if (mobileRedirectUri) return res.redirect(`${mobileRedirectUri}?error=github_failed`);
-      res.redirect(`${frontendUrl}/#login?error=github_failed`);
+      res.redirect(`${frontendUrl}/login#error=github_failed`);
     }
   })(req, res, next);
 });
-
 // Complete profile after OAuth signup
 router.post('/complete-profile', [
   body('username')
@@ -1512,6 +1544,93 @@ router.post('/whatsapp-token', async (req, res) => {
   }
 });
 
+
+// ============================================
+// CLI DEVICE FLOW - Auth para CLI via OAuth
+// ============================================
+
+// POST /api/auth/cli-device - Gerar token temporário
+router.post('/cli-device', async (req, res) => {
+  try {
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+    await database.query(
+      'INSERT INTO cli_auth_tokens (token, expires_at, used) VALUES (?, ?, 0)',
+      [token, expiresAt]
+    );
+
+    res.json({
+      token,
+      url: `${process.env.FRONTEND_URL}/cli-auth?token=${token}`,
+      expiresIn: 600
+    });
+  } catch (error) {
+    console.error('CLI device error:', error);
+    res.status(500).json({ error: 'Failed to generate CLI auth token' });
+  }
+});
+
+// GET /api/auth/cli-poll/:token - CLI faz polling aqui
+router.get('/cli-poll/:token', async (req, res) => {
+  try {
+    const rows = await database.query(
+      'SELECT * FROM cli_auth_tokens WHERE token = ? AND expires_at > NOW() AND used = 0',
+      [req.params.token]
+    );
+
+    if (!rows.length) return res.status(404).json({ status: 'expired' });
+    if (!rows[0].user_id) return res.json({ status: 'pending' });
+
+    const users = await database.query('SELECT * FROM users WHERE id = ?', [rows[0].user_id]);
+    if (!users.length) return res.status(404).json({ status: 'expired' });
+
+    const user = users[0];
+    const jwtToken = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    await database.query(
+      'UPDATE cli_auth_tokens SET used = 1 WHERE token = ?',
+      [req.params.token]
+    );
+
+    res.json({
+      status: 'authorized',
+      token: jwtToken,
+      username: user.username
+    });
+  } catch (error) {
+    console.error('CLI poll error:', error);
+    res.status(500).json({ error: 'Failed to poll CLI auth' });
+  }
+});
+
+// PUT /api/auth/cli-device/:token - Frontend chama após OAuth
+router.put('/cli-device/:token', authMiddleware, async (req, res) => {
+  try {
+    const rows = await database.query(
+      'SELECT * FROM cli_auth_tokens WHERE token = ? AND expires_at > NOW() AND used = 0',
+      [req.params.token]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Token inválido ou expirado' });
+    }
+
+    await database.query(
+      'UPDATE cli_auth_tokens SET user_id = ? WHERE token = ?',
+      [req.user.userId, req.params.token]
+    );
+
+    res.json({ message: 'Authorized successfully' });
+  } catch (error) {
+    console.error('CLI device authorize error:', error);
+    res.status(500).json({ error: 'Failed to authorize CLI token' });
+  }
+});
 
 // ============================================
 // STARTUP COMMANDS - Comandos personalizados

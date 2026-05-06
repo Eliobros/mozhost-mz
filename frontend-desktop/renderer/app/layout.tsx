@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import TawkToChat from '@/components/TawkToChat'
 
-const geistSans = Geist({
+const geistSans = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+const geistMono = Inter({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "eliobros tech",
   ],
   alternates: {
-    canonical: "https://mozhost.topazioverse.com.br",
+    canonical: "https://mozhost.shop",
   },
   robots: {
     index: true,
@@ -48,7 +48,7 @@ export default function RootLayout({
     <html lang="pt">
       <head>
         {/* Canonical */}
-        <link rel="canonical" href="https://mozhost.topazioverse.com.br" />
+        <link rel="canonical" href="https://mozhost.shop" />
 
         {/* Viewport */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -58,11 +58,11 @@ export default function RootLayout({
         <meta property="og:description" content={description} />
         <meta
           property="og:image"
-          content="https://mozhost.vercel.app/mozhost.png"
+          content="https://mozhost.shop/mozhost.png"
         />
         <meta
           property="og:url"
-          content="https://mozhost.topazioverse.com.br"
+          content="https://mozhost.shop"
         />
         <meta property="og:type" content="website" />
 
@@ -72,7 +72,7 @@ export default function RootLayout({
         <meta name="twitter:description" content={description} />
         <meta
           name="twitter:image"
-          content="https://mozhost.vercel.app/mozhost.png"
+          content="https://mozhost.shop/mozhost.png"
         />
 
         {/* Google Verification */}
@@ -95,16 +95,16 @@ export default function RootLayout({
   "@context": "https://schema.org",
   "@type": "WebHostingService",
   "name": "MozHost",
-  "url": "https://mozhost.topazioverse.com.br",
-  "image": "https://mozhost.vercel.app/mozhost.png",
-  "logo": "https://mozhost.vercel.app/mozhost.png",
+  "url": "https://mozhost.shop",
+  "image": "https://mozhost.shop/mozhost.png",
+  "logo": "https://mozhost.shop/mozhost.png",
   "description": "MozHost é uma plataforma moçambicana especializada em hospedagem de Bots e APIs, desenvolvida pela empresa Eliobros Tech.",
   "serviceType": ["Hospedagem de Bots", "Hospedagem de APIs", "Serviços Cloud"],
   "provider": {
     "@type": "Organization",
     "name": "Eliobros Tech",
     "url": "https://eliobrostech.com",
-    "logo": "https://mozhost.vercel.app/mozhost.png",
+    "logo": "https://mozhost.shop/mozhost.png",
     "address": {
       "@type": "PostalAddress",
       "addressCountry": "MZ"
@@ -129,7 +129,7 @@ export default function RootLayout({
   "@context": "https://schema.org",
   "@type": "OfferCatalog",
   "name": "Planos de Hospedagem MozHost",
-  "url": "https://mozhost.topazioverse.com.br",
+  "url": "https://mozhost.shop",
   "itemListElement": [
     {
       "@type": "Offer",
@@ -220,7 +220,7 @@ export default function RootLayout({
   "@type": "Organization",
   "name": "Eliobros Tech",
   "url": "https://eliobrostech.com",
-  "logo": "https://mozhost.vercel.app/mozhost.png",
+  "logo": "https://mozhost.shop/mozhost.png",
   "description": "Empresa moçambicana de tecnologia especializada em desenvolvimento de softwares, hospedagem e soluções inovadoras.",
   "address": {
     "@type": "PostalAddress",
@@ -238,3 +238,4 @@ export default function RootLayout({
     </html>
   );
 }
+

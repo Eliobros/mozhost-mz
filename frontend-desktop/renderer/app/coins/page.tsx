@@ -31,7 +31,7 @@ const CoinsPurchase = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [phoneError, setPhoneError] = useState('');
 
@@ -66,7 +66,7 @@ const CoinsPurchase = () => {
   };
 
   // Validar número em tempo real
-  const handlePhoneChange = (value) => {
+  const handlePhoneChange = (value: string) => {
     // Remover espaços e caracteres não numéricos
     const cleanNumber = value.replace(/[^0-9]/g, '');
     setPhoneNumber(cleanNumber);

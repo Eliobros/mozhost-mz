@@ -62,11 +62,13 @@ const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGINS || '');
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
+  console.log('🔍 Origin recebido:', JSON.stringify(origin));
+  console.log('🔍 Allowed:', ALLOWED_ORIGINS);
+  if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+    return callback(null, true);
+  }
+  return callback(new Error('Not allowed by CORS'));
+},
     methods: ["GET", "POST"],
     credentials: true
   }
