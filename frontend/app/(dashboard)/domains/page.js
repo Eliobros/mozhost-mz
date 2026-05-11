@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 const API = 'https://api.mozhost.shop';
-const ALAUDA_API_URL = 'https://alauda-api.topazioverse.com.br';
+const ALAUDA_API_URL = 'https://alauda-api.mozhost.shop';
 
 // ===== HELPERS =====
 const hdrs = () => {
@@ -20,8 +20,34 @@ const hdrs = () => {
 
 const cpy = (t) => { navigator.clipboard.writeText(t); };
 const DNS_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV', 'CAA', 'ALIAS'];
-const POPULAR_TLDS = ['.com', '.net', '.org', '.io', '.dev', '.app', '.co', '.mz', '.com.br', '.xyz', '.tech', '.online', '.site', '.store'];
+const POPULAR_TLDS = ['.com', '.net', '.org', '.io', '.dev', '.app', '.co', '.mz', '.com.br', '.xyz', '.tech', '.online', '.site', '.store', '.shop'];
 
+// ===== CURRENCY HELPERS =====
+const DEFAULT_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_MT || '64') || 64;
+
+function formatMZN(usd, rate) {
+  const mzn = Math.ceil(parseFloat(usd) * rate);
+  return new Intl.NumberFormat('pt-MZ', {
+    style: 'currency',
+    currency: 'MZN',
+    maximumFractionDigits: 0,
+  }).format(mzn);
+}
+
+function useExchangeRate() {
+  const [rate, setRate] = useState(DEFAULT_RATE);
+
+  useEffect(() => {
+    fetch('/api/exchange-rate')
+      .then(r => r.json())
+      .then(d => { if (d.rate) setRate(d.rate); })
+      .catch(() => {});
+  }, []);
+
+  return rate;
+}
+
+// ===== STATUS CONFIG =====
 const stCfg = (s) => ({
   pending: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-50 border-yellow-200', text: 'Pendente', dot: 'bg-yellow-400' },
   dns_configured: { icon: RefreshCw, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200', text: 'DNS OK', dot: 'bg-blue-400' },
@@ -97,6 +123,8 @@ function ConfirmModal({ title, message, confirmText = 'Confirmar', cancelText = 
 
 // ===== MAIN PAGE =====
 export default function DomainsPage() {
+  const exchangeRate = useExchangeRate(); // ← taxa USD→MZN
+
   const [activeTab, setActiveTab] = useState('mydomains');
   const [domains, setDomains] = useState([]);
   const [containers, setContainers] = useState([]);
@@ -150,7 +178,7 @@ export default function DomainsPage() {
   const [domainStatusFilter, setDomainStatusFilter] = useState('all');
 
   // Pagamento de domínios
-  const [payStep, setPayStep] = useState(1); // 1 = confirmar domínio, 2 = pagamento
+  const [payStep, setPayStep] = useState(1);
   const [payMethod, setPayMethod] = useState('mpesa');
   const [payPhone, setPayPhone] = useState('');
   const [payPhoneError, setPayPhoneError] = useState('');
@@ -240,7 +268,6 @@ export default function DomainsPage() {
     setSearching(true);
     setSearchResults([]);
 
-    // Se o usuário digitou com extensão, pesquisar só esse
     const hasTld = raw.includes('.');
     const domainsToCheck = hasTld
       ? [raw]
@@ -305,9 +332,7 @@ export default function DomainsPage() {
     setPayProcessing(true);
     try {
       let transactionId = null;
-      let paymentUrl = null;
 
-      // === STEP 1: Para M-Pesa/e-Mola, chamar Alauda DIRETO do frontend (mesmo fluxo do coins) ===
       if (payMethod === 'mpesa' || payMethod === 'emola') {
         const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
         const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
@@ -317,7 +342,7 @@ export default function DomainsPage() {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            valor: Math.ceil(parseFloat(cost) * (parseFloat(process.env.NEXT_PUBLIC_USD_TO_MT) || 63)).toString(),
+            valor: Math.ceil(parseFloat(cost) * exchangeRate).toString(),
             numero_celular: payPhone,
             usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
           })
@@ -332,7 +357,6 @@ export default function DomainsPage() {
         transactionId = payData.payment?.transaction_id || payData.transaction_id;
       }
 
-      // === STEP 2: Registrar o pagamento no backend ===
       const body = { domain, action, cost, method: payMethod, years: years || 1 };
       if (payMethod === 'mpesa' || payMethod === 'emola') body.phone = payPhone;
       if (transactionId) body.transaction_id = transactionId;
@@ -347,7 +371,6 @@ export default function DomainsPage() {
 
         if (data.payment_url) window.open(data.payment_url, '_blank');
 
-        // Polling do status
         if (data.payment_id) {
           const interval = setInterval(async () => {
             try {
@@ -528,6 +551,11 @@ export default function DomainsPage() {
                 <div className="text-2xl font-bold">{registeredDomains.length}</div>
                 <div className="text-blue-200 text-xs">Registrados</div>
               </div>
+              {/* Taxa de câmbio no header */}
+              <div className="text-center border-l border-white/20 pl-6">
+                <div className="text-sm font-bold">1 USD = {exchangeRate.toFixed(0)} MT</div>
+                <div className="text-blue-200 text-xs">Taxa actual</div>
+              </div>
             </div>
           </div>
         </div>
@@ -575,7 +603,6 @@ export default function DomainsPage() {
         {/* ======== TAB: MEUS DOMÍNIOS ======== */}
         {activeTab === 'mydomains' && (
           <div>
-            {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2 flex-wrap">
                 <select
@@ -667,7 +694,6 @@ export default function DomainsPage() {
                           </div>
                         </div>
 
-                        {/* Status cards */}
                         {d.status === 'pending' && (
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
                             <p className="font-semibold text-yellow-900 mb-2 flex items-center gap-2 text-sm">
@@ -806,7 +832,10 @@ export default function DomainsPage() {
                               <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">Premium</span>
                             )}
                             {result.renewal_price && (
-                              <span className="text-xs text-gray-400">Renovação: ${result.renewal_price}/ano</span>
+                              <span className="text-xs text-gray-400">
+                                {/* ← RENOVAÇÃO EM MZN */}
+                                Renovação: {formatMZN(result.renewal_price, exchangeRate)}/ano
+                              </span>
                             )}
                           </div>
                         </div>
@@ -814,10 +843,16 @@ export default function DomainsPage() {
                       <div className="flex items-center gap-3 w-full sm:w-auto">
                         {result.available ? (
                           <>
+                            {/* ← PREÇO EM MZN */}
                             <div className="text-right">
-                              <div className="text-xl font-bold text-gray-900">${result.price}</div>
+                              <div className="text-xl font-bold text-gray-900">
+                                {formatMZN(result.price, exchangeRate)}
+                              </div>
+                              <div className="text-xs text-gray-400">~${result.price} USD</div>
                               {result.regular_price && result.regular_price !== result.price && (
-                                <div className="text-xs text-gray-400 line-through">${result.regular_price}</div>
+                                <div className="text-xs text-gray-400 line-through">
+                                  {formatMZN(result.regular_price, exchangeRate)}
+                                </div>
                               )}
                             </div>
                             <button onClick={() => setShowBuyModal(result)}
@@ -901,7 +936,6 @@ export default function DomainsPage() {
                             </div>
                           </div>
 
-                          {/* Expanded actions */}
                           {isExpanded && (
                             <div className="mt-3 pt-3 border-t flex flex-wrap gap-2">
                               <button onClick={() => { setActiveTab('dns'); loadDns(domain); }}
@@ -933,7 +967,6 @@ export default function DomainsPage() {
         {/* ======== TAB: DNS ======== */}
         {activeTab === 'dns' && (
           <div className="space-y-4">
-            {/* Domain selector */}
             <div className="bg-white rounded-xl shadow-sm p-5 sm:p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-600" /> Gestão de Registros DNS
@@ -954,7 +987,6 @@ export default function DomainsPage() {
               </div>
             </div>
 
-            {/* DNS Records */}
             {selectedDnsDomain && (
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1039,7 +1071,6 @@ export default function DomainsPage() {
                   </div>
                 )}
 
-                {/* Quick add templates */}
                 {selectedDnsDomain && !loadingDns && (
                   <div className="px-5 py-3 bg-gray-50 border-t">
                     <p className="text-xs text-gray-500 mb-2">Adicionar rapidamente:</p>
@@ -1064,7 +1095,6 @@ export default function DomainsPage() {
               </div>
             )}
 
-            {/* DNS Form Modal */}
             {showDnsForm && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
                 <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
@@ -1205,7 +1235,6 @@ export default function DomainsPage() {
                       </p>
                     </div>
 
-                    {/* Quick presets */}
                     {editingNs && (
                       <div className="mt-4 pt-4 border-t">
                         <p className="text-xs text-gray-500 mb-2">Presets comuns:</p>
@@ -1277,7 +1306,7 @@ export default function DomainsPage() {
           </div>
         )}
 
-        {/* Modal: Comprar Domínio (com pagamento) */}
+        {/* Modal: Comprar Domínio */}
         {showBuyModal && !payResult && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -1288,7 +1317,7 @@ export default function DomainsPage() {
                 <button onClick={closeBuyModal} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
               </div>
 
-              {/* Domain summary (always visible) */}
+              {/* ← PREÇO EM MZN NO MODAL */}
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1298,18 +1327,21 @@ export default function DomainsPage() {
                         <span className="text-xs bg-green-200 text-green-800 px-1.5 py-0.5 rounded font-medium">Promo</span>
                       )}
                       {showBuyModal.renewal_price && (
-                        <span className="text-xs text-gray-500">Renovação: ${showBuyModal.renewal_price}/ano</span>
+                        <span className="text-xs text-gray-500">
+                          Renovação: {formatMZN(showBuyModal.renewal_price, exchangeRate)}/ano
+                        </span>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">${showBuyModal.price}</p>
-                    <p className="text-xs text-gray-500">por ano</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatMZN(showBuyModal.price, exchangeRate)}
+                    </p>
+                    <p className="text-xs text-gray-400">~${showBuyModal.price} USD · por ano</p>
                   </div>
                 </div>
               </div>
 
-              {/* Step 1: Container selection */}
               {payStep === 1 && (
                 <>
                   <div className="mb-4">
@@ -1323,7 +1355,6 @@ export default function DomainsPage() {
                     </select>
                     <p className="text-xs text-gray-400 mt-1">O domínio será conectado automaticamente após o pagamento</p>
                   </div>
-
                   <div className="flex gap-3">
                     <button onClick={closeBuyModal}
                       className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Cancelar</button>
@@ -1335,7 +1366,6 @@ export default function DomainsPage() {
                 </>
               )}
 
-              {/* Step 2: Payment method */}
               {payStep === 2 && (
                 <>
                   <div className="mb-4">
@@ -1358,7 +1388,6 @@ export default function DomainsPage() {
                     </div>
                   </div>
 
-                  {/* Phone input for mobile payments */}
                   {(payMethod === 'mpesa' || payMethod === 'emola') && (
                     <div className="mb-4">
                       <label className="block text-sm font-semibold text-gray-700 mb-1">Número de Telefone</label>
@@ -1413,7 +1442,7 @@ export default function DomainsPage() {
           </div>
         )}
 
-        {/* Modal: Renovar Domínio (com pagamento) */}
+        {/* Modal: Renovar Domínio */}
         {showRenewModal && !payResult && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -1424,11 +1453,23 @@ export default function DomainsPage() {
                 <button onClick={closeRenewModal} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-center">
-                <p className="font-bold text-gray-900 text-lg">{showRenewModal.domain}</p>
+              {/* ← PREÇO EM MZN NO MODAL DE RENOVAÇÃO */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-gray-900 text-lg">{showRenewModal.domain}</p>
+                  {showRenewModal.renewal_price && (
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-gray-900">
+                        {formatMZN((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears, exchangeRate)}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        ~${((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears).toFixed(2)} USD
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Step 1: Duration */}
               {payStep === 1 && (
                 <>
                   <div className="mb-4">
@@ -1443,8 +1484,13 @@ export default function DomainsPage() {
                         </button>
                       ))}
                     </div>
+                    {/* ← preço total da renovação em MZN conforme anos selecionados */}
+                    <p className="text-xs text-gray-400 text-center mt-2">
+                      Total: <span className="font-semibold text-gray-700">
+                        {formatMZN((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears, exchangeRate)}
+                      </span>
+                    </p>
                   </div>
-
                   <div className="flex gap-3">
                     <button onClick={closeRenewModal}
                       className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Cancelar</button>
@@ -1456,7 +1502,6 @@ export default function DomainsPage() {
                 </>
               )}
 
-              {/* Step 2: Payment */}
               {payStep === 2 && (
                 <>
                   <div className="mb-4">

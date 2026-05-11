@@ -239,7 +239,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
 
             {/* Bottom bar */}
             <div className="mt-10 pt-6 border-t border-gray-800 text-sm text-gray-500">
-              © {new Date().getFullYear()}  Eliobros Tech. Todos os direitos reservados.
+              © 2025 -  {new Date().getFullYear()}  Eliobros Tech. Todos os direitos reservados.
             </div>
           </div>
         </footer>

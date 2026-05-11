@@ -1,6 +1,29 @@
 import React, { useState, useMemo } from 'react';
 import { X, Coins, Smartphone, Loader, CheckCircle, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
 
+const getFriendlyError = (message) => {
+  if (!message) return 'Erro inesperado. Tenta novamente.';
+  
+  const errors = {
+    'Invalid input': 'Dados inválidos. Verifica o número e o valor.',
+    'Unauthorized': 'Sessão expirada. Faz login novamente.',
+    'Payment failed': 'Pagamento recusado. Verifica o saldo.',
+    'Insufficient funds': 'Saldo insuficiente.',
+    'Invalid phone': 'Número de telefone inválido.',
+    'Too many requests': 'Muitas tentativas. Aguarda um momento.',
+    'Network error': 'Sem conexão. Verifica a internet.',
+    'timeout': 'Tempo esgotado. Tenta novamente.',
+    'not found': 'Pagamento não encontrado.',
+  };
+
+  // Procura por match parcial
+  const key = Object.keys(errors).find(k => 
+    message.toLowerCase().includes(k.toLowerCase())
+  );
+
+  return key ? errors[key] : 'Erro ao processar pagamento. Tenta novamente.';
+};
+
 const PaymentModal = ({ onClose, onSuccess }) => {
   const [paymentId, setPaymentId] = useState(null);
   const [step, setStep] = useState('amount');
@@ -200,15 +223,15 @@ const PaymentModal = ({ onClose, onSuccess }) => {
         await handleMobilePayment(token, userData);
       }
 
-    } catch (err) {
-      console.error('Erro no pagamento:', err);
-      setError(err.message);
-      setStep('error');
-      setLoading(false);
-    }
+} catch (err) {
+  console.error('Erro no pagamento:', err); 
+  setError(getFriendlyError(err.message)); 
+  setStep('error');
+  setLoading(false);
+}
   };
 
-  const handleMercadoPagoPayment = async (token, userId) => {
+const handleMercadoPagoPayment = async (token, userId) => {
     const response = await fetch(`${ALAUDA_API_URL}/api/payment/mercadopago`, {
       method: 'POST',
       headers: {
@@ -258,121 +281,36 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     setLoading(false);
   };
 
-  const handleMobilePayment = async (token, userData) => {
-  console.log('👤 userData:', JSON.stringify(userData)) // 
-  // Se for M-Pesa usa API direta
-  const url = paymentMethod === 'mpesa'
-  ? `${ALAUDA_API_URL}/api/payment/mpesa/direct`  // ← ALAUDA + sem 's'
-  : `${ALAUDA_API_URL}/api/payment/${paymentMethod}`
 
-const headers = paymentMethod === 'mpesa'
-  ? {
-      'Authorization': `Bearer ${token}`,
-      'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY,
-      'Content-Type': 'application/json'
-    }
-  : {
+  const handleMobilePayment = async (token, userData) => {
+  const response = await fetch(`${ALAUDA_API_URL}/api/payment/${paymentMethod}`, {
+    method: 'POST',
+    headers: {
       'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY}`,
       'Content-Type': 'application/json'
-    }
+    },
+    body: JSON.stringify({
+      valor: amount,
+      numero_celular: phoneNumber,
+      usuario_id: String(userData.id)
+    })
+  });
 
-const response = await fetch(url, {
-  method: 'POST',
-  headers: headers,
-  body: JSON.stringify({
-    valor: amount,
-    numero_celular: phoneNumber,
-    usuario_id: userData.email || userData.username || userData.phone || userData.celular || String(userData.id)
-  })
-  })
+  const data = await response.json();
 
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.message || data.error || 'Erro ao processar pagamento');
-    }
-
-    setPaymentResult(data);
-
-    // ADICIONA AQUI:
-const transactionRef = data.data?.payment?.transaction_reference;
-if (transactionRef) {
-  setPaymentId(transactionRef);
-  console.log('💾 Transaction Ref salvo:', transactionRef);
-}
-
-    await fetch(`${API_URL}/api/payment/initiate`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-	 'X-API-Key': process.env.NEXT_PUBLIC_MOZHOST_API_KEY || 'sua_api_key_aqui' ,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        amount: parseFloat(amount),
-        currency: 'MZN',
-        coins: getCoinsFromAmount(amount),
-        paymentMethod,
-        phoneNumber,
-        external_payment_id: data.data?.transaction_id || data.transaction_id,
-        provider: 'paymoz'
-      })
-    });
-
-    const ref = data.data?.payment?.transaction_reference;
-setTimeout(() => checkPaymentStatus(ref), 3000);
-  };
-
-  const checkPaymentStatus = async (transactionRef) => {
-  if (!transactionRef) {
-    setError('Referência não encontrada');
-    setStep('error');
-    setLoading(false);
-    return;
+  if (!data.success) {
+    throw new Error(data.message || data.error || 'Erro ao processar pagamento');
   }
 
-  let attempts = 0;
-  const maxAttempts = 36; // 3 minutos
+  const checkoutUrl = data.data?.payment?.checkout_url;
 
-  const interval = setInterval(async () => {
-  attempts++;
-  try {
-    const res = await fetch(
-      `${ALAUDA_API_URL}/api/payment/mpesa/check/${transactionRef}`,
-      { headers: { 'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY } }
-    );
-
-    // Se der 500, ignora e continua tentando
-    if (!res.ok) {
-      console.log(`[Poll #${attempts}] Erro temporário, continuando...`);
-      return;
-    }
-
-    const json = await res.json();
-    const code = json?.data?.output_ResponseCode;
-
-    console.log(`[Poll #${attempts}] ResponseCode:`, code);
-
-    if (json.data?.status === 'completed') {
-      clearInterval(interval);
-      setStep('success');
-      setLoading(false);
-      setTimeout(() => onSuccess(getCoinsFromAmount(amount)), 2000);
-    } else if (['INS-1', 'INS-9', 'INS-10'].includes(code)) {
-      clearInterval(interval);
-      setError('Pagamento cancelado ou recusado.');
-      setStep('error');
-      setLoading(false);
-    } else if (attempts >= maxAttempts) {
-      clearInterval(interval);
-      setError('Tempo esgotado. Tenta novamente.');
-      setStep('error');
-      setLoading(false);
-    }
-  } catch (err) {
-    console.log(`[Poll #${attempts}] Catch error, continuando...`);
+  if (!checkoutUrl) {
+    throw new Error('URL de pagamento não recebida');
   }
-}, 5000);
+
+  setMercadoPagoUrl(checkoutUrl);
+  setStep('mercadopago');
+  setLoading(false);
 };
 
   const downloadReceipt = async () => {
@@ -685,35 +623,35 @@ setTimeout(() => checkPaymentStatus(ref), 3000);
           )}
 
           {/* STEP 4: MERCADOPAGO - Link externo */}
-          {step === 'mercadopago' && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CreditCard className="w-10 h-10 text-cyan-600" />
-              </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Quase lá!</h4>
-              <p className="text-sm text-gray-600 mb-4">
-                Clique no botão abaixo para finalizar o pagamento no MercadoPago
-              </p>
-              <a
-                href={mercadoPagoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center w-full bg-cyan-600 hover:bg-cyan-700 text-white py-3 rounded-md font-medium mb-4"
-              >
-                <ExternalLink className="w-5 h-5 mr-2" />
-                Pagar com MercadoPago
-              </a>
-              <p className="text-xs text-gray-500">
-                Após o pagamento, as coins serão creditadas automaticamente em até 5 minutos.
-              </p>
-              <button
-                onClick={onClose}
-                className="mt-4 text-sm text-gray-600 hover:text-gray-800"
-              >
-                Fechar e aguardar
-              </button>
-            </div>
-          )}
+{step === 'mercadopago' && (
+  <div className="text-center py-8">
+    <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <CreditCard className="w-10 h-10 text-cyan-600" />
+    </div>
+    <h4 className="text-lg font-medium text-gray-900 mb-2">Quase lá!</h4>
+    <p className="text-sm text-gray-600 mb-4">
+      Clique para finalizar o pagamento via {selectedMethodData?.name}
+    </p>
+    <a
+      href={mercadoPagoUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center justify-center w-full bg-cyan-600 hover:bg-cyan-700 text-white py-3 rounded-md font-medium mb-4"
+    >
+      <ExternalLink className="w-5 h-5 mr-2" />
+      Pagar com {selectedMethodData?.name}
+    </a>
+    <p className="text-xs text-gray-500">
+      Após o pagamento, as coins serão creditadas automaticamente.
+    </p>
+    <button
+      onClick={onClose}
+      className="mt-4 text-sm text-gray-600 hover:text-gray-800"
+    >
+      Fechar e aguardar
+    </button>
+  </div>
+)}
 
           {/* STEP 5: SUCCESS - Pagamento confirmado */}
           {step === 'success' && (

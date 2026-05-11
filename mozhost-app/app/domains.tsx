@@ -61,10 +61,31 @@ type RegisteredDomain = {
 
 const POPULAR_TLDS = ['.com', '.net', '.org', '.io', '.dev', '.app', '.co', '.mz'];
 
+const DEFAULT_RATE = 64;
+
+
+function useExchangeRate() {
+  const [rate, setRate] = useState(DEFAULT_RATE);
+  useEffect(() => {
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(r => r.json())
+      .then(d => { if (d.rates?.MZN) setRate(d.rates.MZN); })
+      .catch(() => {});
+  }, []);
+  return rate;
+}
+
+function formatMZN(usd: string | number, rate: number): string {
+  const mzn = Math.ceil(parseFloat(String(usd)) * rate);
+  return `${mzn.toLocaleString('pt-MZ')} MT`;
+}
+
+
 // ===== MAIN SCREEN =====
 
 export default function DomainsScreen() {
   const router = useRouter();
+  const exchangeRate = useExchangeRate();
 
   // Tab
   const [activeTab, setActiveTab] = useState<'connected' | 'register'>('connected');
@@ -662,7 +683,9 @@ export default function DomainsScreen() {
                             </View>
                           )}
                           {result.renewal_price && (
-                            <Text style={styles.renewalPrice}>Renovação: ${result.renewal_price}/ano</Text>
+                          <Text style={styles.renewalPrice}>
+  Renovação: {formatMZN(result.renewal_price!, exchangeRate)}/ano
+</Text>
                           )}
                         </View>
                       </View>
@@ -670,10 +693,13 @@ export default function DomainsScreen() {
                     {result.available ? (
                       <View style={styles.resultRight}>
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.resultPrice}>${result.price}</Text>
-                          {result.regular_price && result.regular_price !== result.price && (
-                            <Text style={styles.resultRegularPrice}>${result.regular_price}</Text>
-                          )}
+                      <Text style={styles.resultPrice}>{formatMZN(result.price, exchangeRate)}</Text>
+<Text style={styles.resultRegularPrice}>~${result.price} USD</Text>
+{result.regular_price && result.regular_price !== result.price && (
+  <Text style={[styles.resultRegularPrice, { textDecorationLine: 'line-through' }]}>
+    {formatMZN(result.regular_price, exchangeRate)}
+  </Text>
+)}
                         </View>
                         <TouchableOpacity
                           style={styles.buyBtn}
@@ -857,8 +883,10 @@ export default function DomainsScreen() {
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.buySummaryPrice}>${showBuyModal.price}</Text>
-                      <Text style={styles.buySummaryPriceLabel}>por ano</Text>
+                      <Text style={styles.buySummaryPrice}>
+  {formatMZN(showBuyModal.price, exchangeRate)}
+</Text>
+<Text style={styles.buySummaryPriceLabel}>~${showBuyModal.price} MZN · por ano</Text>
                     </View>
                   </View>
                 )}

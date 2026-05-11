@@ -1,0 +1,198 @@
+// routes/support.js
+// Rotas HTTP do sistema de suporte humano MozHost
+
+const express = require('express');
+const router = express.Router();
+const bridge = require('../services/supportBridge');
+const database = require('../models/database');
+const authMiddleware  = require('../middleware/auth'); // o teu middleware JWT
+
+// ─── POST /api/support/ticket ─────────────────────────────────────────────────
+// Cria um novo ticket de suporte (chamado pelo frontend ou pelo function calling da IA)
+
+router.post('/ticket', authMiddleware, async (req, res) => {
+  try {
+    const { summary, lastMessage, conversationHistory } = req.body;
+    const userId = req.user.id;
+
+    if (!summary || !lastMessage) {
+      return res.status(400).json({ success: false, error: 'summary e lastMessage são obrigatórios' });
+    }
+
+    // Verificar se utilizador já tem ticket activo
+    const existing = await database.query(
+      `SELECT id FROM support_tickets 
+       WHERE user_id = ? AND status IN ('waiting', 'active')
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (existing.length > 0) {
+      return res.json({
+        success: true,
+        ticketId: existing[0].id,
+        message: 'Ticket existente retomado'
+      });
+    }
+
+    const { ticketId } = await bridge.createTicket({
+      userId,
+      summary,
+      lastMessage,
+      conversationHistory: conversationHistory || []
+    });
+
+    res.json({ success: true, ticketId });
+
+  } catch (err) {
+    console.error('❌ Erro ao criar ticket:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/support/message ────────────────────────────────────────────────
+// Usuário envia mensagem para o agente (bridge → WhatsApp do agente)
+
+router.post('/message', authMiddleware, async (req, res) => {
+  try {
+    const { ticketId, message } = req.body;
+    const userId = req.user.id;
+
+    if (!ticketId || !message) {
+      return res.status(400).json({ success: false, error: 'ticketId e message são obrigatórios' });
+    }
+
+    if (message.length > 2000) {
+      return res.status(400).json({ success: false, error: 'Mensagem muito longa (máx 2000 chars)' });
+    }
+
+    await bridge.userToAgent({ ticketId: parseInt(ticketId), userId, message });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error('❌ Erro ao enviar mensagem:', err.message);
+    const status = err.message === 'Acesso negado' ? 403 : 500;
+    res.status(status).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/support/ticket/:id/cancel ─────────────────────────────────────
+// Utilizador cancela o ticket enquanto aguarda ou durante conversa
+
+router.post('/ticket/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    await bridge.cancelTicket({ ticketId, userId });
+
+    res.json({ success: true, message: 'Ticket cancelado' });
+
+  } catch (err) {
+    console.error('❌ Erro ao cancelar ticket:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/support/ticket/:id ─────────────────────────────────────────────
+// Busca estado actual do ticket (útil para reconnect do socket)
+
+router.get('/ticket/:id', authMiddleware, async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    const tickets = await database.query(
+      `SELECT id, status, agent_name, summary, created_at, claimed_at, closed_at
+       FROM support_tickets WHERE id = ? AND user_id = ?`,
+      [ticketId, userId]
+    );
+
+    if (tickets.length === 0) {
+      return res.status(404).json({ success: false, error: 'Ticket não encontrado' });
+    }
+
+    res.json({ success: true, ticket: tickets[0] });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/support/ticket/:id/messages ────────────────────────────────────
+// Histórico de mensagens do ticket (para recarregar após reconnect)
+
+router.get('/ticket/:id/messages', authMiddleware, async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Verificar que o ticket pertence ao utilizador
+    const tickets = await database.query(
+      'SELECT id FROM support_tickets WHERE id = ? AND user_id = ?',
+      [ticketId, userId]
+    );
+
+    if (tickets.length === 0) {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+
+    const messages = await database.query(
+      `SELECT sender, agent_name, message, created_at
+       FROM support_messages WHERE ticket_id = ?
+       ORDER BY created_at ASC`,
+      [ticketId]
+    );
+
+    res.json({ success: true, messages });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Socket.IO: join_ticket ───────────────────────────────────────────────────
+// Este handler NÃO é uma rota HTTP — fica aqui para referência.
+// Chama setupSupportSocket(io) no teu index.js
+
+function setupSupportSocket(io) {
+  io.on('connection', (socket) => {
+
+    // Utilizador entra na sala do seu ticket
+    socket.on('join_ticket', async ({ ticketId }) => {
+      if (!ticketId) return;
+
+      // Opcional: validar token aqui se quiseres segurança extra no socket
+      socket.join(`ticket_${ticketId}`);
+      console.log(`🔌 Socket ${socket.id} entrou em ticket_${ticketId}`);
+
+      // Enviar estado actual do ticket logo ao conectar
+      try {
+        const tickets = await database.query(
+          'SELECT status, agent_name FROM support_tickets WHERE id = ?',
+          [ticketId]
+        );
+
+        if (tickets.length > 0 && tickets[0].status === 'active') {
+          socket.emit('agente_entrou', {
+            agentName: tickets[0].agent_name,
+            ticketId,
+            reconnected: true
+          });
+        }
+      } catch {}
+    });
+
+    socket.on('leave_ticket', ({ ticketId }) => {
+      socket.leave(`ticket_${ticketId}`);
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`🔌 Socket ${socket.id} desconectado`);
+    });
+  });
+}
+
+module.exports = router;
+module.exports.setupSupportSocket = setupSupportSocket;

@@ -297,6 +297,20 @@ const functionDeclarations = [
     }
   },
   {
+  name: 'escalar_para_suporte',
+  description: 'Escala a conversa para um agente humano quando o utilizador pede suporte humano, diz que quer falar com uma pessoa real, ou quando a IA não consegue resolver o problema',
+  parameters: {
+    type: 'object',
+    properties: {
+      motivo: {
+        type: 'string',
+        description: 'Resumo do problema do utilizador para passar ao agente humano'
+      }
+    },
+    required: ['motivo']
+  }
+},
+  {
     name: 'executar_comando',
     description: 'Executa um comando no terminal do container do usuário e retorna o output',
     parameters: {
@@ -323,6 +337,40 @@ const functionDeclarations = [
       required: []
     }
   },
+  {
+  name: 'enviar_codigo_suporte',
+  description: 'Envia um código de verificação para o email do usuário autenticado para confirmar ações sensíveis como mudança de email, exclusão de conta, etc.',
+  parameters: {
+    type: 'object',
+    properties: {
+      purpose: {
+        type: 'string',
+        enum: ['email_verify', 'change_email', 'delete_container', 'change_password', 'other'],
+        description: 'Motivo do envio do código'
+      }
+    },
+    required: ['purpose']
+  }
+},
+{
+  name: 'verificar_codigo_suporte',
+  description: 'Verifica se o código informado pelo usuário é válido para confirmar uma ação sensível',
+  parameters: {
+    type: 'object',
+    properties: {
+      code: {
+        type: 'string',
+        description: 'Código de 6 dígitos informado pelo usuário'
+      },
+      purpose: {
+        type: 'string',
+        enum: ['email_verify', 'change_email', 'delete_container', 'change_password', 'other'],
+        description: 'Motivo do código a verificar'
+      }
+    },
+    required: ['code', 'purpose']
+  }
+},
   {
     name: 'meus_containers',
     description: 'Lista todos os containers do usuário autenticado atual',
@@ -474,6 +522,121 @@ const functionImplementations = {
       }))
     };
   },
+
+async enviar_codigo_suporte({ purpose }, userId) {
+  const { sendEmail, generateCode } = require('../utils/email');
+
+  // Buscar dados do utilizador
+  const users = await database.query(
+    'SELECT id, username, email FROM users WHERE id = ?',
+    [userId]
+  );
+
+  if (users.length === 0) {
+    return { erro: 'Usuário não encontrado' };
+  }
+
+  const user = users[0];
+
+  // Invalidar códigos anteriores do mesmo purpose
+  await database.query(
+    `UPDATE verification_codes 
+     SET used_at = NOW() 
+     WHERE user_id = ? AND purpose = ? AND used_at IS NULL`,
+    [userId, purpose]
+  );
+
+  // Gerar novo código
+  const code = generateCode(6);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+
+  // Guardar no banco
+  await database.query(
+    `INSERT INTO verification_codes (user_id, code, purpose, expires_at) 
+     VALUES (?, ?, ?, ?)`,
+    [userId, code, purpose, expiresAt]
+  );
+
+  // Labels para o email
+  const purposeLabels = {
+    email_verify: 'Verificação de Email',
+    change_email: 'Alteração de Email',
+    delete_container: 'Exclusão de Container',
+    change_password: 'Alteração de Password',
+    other: 'Verificação de Segurança'
+  };
+
+  const label = purposeLabels[purpose] || 'Verificação';
+
+  // Enviar email via Resend
+  await sendEmail({
+    toEmail: user.email,
+    toName: user.username,
+    subject: `MozHost - Código de ${label}`,
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+        <div style="background: #6c47ff; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">🔐 MozHost</h1>
+        </div>
+        <div style="background: #f9f9f9; padding: 24px; border-radius: 0 0 8px 8px;">
+          <p style="font-size: 15px;">Olá, <strong>${user.username}</strong>!</p>
+          <p style="font-size: 15px;">O teu código para <strong>${label}</strong> é:</p>
+          <div style="background: white; border: 2px dashed #6c47ff; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #6c47ff;">${code}</span>
+          </div>
+          <p style="color: #888; font-size: 13px;">⏱️ Este código expira em <strong>10 minutos</strong>.</p>
+          <p style="color: #888; font-size: 13px;">Se não foste tu a solicitar, ignora este email.</p>
+        </div>
+      </div>
+    `,
+    textContent: `MozHost - Código de ${label}\n\nOlá ${user.username}!\n\nO teu código é: ${code}\n\nExpira em 10 minutos.`
+  });
+
+  return {
+    sucesso: true,
+    mensagem: `Código enviado para ${user.email}`,
+    expira_em: '10 minutos'
+  };
+},
+
+async verificar_codigo_suporte({ code, purpose }, userId) {
+  const codes = await database.query(
+    `SELECT id, code, expires_at, used_at 
+     FROM verification_codes 
+     WHERE user_id = ? AND purpose = ? AND used_at IS NULL
+     ORDER BY created_at DESC 
+     LIMIT 1`,
+    [userId, purpose]
+  );
+
+  if (codes.length === 0) {
+    return { valido: false, motivo: 'Nenhum código encontrado para este propósito' };
+  }
+
+  const record = codes[0];
+
+  // Verificar expiração
+  if (new Date() > new Date(record.expires_at)) {
+    return { valido: false, motivo: 'Código expirado' };
+  }
+
+  // Verificar código
+  if (record.code !== String(code)) {
+    return { valido: false, motivo: 'Código incorreto' };
+  }
+
+  // Marcar como usado
+  await database.query(
+    'UPDATE verification_codes SET used_at = NOW() WHERE id = ?',
+    [record.id]
+  );
+
+  return {
+    valido: true,
+    mensagem: 'Código verificado com sucesso ✅'
+  };
+},
+
 
   async estatisticas_pagamentos({ periodo_dias, metodo }) {
     let dateFilter = '';
@@ -710,6 +873,21 @@ const functionImplementations = {
       }))
     };
   },
+  
+  async escalar_para_suporte({ motivo }, userId) {
+  const result = await database.query(
+    `INSERT INTO support_tickets 
+     (user_id, status, summary, created_at) 
+     VALUES (?, 'waiting', ?, NOW())`,
+    [userId, motivo]
+  );
+
+  return {
+    sucesso: true,
+    ticketId: result.insertId,
+    mensagem: 'Ticket de suporte criado'
+  };
+},
 
   async estatisticas_whatsapp() {
     const totalVinculados = await database.query(

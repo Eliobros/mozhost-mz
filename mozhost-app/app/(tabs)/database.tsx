@@ -196,6 +196,24 @@ export default function DatabaseScreen() {
                 <Text style={styles.formLabel}>Nome</Text>
                 <TextInput style={styles.formInput} placeholder="meu-db" placeholderTextColor={Colors.textMuted} value={formData.name} onChangeText={(v) => setFormData((p) => ({ ...p, name: v }))} autoCapitalize="none" />
               </View>
+              
+              <View style={styles.formGroup}>
+  <Text style={styles.formLabel}>Tipo</Text>
+  <View style={styles.typeSelector}>
+    {(['mysql', 'mariadb', 'postgres', 'mongodb', 'redis'] as const).map((t) => (
+      <TouchableOpacity
+        key={t}
+        style={[styles.typeBtn, formData.type === t && styles.typeBtnActive]}
+        onPress={() => setFormData((p) => ({ ...p, type: t }))}
+      >
+        <Text style={[styles.typeBtnText, formData.type === t && styles.typeBtnTextActive]}>
+          {t}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</View>
+              
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Nome do Database</Text>
                 <TextInput style={styles.formInput} placeholder="meubanco" placeholderTextColor={Colors.textMuted} value={formData.database_name} onChangeText={(v) => setFormData((p) => ({ ...p, database_name: v }))} autoCapitalize="none" />
@@ -230,6 +248,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
   headerBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   headerTitle: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
+  typeSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+typeBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceVariant },
+typeBtnActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+typeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+typeBtnTextActive: { color: '#fff' },
   addBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.secondary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, gap: 4 },
   addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   emptyState: { alignItems: 'center', paddingTop: 80 },

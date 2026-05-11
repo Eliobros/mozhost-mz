@@ -62,8 +62,12 @@ class DockerDatabaseManager {
       // Gerar subdomínio: nome-tipo.dominio.com
       const subdomain = `${this.sanitizeName(name)}-${type}.${this.publicHost}`;
 
-      // Criar docker-compose
+      // Criar docker compose
       await this.createDockerCompose(dbPath, databaseId, type, port, credentials);
+      
+      const exists = await fs.pathExists(path.join(dbPath, 'docker-compose.yml'));
+console.log('📄 docker-compose.yml existe?', exists);
+console.log('📁 dbPath:', dbPath);
 
       // Criar script de inicialização (se MySQL/Postgres)
       if (['mysql', 'mariadb', 'postgres'].includes(type)) {
@@ -72,7 +76,7 @@ class DockerDatabaseManager {
 
       // Iniciar container
       console.log(`🐳 Starting database ${databaseId}...`);
-      await execAsync(`cd ${dbPath} && docker-compose up -d`);
+      await execAsync(`cd ${dbPath} && docker compose up -d`);
 
       // Aguardar database inicializar
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -162,7 +166,7 @@ class DockerDatabaseManager {
 }
 
   /**
-   * Criar docker-compose.yml
+   * Criar docker compose.yml
    */
   async createDockerCompose(dbPath, databaseId, type, port, credentials) {
     const configs = {
@@ -325,7 +329,7 @@ USE ${credentials.database};
     }
 
     const dbPath = dbInfo[0].docker_compose_path;
-    await execAsync(`cd ${dbPath} && docker-compose stop`);
+    await execAsync(`cd ${dbPath} && docker compose stop`);
 
     await database.query(
       'UPDATE `databases` SET status = ? WHERE id = ?',
@@ -347,7 +351,7 @@ USE ${credentials.database};
     }
 
     const dbPath = dbInfo[0].docker_compose_path;
-    await execAsync(`cd ${dbPath} && docker-compose start`);
+    await execAsync(`cd ${dbPath} && docker compose start`);
 
     await database.query(
       'UPDATE `databases` SET status = ? WHERE id = ?',
@@ -372,7 +376,7 @@ USE ${credentials.database};
 
     // Parar e remover containers
     try {
-      await execAsync(`cd ${dbPath} && docker-compose down -v`);
+      await execAsync(`cd ${dbPath} && docker compose down -v`);
     } catch (e) {
       console.error('Error stopping database:', e);
     }

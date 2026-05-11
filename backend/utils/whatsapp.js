@@ -27,16 +27,14 @@ async function initializeWhatsApp() {
   connectionPromise = new Promise(async (resolve) => {
     try {
       console.log('🚀 Inicializando WhatsApp...');
-      
+
       const authPath = path.join(__dirname, '../.auth');
 
-      // Criar diretório de autenticação se não existir
       if (!fs.existsSync(authPath)) {
         fs.mkdirSync(authPath, { recursive: true });
         console.log('📁 Pasta de autenticação criada:', authPath);
       }
 
-      // Busca a versão mais recente do WhatsApp Web
       const { version, isLatest } = await fetchLatestBaileysVersion();
       console.log(`📱 Usando WhatsApp Web v${version.join('.')}, última versão: ${isLatest}`);
 
@@ -45,8 +43,8 @@ async function initializeWhatsApp() {
       sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true, // 👈 Isso vai imprimir no terminal automaticamente
-        logger: pino({ level: 'silent' }), // 👈 'silent' para não poluir, ou 'info' para debug
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' }),
         browser: ['MozHost', 'Chrome', '1.0.0'],
         defaultQueryTimeoutMs: undefined,
       });
@@ -62,17 +60,16 @@ async function initializeWhatsApp() {
           console.log('🔗 Escaneie o QR Code acima com seu WhatsApp');
           console.log('📲 Abra o WhatsApp > Aparelhos conectados > Conectar');
           console.log('========================================\n');
-          
-          // Também salva o QR em arquivo para backup
+
           fs.writeFileSync(path.join(authPath, 'qr.txt'), qr);
           console.log('💾 QR Code salvo em: .auth/qr.txt\n');
         }
 
         if (connection === 'close') {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-          
+
           console.log('🔌 Conexão WhatsApp fechada. Reconectando...', shouldReconnect);
-          
+
           if (shouldReconnect) {
             isConnected = false;
             currentQR = null;
@@ -80,27 +77,34 @@ async function initializeWhatsApp() {
             setTimeout(() => initializeWhatsApp(), 3000);
           } else {
             console.log('🚪 Logout detectado. Limpando sessão...');
-            // Limpa a pasta de auth quando há logout
             if (fs.existsSync(authPath)) {
               fs.rmSync(authPath, { recursive: true, force: true });
             }
             isConnected = false;
             currentQR = null;
             connectionPromise = null;
-            // Reinicia após 2 segundos para gerar novo QR
             setTimeout(() => initializeWhatsApp(), 2000);
           }
         } else if (connection === 'open') {
           console.log('✅ WhatsApp conectado com sucesso!');
           isConnected = true;
           currentQR = null;
-          
-          // Remove o arquivo de QR quando conectar
+
           const qrFile = path.join(authPath, 'qr.txt');
           if (fs.existsSync(qrFile)) {
             fs.unlinkSync(qrFile);
           }
-          
+
+          // ✅ NOVO: ligar o supportBridge ao socket logo que conectar
+          // (resolve o problema do setTimeout de 5s no server.js)
+          try {
+            const supportBridge = require('../services/supportBridge');
+            supportBridge.attachSocket(sock);
+            console.log('🤝 SupportBridge ligado ao Baileys');
+          } catch (e) {
+            // supportBridge pode não estar disponível em todos os ambientes
+          }
+
           resolve(sock);
         }
       });
@@ -108,21 +112,29 @@ async function initializeWhatsApp() {
       sock.ev.on('creds.update', saveCreds);
 
       // ============================================
-      // 🤖 SISTEMA DE COMANDOS BOT
+      // 🤖 SISTEMA DE MENSAGENS — Bot + SupportBridge
       // ============================================
       const whatsappBotService = require('../services/whatsappBotService');
 
-      sock.ev.on('messages.upsert', async ({ messages }) => {
+      sock.ev.on('messages.upsert', async (payload) => {
+        const { messages } = payload;
+
         for (const msg of messages) {
           try {
-            await whatsappBotService.handleMessage(sock, msg);
+            // ✅ NOVO: SupportBridge processa primeiro (comandos ACEITAR/ENCERRAR e bridge)
+            const supportBridge = require('../services/supportBridge');
+            const handled = await supportBridge.handleIncomingWhatsApp(payload);
+
+            // Se o bridge não tratou (não é agente), passa ao bot normal
+            if (!handled) {
+              await whatsappBotService.handleMessage(sock, msg);
+            }
           } catch (error) {
-            console.error('❌ Erro no bot WhatsApp:', error.message);
+            console.error('❌ Erro no handler WhatsApp:', error.message);
           }
         }
       });
 
-      // Timeout para conexão (60 segundos)
       setTimeout(() => {
         if (!isConnected) {
           console.log('⏰ Timeout na conexão WhatsApp (60s)');
@@ -148,13 +160,11 @@ async function initializeWhatsApp() {
  */
 async function sendWhatsAppMessage({ phone, message }) {
   try {
-    // Tentar conectar se não estiver conectado
     if (!isConnected || !sock) {
       console.log('🔌 WhatsApp não conectado, tentando conectar...');
       await initializeWhatsApp();
     }
 
-    // Se ainda não conseguiu conectar, simular envio
     if (!isConnected || !sock) {
       console.warn('⚠️  WhatsApp não conectado, simulando envio');
       console.log(`📱 WhatsApp simulado para: ${phone}`);
@@ -162,17 +172,14 @@ async function sendWhatsAppMessage({ phone, message }) {
       return { messageId: 'simulated', status: 'sent' };
     }
 
-    // Formatar número
     const cleanPhone = phone.replace(/[^\d]/g, '');
     const formattedPhone = cleanPhone + '@s.whatsapp.net';
 
-    // Verificar se o número existe no WhatsApp
     const [result] = await sock.onWhatsApp(formattedPhone);
     if (!result?.exists) {
       throw new Error('Número não encontrado no WhatsApp');
     }
 
-    // Enviar mensagem
     const sentMessage = await sock.sendMessage(formattedPhone, { text: message });
 
     console.log('✅ WhatsApp enviado com sucesso:', sentMessage.key.id);
@@ -187,6 +194,13 @@ async function sendWhatsAppMessage({ phone, message }) {
     console.log('📱 Simulando envio devido a erro...');
     return { messageId: 'simulated_error', status: 'sent' };
   }
+}
+
+/**
+ * Retorna o socket Baileys activo (para o supportBridge e outros serviços)
+ */
+function getWhatsAppSocket() {
+  return sock;
 }
 
 /**
@@ -248,5 +262,6 @@ module.exports = {
   startWhatsApp,
   disconnectWhatsApp,
   initializeWhatsApp,
-  getCurrentQR
+  getCurrentQR,
+  getWhatsAppSocket, // ✅ NOVO
 };

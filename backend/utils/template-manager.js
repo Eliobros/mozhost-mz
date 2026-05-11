@@ -146,28 +146,90 @@ API criada automaticamente pelo MozHost.
     return {
       directories: ['commands', 'utils'],
       files: {
-        'index.js': `const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
+        'index.js': `
+        const { default: makeWASocket, DisconnectReason, initAuthCreds, BufferJSON, proto } = require('baileys');
 const P = require('pino');
 const fs = require('fs');
 const path = require('path');
 const qrcode = require('qrcode');
+const { MongoClient } = require('mongodb');
 
 const prefix = process.env.PREFIX || '!';
 const ownerNumber = process.env.OWNER_NUMBER || '';
+const MONGO_URI = process.env.MONGO_URI || '';
+const DB_NAME = process.env.DB_NAME || 'mozhost_bot';
+const COLLECTION_NAME = 'sessao';
 
 // Arquivos de estado
 const QR_FILE = './qr.txt';
 const STATE_FILE = './bot-state.json';
 
 // ============================================
+// MONGO AUTH STATE
+// ============================================
+const useMongoAuthState = async (collection) => {
+  const readData = async (id) => {
+    const data = await collection.findOne({ _id: id });
+    if (!data) return null;
+    return JSON.parse(JSON.stringify(data.value), BufferJSON.reviver);
+  };
+
+  const writeData = async (id, value) => {
+    await collection.updateOne(
+      { _id: id },
+      { $set: { value: JSON.parse(JSON.stringify(value, BufferJSON.replacer)) } },
+      { upsert: true }
+    );
+  };
+
+  const removeData = async (id) => {
+    await collection.deleteOne({ _id: id });
+  };
+
+  const creds = (await readData('creds')) || initAuthCreds();
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {};
+          await Promise.all(
+            ids.map(async (id) => {
+              let value = await readData(`${type}-${id}`);
+              if (type === 'app-state-sync-key' && value) {
+                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+              }
+              data[id] = value;
+            })
+          );
+          return data;
+        },
+        set: async (data) => {
+          const tasks = [];
+          for (const category of Object.keys(data)) {
+            for (const id of Object.keys(data[category])) {
+              const value = data[category][id];
+              const key = `${category}-${id}`;
+              tasks.push(value ? writeData(key, value) : removeData(key));
+            }
+          }
+          await Promise.all(tasks);
+        },
+      },
+    },
+    saveCreds: async () => {
+      await writeData('creds', creds);
+    },
+  };
+};
+
+// ============================================
 // SALVAR ESTADO
 // ============================================
 function saveState(state) {
   try {
-    const dataToSave = {
-      ...state,
-      timestamp: new Date().toISOString()
-    };
+    const dataToSave = { ...state, timestamp: new Date().toISOString() };
     fs.writeFileSync(STATE_FILE, JSON.stringify(dataToSave, null, 2));
     console.log('💾 Estado salvo:', dataToSave.connected ? 'Conectado' : 'Desconectado');
   } catch (error) {
@@ -181,24 +243,15 @@ function saveState(state) {
 async function saveQRCode(qr) {
   try {
     console.log('🔄 Gerando QR Code...');
-    
-    // Gerar QR Code como Data URL
     const qrDataURL = await qrcode.toDataURL(qr);
-    
-    // Salvar em arquivo separado
     fs.writeFileSync(QR_FILE, qrDataURL);
     console.log('✅ QR Code salvo em qr.txt');
-
-    // Salvar no estado também
-    const state = {
+    fs.writeFileSync(STATE_FILE, JSON.stringify({
       connected: false,
       qr: qrDataURL,
       timestamp: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    }, null, 2));
     console.log('📱 QR Code disponível! Verifique o painel.');
-
   } catch (error) {
     console.error('❌ Erro ao salvar QR Code:', error);
   }
@@ -211,13 +264,13 @@ const commands = new Map();
 
 function loadCommands() {
   const commandsPath = path.join(__dirname, 'commands');
-  
+
   if (!fs.existsSync(commandsPath)) {
     console.warn('⚠️ Pasta de comandos não encontrada. Criando...');
     fs.mkdirSync(commandsPath, { recursive: true });
     return;
   }
-  
+
   const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
   if (commandFiles.length === 0) {
@@ -229,9 +282,9 @@ function loadCommands() {
     try {
       const command = require(path.join(commandsPath, file));
       commands.set(command.name, command);
-      console.log(\`✅ Comando carregado: \${command.name}\`);
+      console.log(`✅ Comando carregado: ${command.name}`);
     } catch (error) {
-      console.error(\`❌ Erro ao carregar comando \${file}:\`, error.message);
+      console.error(`❌ Erro ao carregar comando ${file}:`, error.message);
     }
   }
 }
@@ -253,12 +306,12 @@ async function handleMessage(sock, msg) {
   if (!command) return;
 
   try {
-    console.log(\`📨 Executando comando: \${cmdName}\`);
+    console.log(`📨 Executando comando: ${cmdName}`);
     await command.execute(sock, msg, args);
   } catch (error) {
-    console.error(\`❌ Erro ao executar comando \${cmdName}:\`, error);
+    console.error(`❌ Erro ao executar comando ${cmdName}:`, error);
     await sock.sendMessage(msg.key.remoteJid, {
-      text: \`❌ Erro ao executar comando: \${error.message}\`
+      text: `❌ Erro ao executar comando: ${error.message}`
     });
   }
 }
@@ -266,8 +319,9 @@ async function handleMessage(sock, msg) {
 // ============================================
 // CONEXÃO COM WHATSAPP
 // ============================================
-async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('./auth');
+async function connectToWhatsApp(collection) {
+  // Sessão salva no MongoDB em vez de arquivos locais
+  const { state, saveCreds } = await useMongoAuthState(collection);
 
   const sock = makeWASocket({
     auth: state,
@@ -281,26 +335,23 @@ async function connectToWhatsApp() {
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    // QR Code gerado
     if (qr) {
       console.log('📱 Novo QR Code gerado!');
       await saveQRCode(qr);
     }
 
-    // Conexão fechada
     if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
       console.log('❌ Conexão fechada.');
       console.log('🔄 Reconectar?', shouldReconnect);
 
-      // Salvar estado desconectado
       saveState({
         connected: false,
         reason: lastDisconnect?.error?.message || 'Desconectado'
       });
 
-      // Limpar QR Code antigo
       if (fs.existsSync(QR_FILE)) {
         fs.unlinkSync(QR_FILE);
         console.log('🗑️ QR Code antigo removido');
@@ -308,25 +359,25 @@ async function connectToWhatsApp() {
 
       if (shouldReconnect) {
         console.log('⏳ Reconectando em 3 segundos...');
-        setTimeout(connectToWhatsApp, 3000);
+        setTimeout(() => connectToWhatsApp(collection), 3000);
       } else {
-        console.log('🛑 Bot deslogado. Remova a pasta ./auth e reinicie.');
+        // Limpar sessão do MongoDB ao deslogar
+        console.log('🛑 Bot deslogado. Limpando sessão do banco...');
+        await collection.deleteMany({});
+        console.log('🗑️ Sessão removida. Reinicie o bot para escanear novo QR.');
       }
-    } 
-    
-    // Conectado
+    }
+
     else if (connection === 'open') {
       console.log('✅ Conectado ao WhatsApp!');
 
-      // Obter informações do bot
       const me = sock.user;
       const botNumber = me.id.split(':')[0];
       const botName = me.name || me.verifiedName || 'Bot';
 
-      console.log(\`📱 Número: \${botNumber}\`);
-      console.log(\`👤 Nome: \${botName}\`);
+      console.log(`📱 Número: ${botNumber}`);
+      console.log(`👤 Nome: ${botName}`);
 
-      // Salvar estado conectado
       saveState({
         connected: true,
         number: botNumber,
@@ -334,14 +385,12 @@ async function connectToWhatsApp() {
         device: 'WhatsApp'
       });
 
-      // Limpar QR Code (não precisa mais)
       if (fs.existsSync(QR_FILE)) {
         fs.unlinkSync(QR_FILE);
         console.log('🗑️ QR Code removido (já conectado)');
       }
     }
-    
-    // Conectando
+
     else if (connection === 'connecting') {
       console.log('🔄 Conectando...');
     }
@@ -364,30 +413,40 @@ async function start() {
   console.log('║   🤖 MozHost Bot (Baileys)        ║');
   console.log('╚════════════════════════════════════╝');
   console.log('');
-  console.log(\`📌 Prefix: \${prefix}\`);
-  console.log(\`👤 Owner: \${ownerNumber || 'Não configurado'}\`);
+  console.log(`📌 Prefix: ${prefix}`);
+  console.log(`👤 Owner: ${ownerNumber || 'Não configurado'}`);
   console.log('');
 
+  // Verificar MONGO_URI
+  if (!MONGO_URI) {
+    console.error('❌ MONGO_URI não configurada no .env!');
+    process.exit(1);
+  }
+
+  // Conectar ao MongoDB
+  console.log('🔄 Conectando ao MongoDB...');
+  const client = new MongoClient(MONGO_URI);
+  await client.connect();
+  console.log('✅ MongoDB conectado!');
+
+  const collection = client.db(DB_NAME).collection(COLLECTION_NAME);
+
   // Criar diretórios necessários
-  const dirs = ['./auth', './commands'];
-  for (const dir of dirs) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(\`📁 Criado: \${dir}\`);
-    }
+  if (!fs.existsSync('./commands')) {
+    fs.mkdirSync('./commands', { recursive: true });
+    console.log('📁 Criado: ./commands');
   }
 
   // Carregar comandos
   loadCommands();
-  console.log(\`✅ \${commands.size} comando(s) carregado(s)\`);
+  console.log(`✅ ${commands.size} comando(s) carregado(s)`);
   console.log('');
 
-  // Conectar
+  // Conectar ao WhatsApp
   console.log('🔄 Iniciando conexão...');
-  await connectToWhatsApp();
+  await connectToWhatsApp(collection);
 }
 
-// Tratamento de erros não capturados
 process.on('uncaughtException', (err) => {
   console.error('❌ Erro não capturado:', err);
 });
@@ -396,11 +455,12 @@ process.on('unhandledRejection', (err) => {
   console.error('❌ Promise rejeitada:', err);
 });
 
-// Iniciar
 start().catch(err => {
   console.error('❌ Erro fatal ao iniciar bot:', err);
   process.exit(1);
-});`,
+});
+
+        `,
 
         'commands/ping.js': `module.exports = {
   name: 'ping',

@@ -27,7 +27,7 @@ const couponRoutes = require('./routes/coupons');
 const fileRoutes = require('./routes/files');
 const proxyRoutes = require('./routes/proxy');
 const terminalHandler = require('./controllers/terminal');
-const { startWhatsApp, disconnectWhatsApp } = require('./utils/whatsapp');
+const { startWhatsApp, disconnectWhatsApp, getWhatsAppSocket } = require('./utils/whatsapp'); // ✅ adicionar getWhatsAppSocket
 const paymentRoutes = require('./routes/payment');
 const authenticateToken = require('./middleware/auth');
 const domainsRoutes = require('./routes/domains');
@@ -38,6 +38,10 @@ const databasesRoutes = require('./routes/databases');
 const emailRoutes = require('./routes/emails');
 const billingRoutes = require('./routes/billing');
 
+// ✅ NOVO: Support bridge
+const supportBridge = require('./services/supportBridge');
+const supportRoutes = require('./routes/support');
+const { setupSupportSocket } = require('./routes/support');
 
 // ✨ NOVO: Importar NotificationManager
 const notificationManager = require('./utils/notification-manager');
@@ -62,13 +66,13 @@ const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGINS || '');
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-  console.log('🔍 Origin recebido:', JSON.stringify(origin));
-  console.log('🔍 Allowed:', ALLOWED_ORIGINS);
-  if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
-    return callback(null, true);
-  }
-  return callback(new Error('Not allowed by CORS'));
-},
+      console.log('🔍 Origin recebido:', JSON.stringify(origin));
+      console.log('🔍 Allowed:', ALLOWED_ORIGINS);
+      if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -84,7 +88,6 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
-// ✅ CORREÇÃO CORS - ADICIONAR X-API-Key
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
@@ -94,16 +97,15 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'] // ✅ ADICIONA X-API-Key
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key']
 }));
 
-// ✅ CORREÇÃO CORS OPTIONS - ADICIONAR X-API-Key
 app.options('*', (req, res) => {
   const reqOrigin = req.headers.origin;
   if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
     res.header('Access-Control-Allow-Origin', reqOrigin || '');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key'); // ✅ ADICIONA X-API-Key
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key');
     res.header('Access-Control-Allow-Credentials', 'true');
     return res.sendStatus(200);
   }
@@ -144,12 +146,11 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// ✨ NOVO: SOCKET.IO PARA NOTIFICAÇÕES
+// SOCKET.IO — NOTIFICAÇÕES + SUPORTE
 // ============================================
 io.on('connection', async (socket) => {
   console.log(`[Socket.IO] Cliente conectado: ${socket.id}`);
 
-  // Autenticar usuário via token
   const token = socket.handshake.auth.token || socket.handshake.query.token;
 
   if (!token) {
@@ -159,11 +160,9 @@ io.on('connection', async (socket) => {
   }
 
   try {
-    // Verificar token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.userId;
 
-    // Verificar se usuário existe
     const users = await database.query(
       'SELECT id, username FROM users WHERE id = ? AND is_active = true',
       [userId]
@@ -175,21 +174,44 @@ io.on('connection', async (socket) => {
       return;
     }
 
-    // Registrar conexão
     socket.userId = userId;
     socket.username = users[0].username;
     notificationManager.registerUserSocket(userId, socket.id);
 
     console.log(`✅ [Socket.IO] Usuário autenticado: ${socket.username} (ID: ${userId})`);
 
-    // Enviar notificação de boas-vindas (opcional)
     socket.emit('connected', {
       message: 'Conectado ao sistema de notificações',
       userId,
       username: socket.username
     });
 
-    // Desconexão
+    // ✅ NOVO: suporte — usuário entra na sala do seu ticket
+    socket.on('join_ticket', async ({ ticketId }) => {
+      if (!ticketId) return;
+      socket.join(`ticket_${ticketId}`);
+      console.log(`🎫 [Suporte] ${socket.username} entrou em ticket_${ticketId}`);
+
+      // Re-enviar estado do ticket caso o socket tenha reconnectado
+      try {
+        const tickets = await database.query(
+          'SELECT status, agent_name FROM support_tickets WHERE id = ? AND user_id = ?',
+          [ticketId, userId]
+        );
+        if (tickets.length > 0 && tickets[0].status === 'active') {
+          socket.emit('agente_entrou', {
+            agentName: tickets[0].agent_name,
+            ticketId,
+            reconnected: true
+          });
+        }
+      } catch {}
+    });
+
+    socket.on('leave_ticket', ({ ticketId }) => {
+      socket.leave(`ticket_${ticketId}`);
+    });
+
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Cliente desconectado: ${socket.id}`);
       if (socket.userId) {
@@ -197,7 +219,6 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // Evento de teste (opcional)
     socket.on('ping', () => {
       socket.emit('pong', { timestamp: Date.now() });
     });
@@ -227,6 +248,8 @@ app.use('/api', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/alexa', alexaRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/support', supportRoutes); // ✅ NOVO
+
 const terminalRoutes = require('./routes/terminal');
 app.use('/api/terminal', terminalRoutes);
 const logsRoutes = require('./routes/logs');
@@ -246,6 +269,7 @@ const emailForwarding = require('./routes/emailForwarding');
 const passkeysRouter = require('./routes/passkeys');
 app.use('/api/passkeys', passkeysRouter);
 app.use('/api/email-forwarding', emailForwarding);
+
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
@@ -315,7 +339,9 @@ app.use('*', (req, res) => {
   });
 });
 
-// Inicializar servidor
+// ============================================
+// INICIALIZAR SERVIDOR
+// ============================================
 async function startServer() {
   try {
     console.log('🔍 Testing database connection...');
@@ -337,12 +363,27 @@ async function startServer() {
     console.log('📱 Initializing WhatsApp...');
     startWhatsApp();
 
+    // ✅ NOVO: inicializar bridge APÓS o WhatsApp estar a arrancar
+    // Aguarda um pouco para o Baileys conectar antes de ligar o bridge
+    setTimeout(() => {
+      const sock = getWhatsAppSocket(); // getter que exportas do utils/whatsapp.js
+      if (sock) {
+        supportBridge.init(io, sock);
+        sock.ev.on('messages.upsert', supportBridge.handleIncomingWhatsApp);
+        console.log('🤝 SupportBridge conectado ao Baileys');
+      } else {
+        console.warn('⚠️  Baileys ainda não conectado — bridge iniciará sem WA');
+        supportBridge.init(io, null);
+      }
+    }, 5000);
+
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');
       console.log(`📡 Server running on port ${PORT}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`🔔 WebSocket notifications: ws://localhost:${PORT}`);
       console.log(`🔌 WebSocket terminal: ws://localhost:${PORT}/api/terminal/:containerId`);
+      console.log(`🤝 Support bridge: /api/support`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
