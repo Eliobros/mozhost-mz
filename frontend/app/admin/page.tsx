@@ -10,6 +10,7 @@ import { Coins } from './components/Coins';
 import { Modal } from './components/Modal';
 import { AuthGuard } from './components/AuthGuard';
 import { useAdminAuth } from './hooks/useAdminAuth';
+import { Campaigns } from './components/Campaigns';
 
 export default function AdminPanel() {
   const { password, isAuthenticated, login } = useAdminAuth();
@@ -63,6 +64,7 @@ export default function AdminPanel() {
         {currentPage === 'users' && <Users password={password} onOpenModal={setModal} key={`users-${refreshKey}`} />}
         {currentPage === 'containers' && <Containers password={password} key={`containers-${refreshKey}`} />}
         {currentPage === 'coins' && <Coins password={password} onOpenModal={setModal} key={`coins-${refreshKey}`} />}
+        {currentPage === 'campaigns' && <Campaigns password={password} key={`campaigns-${refreshKey}`} />}
       </div>
 
       <Modal modal={modal} onClose={() => setModal(null)} onSuccess={handleModalSuccess} />
