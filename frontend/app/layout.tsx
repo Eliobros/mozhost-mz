@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import CanonicalUrl from "@/components/CanonicalUrl";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,9 +25,7 @@ export const metadata: Metadata = {
     "cloud hosting",
     "eliobros tech",
   ],
-  alternates: {
-    canonical: "https://mozhost.shop",
-  },
+  // ← REMOVIDO alternates canonical fixo
   robots: {
     index: true,
     follow: true,
@@ -47,8 +46,8 @@ export default function RootLayout({
   return (
     <html lang="pt">
       <head>
-        {/* Canonical */}
-        <link rel="canonical" href="https://mozhost.shop" />
+        {/* Canonical dinâmico ← NOVO */}
+        <CanonicalUrl />
 
         {/* Viewport */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -56,24 +55,15 @@ export default function RootLayout({
         {/* Open Graph */}
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta
-          property="og:image"
-          content="https://mozhost.shop/mozhost.png"
-        />
-        <meta
-          property="og:url"
-          content="https://mozhost.shop"
-        />
+        <meta property="og:image" content="https://mozhost.shop/mozhost.png" />
+        <meta property="og:url" content="https://mozhost.shop" />
         <meta property="og:type" content="website" />
 
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
-        <meta
-          name="twitter:image"
-          content="https://mozhost.shop/mozhost.png"
-        />
+        <meta name="twitter:image" content="https://mozhost.shop/mozhost.png" />
 
         {/* Google Verification */}
         <meta
@@ -88,9 +78,8 @@ export default function RootLayout({
         {/* Theme Color */}
         <meta name="theme-color" content="#3B82F6" />
 
-        {/* SCHEMA 1 - WebHostingService (MozHost) */}
-        <script type="application/ld+json">
-          {`
+        {/* SCHEMA 1 - WebHostingService */}
+        <script type="application/ld+json">{`
 {
   "@context": "https://schema.org",
   "@type": "WebHostingService",
@@ -119,12 +108,10 @@ export default function RootLayout({
     "offerCount": "4"
   }
 }
-          `}
-        </script>
+        `}</script>
 
-        {/* SCHEMA 2 - Tabela de Planos */}
-        <script type="application/ld+json">
-          {`
+        {/* SCHEMA 2 - Planos */}
+        <script type="application/ld+json">{`
 {
   "@context": "https://schema.org",
   "@type": "OfferCatalog",
@@ -165,12 +152,10 @@ export default function RootLayout({
     }
   ]
 }
-          `}
-        </script>
+        `}</script>
 
-        {/* SCHEMA 3 - FAQ MozHost */}
-        <script type="application/ld+json">
-          {`
+        {/* SCHEMA 3 - FAQ */}
+        <script type="application/ld+json">{`
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
@@ -209,12 +194,10 @@ export default function RootLayout({
     }
   ]
 }
-          `}
-        </script>
+        `}</script>
 
-        {/* SCHEMA 4 - Organização Eliobros Tech */}
-        <script type="application/ld+json">
-          {`
+        {/* SCHEMA 4 - Organização */}
+        <script type="application/ld+json">{`
 {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -227,8 +210,7 @@ export default function RootLayout({
     "addressCountry": "MZ"
   }
 }
-          `}
-        </script>
+        `}</script>
       </head>
 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>

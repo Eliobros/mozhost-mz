@@ -249,7 +249,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/alexa', alexaRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/support', supportRoutes); // ✅ NOVO
-
+const campaigns = require('./routes/campaigns');
+app.use('/api', campaigns);
 const terminalRoutes = require('./routes/terminal');
 app.use('/api/terminal', terminalRoutes);
 const logsRoutes = require('./routes/logs');

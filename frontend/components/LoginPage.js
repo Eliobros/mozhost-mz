@@ -32,9 +32,12 @@ const LoginPage = () => {
   // Handle OAuth callback
   useEffect(() => {
     const hash = window.location.hash;
-    const search = window.location.search;
+    if (hash.startsWith('#oauth-callback')) {
+      const params = new URLSearchParams(hash.replace('#oauth-callback?', ''));
+      const token = params.get('token');
+      const needsProfile = params.get('needsProfile') === 'true';
+      const provider = params.get('provider');
 
-    const handleToken = (token, needsProfile, provider) => {
       if (token) {
         localStorage.setItem('mozhost_token', token);
         if (needsProfile) {
@@ -49,31 +52,14 @@ const LoginPage = () => {
           }).then(r => r.json()).then(data => {
             if (data.user) localStorage.setItem('mozhost_user', JSON.stringify(data.user));
             window.location.href = '/dashboard';
+            
           }).catch(() => {
             window.location.href = '/dashboard';
+            
           });
         }
       }
-    };
-
-    // Support both fragment-style callbacks and querystring callbacks
-    if (search.includes('token=')) {
-      const params = new URLSearchParams(search);
-      const token = params.get('token');
-      const needsProfile = params.get('needsProfile') === 'true';
-      const provider = params.get('provider');
-      handleToken(token, needsProfile, provider);
-      // remove query params from URL
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    } else if (hash.startsWith('#oauth-callback')) {
-      const params = new URLSearchParams(hash.replace('#oauth-callback?', ''));
-      const token = params.get('token');
-      const needsProfile = params.get('needsProfile') === 'true';
-      const provider = params.get('provider');
-      handleToken(token, needsProfile, provider);
     }
-
     if (hash.includes('error=google_failed') || hash.includes('error=github_failed')) {
       setError('Falha na autenticação. Tente novamente.');
       window.location.href = '/login';
@@ -718,11 +704,11 @@ setTimeout(() => {
                     <div className="ml-3 text-sm">
                       <label htmlFor="acceptTerms" className="text-blue-200">
                         Eu concordo com os{' '}
-                        <button type="button" onClick={() => window.location.hash = 'terms'} className="text-blue-300 hover:text-white underline">
+                        <button type="button" onClick={() => window.location.href = '/terms'} className="text-blue-300 hover:text-white underline">
                           Termos e Condições
                         </button>
                         {' '}e a{' '}
-                        <button type="button" onClick={() => window.location.hash = 'privacy'} className="text-blue-300 hover:text-white underline">
+                        <button type="button" onClick={() => window.location.href = '/privacy'} className="text-blue-300 hover:text-white underline">
                           Política de Privacidade
                         </button>
                       </label>
@@ -801,11 +787,11 @@ setTimeout(() => {
               </div>
 
               <div className="mt-6 text-center text-xs text-blue-300 space-x-4">
-                <button onClick={() => window.location.hash = 'terms'} className="hover:text-white transition-colors underline">
+                <button onClick={() => window.location.href = '/terms'} className="hover:text-white transition-colors underline">
                   Termos e Condições
                 </button>
                 <span>•</span>
-                <button onClick={() => window.location.hash = 'privacy'} className="hover:text-white transition-colors underline">
+                <button onClick={() => window.location.href = '/privacy'} className="hover:text-white transition-colors underline">
                   Política de Privacidade
                 </button>
               </div>
@@ -819,11 +805,11 @@ setTimeout(() => {
           <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-blue-200">
             <div className="flex items-center space-x-6">
               <span>© 2025 Eliobros Tech</span>
-              <a href="mailto:contact@mozhost.com" className="hover:text-white transition-colors">Contato</a>
+              <a href="mailto:contact@mozhost.shop" className="hover:text-white transition-colors">Contato</a>
               <span>Maputo, Moçambique</span>
             </div>
             <div className="mt-4 sm:mt-0">
-              <span>Versão 1.0.0</span>
+              <span>Versão 2.8.1</span>
             </div>
           </div>
         </div>

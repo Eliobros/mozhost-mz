@@ -1,1729 +1,696 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  Modal,
-  TextInput,
-  Linking,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, Stack } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
-import { api } from '@/services/api';
-import { Colors } from '@/constants/Colors';
+import { useState, useEffect, useCallback } from "react";
 
-// ===== TYPES =====
-
-type Domain = {
-  id: number;
-  domain: string;
-  status: string;
-  container_id: number;
-  container_name: string;
-  container_type: string;
-  server_ip: string;
-  ssl_status?: string;
-  ssl_expires_at?: string;
-  verified_at?: string;
-  created_at: string;
+// ─── ICONS (inline SVG para não depender de libs) ───────────────────────────
+const Icon = ({ d, size = 16, stroke = "currentColor", fill = "none" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+);
+const Icons = {
+  globe:    "M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z",
+  refresh:  "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15",
+  lock:     "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
+  unlock:   "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 9.9-1",
+  dns:      "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z",
+  ns:       "M5 12h14M12 5l7 7-7 7",
+  transfer: "M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3",
+  plus:     "M12 5v14M5 12h14",
+  trash:    "M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2",
+  check:    "M20 6L9 17l-5-5",
+  x:        "M18 6L6 18M6 6l12 12",
+  clock:    "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
+  eye:      "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+  search:   "M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z",
+  copy:     "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2M8 4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2M8 4h8",
+  warn:     "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
 };
 
-type Container = {
-  id: number;
-  name: string;
-  type: string;
-  status: string;
-};
+// ─── API HELPER ─────────────────────────────────────────────────────────────
+const API_BASE = typeof window !== 'undefined'
+  ? (window.__API_BASE__ || 'https://api.mozhost.shop/api/registrar')
+  : 'https://api.mozhost.shop/api/registrar';
 
-type SearchResult = {
-  domain: string;
-  available: boolean;
-  price: string;
-  regular_price?: string;
-  first_year_promo?: boolean;
-  premium?: boolean;
-  renewal_price?: string;
-};
-
-type RegisteredDomain = {
-  domain: string;
-  expireDate?: string;
-  expire_date?: string;
-  status?: string;
-  createDate?: string;
-};
-
-const POPULAR_TLDS = ['.com', '.net', '.org', '.io', '.dev', '.app', '.co', '.mz'];
-
-const DEFAULT_RATE = 64;
-
-
-function useExchangeRate() {
-  const [rate, setRate] = useState(DEFAULT_RATE);
-  useEffect(() => {
-    fetch('https://open.er-api.com/v6/latest/USD')
-      .then(r => r.json())
-      .then(d => { if (d.rates?.MZN) setRate(d.rates.MZN); })
-      .catch(() => {});
-  }, []);
-  return rate;
+async function api(path, opts = {}) {
+  const token = localStorage.getItem('token') || '';
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return json;
 }
 
-function formatMZN(usd: string | number, rate: number): string {
-  const mzn = Math.ceil(parseFloat(String(usd)) * rate);
-  return `${mzn.toLocaleString('pt-MZ')} MT`;
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr) - new Date();
+  return Math.ceil(diff / 86400000);
+}
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function statusColor(status) {
+  const map = { completed: '#22c55e', failed: '#ef4444', processing: '#f59e0b', pending: '#6b7280', executing: '#3b82f6' };
+  return map[status] || '#6b7280';
+}
+function expiryColor(days) {
+  if (days === null) return '#6b7280';
+  if (days <= 14) return '#ef4444';
+  if (days <= 30) return '#f59e0b';
+  return '#22c55e';
 }
 
+// ─── TOAST ──────────────────────────────────────────────────────────────────
+function Toast({ toasts }) {
+  return (
+    <div style={{ position:'fixed', bottom:24, right:24, zIndex:9999, display:'flex', flexDirection:'column', gap:8 }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          background: t.type === 'error' ? '#1a0a0a' : t.type === 'success' ? '#0a1a0a' : '#0a0a1a',
+          border: `1px solid ${t.type === 'error' ? '#7f1d1d' : t.type === 'success' ? '#14532d' : '#1e3a5f'}`,
+          color: t.type === 'error' ? '#fca5a5' : t.type === 'success' ? '#86efac' : '#93c5fd',
+          padding: '10px 16px', borderRadius: 8, fontSize: 13, maxWidth: 320,
+          animation: 'slideIn 0.2s ease',
+        }}>
+          {t.msg}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-// ===== MAIN SCREEN =====
+// ─── BADGE ──────────────────────────────────────────────────────────────────
+function Badge({ label, color = '#6b7280' }) {
+  return (
+    <span style={{
+      background: color + '22', color, border: `1px solid ${color}44`,
+      borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
+      letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+    }}>{label}</span>
+  );
+}
 
-export default function DomainsScreen() {
-  const router = useRouter();
-  const exchangeRate = useExchangeRate();
+// ─── MODAL ──────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children, width = 520 }) {
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:1000,
+      background:'rgba(0,0,0,0.7)', backdropFilter:'blur(4px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:16
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{
+        background:'#0f1117', border:'1px solid #1e2130', borderRadius:12,
+        width:'100%', maxWidth:width, maxHeight:'90vh', overflow:'auto',
+        padding:24, position:'relative'
+      }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:15, color:'#e2e8f0' }}>{title}</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#6b7280', cursor:'pointer', padding:4 }}>
+            <Icon d={Icons.x} size={18} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-  // Tab
-  const [activeTab, setActiveTab] = useState<'connected' | 'register'>('connected');
+// ─── INPUT ──────────────────────────────────────────────────────────────────
+function Input({ label, ...props }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {label && <label style={{ display:'block', fontSize:12, color:'#94a3b8', marginBottom:5, fontWeight:500 }}>{label}</label>}
+      <input style={{
+        width:'100%', background:'#1a1d2e', border:'1px solid #2a2f45', borderRadius:7,
+        padding:'9px 12px', color:'#e2e8f0', fontSize:13, outline:'none', boxSizing:'border-box',
+      }} {...props} />
+    </div>
+  );
+}
 
-  // Connected domains (existing)
-  const [domains, setDomains] = useState<Domain[]>([]);
-  const [containers, setContainers] = useState<Container[]>([]);
+function Select({ label, children, ...props }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {label && <label style={{ display:'block', fontSize:12, color:'#94a3b8', marginBottom:5, fontWeight:500 }}>{label}</label>}
+      <select style={{
+        width:'100%', background:'#1a1d2e', border:'1px solid #2a2f45', borderRadius:7,
+        padding:'9px 12px', color:'#e2e8f0', fontSize:13, outline:'none', boxSizing:'border-box',
+      }} {...props}>{children}</select>
+    </div>
+  );
+}
+
+function Btn({ children, onClick, variant='primary', disabled, loading, size='md', icon, style:sx={} }) {
+  const variants = {
+    primary: { background:'#3b5bdb', color:'#fff', border:'none' },
+    danger:  { background:'#7f1d1d', color:'#fca5a5', border:'1px solid #991b1b' },
+    ghost:   { background:'transparent', color:'#94a3b8', border:'1px solid #2a2f45' },
+    success: { background:'#14532d', color:'#86efac', border:'1px solid #166534' },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled || loading} style={{
+      ...variants[variant],
+      borderRadius: 7, cursor: disabled || loading ? 'not-allowed' : 'pointer',
+      padding: size === 'sm' ? '6px 12px' : '9px 16px',
+      fontSize: size === 'sm' ? 12 : 13, fontWeight: 600,
+      opacity: disabled || loading ? 0.6 : 1,
+      display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
+      ...sx
+    }}>
+      {loading ? '...' : icon}{children}
+    </button>
+  );
+}
+
+// ─── DNS MODAL ───────────────────────────────────────────────────────────────
+function DnsModal({ domain, onClose, toast }) {
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [verifying, setVerifying] = useState<Record<number, boolean>>({});
-  const [copiedField, setCopiedField] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  // Connect domain modal
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedContainer, setSelectedContainer] = useState<number | null>(null);
-  const [newDomain, setNewDomain] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Search / Register
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [registeredDomains, setRegisteredDomains] = useState<RegisteredDomain[]>([]);
-
-  // Buy modal
-  const [showBuyModal, setShowBuyModal] = useState<SearchResult | null>(null);
-  const [buyStep, setBuyStep] = useState(1);
-  const [buyLinkContainer, setBuyLinkContainer] = useState<number | null>(null);
-
-  // Renew modal
-  const [showRenewModal, setShowRenewModal] = useState<RegisteredDomain | null>(null);
-  const [renewYears, setRenewYears] = useState(1);
-  const [renewStep, setRenewStep] = useState(1);
-
-  // Payment (shared between buy/renew)
-  const [payMethod, setPayMethod] = useState<'mpesa' | 'emola' | 'mercadopago'>('mpesa');
-  const [payPhone, setPayPhone] = useState('');
-  const [payPhoneError, setPayPhoneError] = useState('');
-  const [payProcessing, setPayProcessing] = useState(false);
-  const [payResult, setPayResult] = useState<any>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ===== DATA LOADING =====
-
-  const loadData = useCallback(async () => {
-    try {
-      const [domainsData, containersData] = await Promise.all([
-        api.get('/domains'),
-        api.get('/containers'),
-      ]);
-      setDomains(Array.isArray(domainsData) ? domainsData : []);
-      setContainers(containersData?.containers || []);
-    } catch {
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const loadRegisteredDomains = useCallback(async () => {
-    try {
-      const data = await api.get('/registrar/list');
-      setRegisteredDomains(data?.domains || []);
-    } catch {
-      // Porkbun may not be configured
-    }
-  }, []);
+  const [form, setForm] = useState({ name: '', type: 'A', content: '', ttl: '1800' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadData();
-    loadRegisteredDomains();
-  }, [loadData, loadRegisteredDomains]);
+    api(`/dns/${domain}`).then(d => { setRecords(d.records || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [domain]);
 
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-    loadRegisteredDomains();
-  };
-
-  // ===== HELPERS =====
-
-  const copyToClipboard = async (text: string, field: string) => {
-    await Clipboard.setStringAsync(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(''), 2000);
-  };
-
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { icon: string; color: string; bg: string; label: string }> = {
-      pending: { icon: 'time', color: '#eab308', bg: '#fefce8', label: 'Pendente' },
-      dns_configured: { icon: 'sync', color: '#3b82f6', bg: '#eff6ff', label: 'DNS OK' },
-      ssl_generating: { icon: 'lock-closed', color: '#a855f7', bg: '#faf5ff', label: 'SSL...' },
-      active: { icon: 'checkmark-circle', color: '#22c55e', bg: '#f0fdf4', label: 'Ativo' },
-      failed: { icon: 'close-circle', color: '#ef4444', bg: '#fef2f2', label: 'Falhou' },
-    };
-    return configs[status] || { icon: 'help-circle', color: '#6b7280', bg: '#f9fafb', label: status || '?' };
-  };
-
-  const daysUntil = (date?: string) => {
-    if (!date) return null;
-    const diff = new Date(date).getTime() - Date.now();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  };
-
-  const getExpiryColor = (days: number | null) => {
-    if (days === null) return Colors.textMuted;
-    if (days < 0) return '#ef4444';
-    if (days <= 30) return '#ef4444';
-    if (days <= 90) return '#f59e0b';
-    return '#22c55e';
-  };
-
-  // ===== CONNECTED DOMAIN ACTIONS =====
-
-  const handleAddDomain = async () => {
-    if (!newDomain.trim()) {
-      Alert.alert('Erro', 'Digite o domínio');
-      return;
-    }
-    if (!selectedContainer) {
-      Alert.alert('Erro', 'Selecione um container');
-      return;
-    }
-    setSubmitting(true);
+  async function addRecord() {
+    if (!form.content) return;
+    setSaving(true);
     try {
-      const data = await api.post('/domains', {
-        containerId: selectedContainer,
-        domain: newDomain.toLowerCase().trim(),
-      });
-      setShowAddModal(false);
-      setNewDomain('');
-      setSelectedContainer(null);
-      await loadData();
-      Alert.alert(
-        'Domínio Adicionado!',
-        `Configure um registro DNS tipo A apontando para: ${data.instructions?.ip || 'IP do servidor'}\n\nAguarde 5-30 minutos para propagação.`
-      );
-    } catch (err: any) {
-      Alert.alert('Erro', err.error || err.message || 'Falha ao adicionar domínio');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleVerify = async (id: number) => {
-    setVerifying((prev) => ({ ...prev, [id]: true }));
-    try {
-      const data = await api.post(`/domains/${id}/verify`);
-      if (data.configured) {
-        Alert.alert('✅ DNS Verificado', `IP detectado: ${data.ip}`);
-      } else {
-        Alert.alert('⏳ DNS Pendente', `IP detectado: ${data.ip || 'nenhum'}\n\nO DNS ainda não propagou. Tente novamente em alguns minutos.`);
-      }
-      await loadData();
-    } catch (err: any) {
-      Alert.alert('Erro', err.error || 'Falha na verificação');
-    } finally {
-      setVerifying((prev) => ({ ...prev, [id]: false }));
-    }
-  };
-
-  const handleDelete = (id: number, domain: string) => {
-    Alert.alert(
-      'Remover Domínio',
-      `Remover "${domain}"? O domínio será desconectado do container.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/domains/${id}`);
-              await loadData();
-            } catch (err: any) {
-              Alert.alert('Erro', err.error || 'Falha ao remover');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // ===== SEARCH =====
-
-  const checkDomain = async () => {
-    const raw = searchQuery.trim().toLowerCase();
-    if (!raw) return;
-
-    setSearching(true);
-    setSearchResults([]);
-
-    const hasTld = raw.includes('.');
-    const domainsToCheck = hasTld ? [raw] : POPULAR_TLDS.map(tld => `${raw}${tld}`);
-
-    try {
-      const results = await Promise.allSettled(
-        domainsToCheck.map(async (domain) => {
-          const data = await api.get(`/registrar/check/${domain}`);
-          return { ...data, domain } as SearchResult;
-        })
-      );
-
-      const parsed = results
-        .filter((r): r is PromiseFulfilledResult<SearchResult> => r.status === 'fulfilled')
-        .map(r => r.value)
-        .sort((a, b) => {
-          if (a.available && !b.available) return -1;
-          if (!a.available && b.available) return 1;
-          return (parseFloat(a.price) || 999) - (parseFloat(b.price) || 999);
-        });
-
-      setSearchResults(parsed);
-      if (parsed.length === 0) Alert.alert('Info', 'Nenhum resultado encontrado');
-    } catch {
-      Alert.alert('Erro', 'Erro ao pesquisar domínios');
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // ===== PHONE VALIDATION =====
-
-  const handlePayPhoneChange = (value: string) => {
-    const clean = value.replace(/[^0-9]/g, '');
-    setPayPhone(clean);
-    if (clean.length === 0) { setPayPhoneError(''); return; }
-    if (clean.length < 9) { setPayPhoneError('Número deve ter 9 dígitos'); return; }
-    if (clean.length > 9) { setPayPhoneError('Máximo 9 dígitos'); return; }
-    const prefix = clean.substring(0, 2);
-    if (!['84', '85', '86', '87'].includes(prefix)) { setPayPhoneError('Deve começar com 84, 85, 86 ou 87'); return; }
-    if (payMethod === 'mpesa' && !['84', '85'].includes(prefix)) { setPayPhoneError('M-Pesa aceita apenas 84/85'); return; }
-    if (payMethod === 'emola' && !['86', '87'].includes(prefix)) { setPayPhoneError('e-Mola aceita apenas 86/87'); return; }
-    setPayPhoneError('');
-  };
-
-  // ===== PAYMENT =====
-
-  const resetPayState = () => {
-    setBuyStep(1);
-    setRenewStep(1);
-    setPayMethod('mpesa');
-    setPayPhone('');
-    setPayPhoneError('');
-    setPayProcessing(false);
-    setPayResult(null);
-    setBuyLinkContainer(null);
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  };
-
-  const closeBuyModal = () => { setShowBuyModal(null); resetPayState(); };
-  const closeRenewModal = () => { setShowRenewModal(null); setRenewYears(1); resetPayState(); };
-
-  const submitDomainPayment = async (action: 'buy' | 'renew', domain: string, cost: string, years?: number) => {
-    if ((payMethod === 'mpesa' || payMethod === 'emola') && payPhone.length !== 9) {
-      Alert.alert('Erro', 'Digite um número válido com 9 dígitos');
-      return;
-    }
-    if (payPhoneError) {
-      Alert.alert('Erro', 'Corrija o número de telefone');
-      return;
-    }
-
-    setPayProcessing(true);
-    try {
-      const body: any = { domain, action, cost, method: payMethod, years: years || 1 };
-      if (payMethod === 'mpesa' || payMethod === 'emola') body.phone = payPhone;
-
-      const data = await api.post('/registrar/pay', body);
-
-      if (data.success) {
-        setPayResult(data);
-
-        if (data.payment_url) {
-          Linking.openURL(data.payment_url).catch(() => {});
-        }
-
-        // Poll payment status
-        if (data.payment_id) {
-          const interval = setInterval(async () => {
-            try {
-              const sData = await api.get(`/registrar/pay/${data.payment_id}/status`);
-              if (sData.payment?.status === 'completed') {
-                clearInterval(interval);
-                pollingRef.current = null;
-                Alert.alert('🎉 Sucesso!', action === 'buy' ? 'Domínio registrado com sucesso!' : 'Domínio renovado com sucesso!');
-
-                if (action === 'buy' && buyLinkContainer) {
-                  try {
-                    await api.post('/domains', { containerId: buyLinkContainer, domain });
-                  } catch {}
-                }
-
-                closeBuyModal();
-                closeRenewModal();
-                loadData();
-                loadRegisteredDomains();
-              } else if (sData.payment?.status === 'failed') {
-                clearInterval(interval);
-                pollingRef.current = null;
-                Alert.alert('Erro', 'Pagamento falhou. Tente novamente.');
-              }
-            } catch {}
-          }, 5000);
-          pollingRef.current = interval;
-          setTimeout(() => {
-            if (pollingRef.current) {
-              clearInterval(pollingRef.current);
-              pollingRef.current = null;
-            }
-          }, 600000);
-        }
-      } else {
-        Alert.alert('Erro', data.error || 'Erro ao processar pagamento');
-      }
-    } catch (err: any) {
-      Alert.alert('Erro', err.error || err.message || 'Erro de conexão');
-    } finally {
-      setPayProcessing(false);
-    }
-  };
-
-  // ===== FILTERS =====
-
-  const filteredDomains =
-    statusFilter === 'all'
-      ? domains
-      : domains.filter((d) => d.status === statusFilter);
-
-  // ===== RENDER =====
-
-  if (loading) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Domínios', headerShown: true }} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      </>
-    );
+      await api(`/dns/${domain}`, { method:'POST', body: JSON.stringify(form) });
+      toast('Registo DNS adicionado', 'success');
+      const d = await api(`/dns/${domain}`);
+      setRecords(d.records || []);
+      setForm({ name:'', type:'A', content:'', ttl:'1800' });
+    } catch(e) { toast(e.message, 'error'); }
+    setSaving(false);
   }
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: 'Domínios',
-          headerShown: true,
-          headerStyle: { backgroundColor: Colors.surface },
-          headerTintColor: Colors.text,
-          headerTitleStyle: { fontWeight: '700' },
-        }}
-      />
-
-      <View style={styles.container}>
-        {/* Tab Bar */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'connected' && styles.tabActive]}
-            onPress={() => setActiveTab('connected')}>
-            <Ionicons name="globe" size={16} color={activeTab === 'connected' ? Colors.primary : Colors.textMuted} />
-            <Text style={[styles.tabText, activeTab === 'connected' && styles.tabTextActive]}>Meus Domínios</Text>
-            {domains.length > 0 && (
-              <View style={[styles.tabBadge, activeTab === 'connected' && styles.tabBadgeActive]}>
-                <Text style={[styles.tabBadgeText, activeTab === 'connected' && styles.tabBadgeTextActive]}>{domains.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'register' && styles.tabActive]}
-            onPress={() => setActiveTab('register')}>
-            <Ionicons name="search" size={16} color={activeTab === 'register' ? Colors.primary : Colors.textMuted} />
-            <Text style={[styles.tabText, activeTab === 'register' && styles.tabTextActive]}>Registrar</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ===== TAB: CONNECTED DOMAINS ===== */}
-        {activeTab === 'connected' && (
-          <>
-            {/* Header bar */}
-            <View style={styles.headerBar}>
-              <Text style={styles.headerCount}>{domains.length} domínio(s)</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={styles.addBtnText}>Conectar</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Status filters */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-              {[
-                { key: 'all', label: 'Todos' },
-                { key: 'active', label: 'Ativos' },
-                { key: 'pending', label: 'Pendentes' },
-                { key: 'failed', label: 'Falhos' },
-              ].map((f) => (
-                <TouchableOpacity
-                  key={f.key}
-                  style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
-                  onPress={() => setStatusFilter(f.key)}>
-                  <Text style={[styles.filterText, statusFilter === f.key && styles.filterTextActive]}>
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Domains list */}
-            <ScrollView
-              style={{ flex: 1 }}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-              {filteredDomains.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="globe-outline" size={64} color={Colors.textMuted} />
-                  <Text style={styles.emptyTitle}>
-                    {statusFilter !== 'all' ? 'Nenhum domínio com este status' : 'Nenhum domínio conectado'}
-                  </Text>
-                  <Text style={styles.emptySubtitle}>
-                    Conecte um domínio ou registre um novo na aba "Registrar"
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.addBtn, { marginTop: 16 }]}
-                    onPress={() => setActiveTab('register')}>
-                    <Ionicons name="search" size={18} color="#fff" />
-                    <Text style={styles.addBtnText}>Registrar Novo</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                filteredDomains.map((domain) => {
-                  const st = getStatusConfig(domain.status);
-                  return (
-                    <View key={domain.id} style={styles.card}>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.cardTitleRow}>
-                          <Ionicons name="globe" size={20} color={Colors.primary} />
-                          <Text style={styles.domainName} numberOfLines={1}>{domain.domain}</Text>
-                        </View>
-                        <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
-                          <Ionicons name={st.icon as any} size={14} color={st.color} />
-                          <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.domainInfo}>
-                        <View style={styles.infoItem}>
-                          <Text style={styles.infoLabel}>Container</Text>
-                          <Text style={styles.infoValue}>{domain.container_name}</Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                          <Text style={styles.infoLabel}>Tipo</Text>
-                          <Text style={styles.infoValue}>{domain.container_type}</Text>
-                        </View>
-                        {domain.ssl_status === 'active' && (
-                          <View style={styles.infoItem}>
-                            <Ionicons name="lock-closed" size={14} color={Colors.success} />
-                            <Text style={[styles.infoValue, { color: Colors.success }]}>SSL Ativo</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {domain.status === 'pending' && domain.server_ip && (
-                        <View style={styles.dnsBox}>
-                          <Text style={styles.dnsTitle}>⚙️ Configure o DNS:</Text>
-                          <Text style={styles.dnsInstruction}>
-                            Adicione um registro tipo <Text style={styles.dnsBold}>A</Text> apontando para:
-                          </Text>
-                          <TouchableOpacity
-                            style={styles.ipRow}
-                            onPress={() => copyToClipboard(domain.server_ip, `ip-${domain.id}`)}>
-                            <Text style={styles.ipText}>{domain.server_ip}</Text>
-                            <Ionicons
-                              name={copiedField === `ip-${domain.id}` ? 'checkmark' : 'copy'}
-                              size={16}
-                              color={copiedField === `ip-${domain.id}` ? Colors.success : Colors.textMuted}
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
-                      <View style={styles.cardActions}>
-                        <TouchableOpacity
-                          style={[styles.actionChip, { backgroundColor: '#eff6ff' }]}
-                          onPress={() => handleVerify(domain.id)}
-                          disabled={verifying[domain.id]}>
-                          {verifying[domain.id] ? (
-                            <ActivityIndicator size="small" color={Colors.primary} />
-                          ) : (
-                            <>
-                              <Ionicons name="sync" size={16} color={Colors.primary} />
-                              <Text style={[styles.actionChipText, { color: Colors.primary }]}>Verificar DNS</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.actionChip, { backgroundColor: '#fef2f2' }]}
-                          onPress={() => handleDelete(domain.id, domain.domain)}>
-                          <Ionicons name="trash" size={16} color={Colors.error} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-              <View style={{ height: 32 }} />
-            </ScrollView>
-          </>
-        )}
-
-        {/* ===== TAB: REGISTER / SEARCH / BUY ===== */}
-        {activeTab === 'register' && (
-          <ScrollView
-            style={{ flex: 1 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-
-            {/* Search Box */}
-            <View style={styles.searchCard}>
-              <Text style={styles.searchTitle}>Encontre o domínio perfeito</Text>
-              <Text style={styles.searchSubtitle}>Pesquise a disponibilidade e registre em segundos</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="meusite.com ou apenas meusite"
-                  placeholderTextColor={Colors.textMuted}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                  returnKeyType="search"
-                  onSubmitEditing={checkDomain}
-                />
-                <TouchableOpacity
-                  style={[styles.searchBtn, (!searchQuery.trim() || searching) && { opacity: 0.5 }]}
-                  onPress={checkDomain}
-                  disabled={!searchQuery.trim() || searching}>
-                  {searching ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="search" size={20} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.searchHint}>💡 Digite sem extensão para pesquisar múltiplas extensões</Text>
-            </View>
-
-            {/* Searching indicator */}
-            {searching && (
-              <View style={styles.searchingBox}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={styles.searchingText}>Pesquisando disponibilidade...</Text>
-              </View>
-            )}
-
-            {/* Search Results */}
-            {!searching && searchResults.length > 0 && (
-              <View style={styles.resultsCard}>
-                <View style={styles.resultsHeader}>
-                  <Text style={styles.resultsHeaderText}>
-                    {searchResults.filter(r => r.available).length} disponíveis de {searchResults.length}
-                  </Text>
-                  <TouchableOpacity onPress={() => setSearchResults([])}>
-                    <Text style={styles.clearResults}>Limpar</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {searchResults.map((result, i) => (
-                  <View key={i} style={[styles.resultItem, !result.available && { opacity: 0.5 }]}>
-                    <View style={styles.resultLeft}>
-                      <Ionicons
-                        name={result.available ? 'checkmark-circle' : 'close-circle'}
-                        size={22}
-                        color={result.available ? '#22c55e' : '#ef4444'}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.resultDomain}>{result.domain}</Text>
-                        <View style={styles.resultBadges}>
-                          {result.first_year_promo && (
-                            <View style={styles.promoBadge}>
-                              <Text style={styles.promoBadgeText}>Promo 1º ano</Text>
-                            </View>
-                          )}
-                          {result.premium && (
-                            <View style={styles.premiumBadge}>
-                              <Text style={styles.premiumBadgeText}>Premium</Text>
-                            </View>
-                          )}
-                          {result.renewal_price && (
-                          <Text style={styles.renewalPrice}>
-  Renovação: {formatMZN(result.renewal_price!, exchangeRate)}/ano
-</Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-                    {result.available ? (
-                      <View style={styles.resultRight}>
-                        <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.resultPrice}>{formatMZN(result.price, exchangeRate)}</Text>
-<Text style={styles.resultRegularPrice}>~${result.price} USD</Text>
-{result.regular_price && result.regular_price !== result.price && (
-  <Text style={[styles.resultRegularPrice, { textDecorationLine: 'line-through' }]}>
-    {formatMZN(result.regular_price, exchangeRate)}
-  </Text>
-)}
-                        </View>
-                        <TouchableOpacity
-                          style={styles.buyBtn}
-                          onPress={() => { setShowBuyModal(result); setBuyStep(1); }}>
-                          <Ionicons name="cart" size={16} color="#fff" />
-                          <Text style={styles.buyBtnText}>Comprar</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <Text style={styles.unavailableText}>Indisponível</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Registered Domains */}
-            <View style={styles.registeredCard}>
-              <View style={styles.registeredHeader}>
-                <View>
-                  <Text style={styles.registeredTitle}>Domínios Registrados</Text>
-                  <Text style={styles.registeredSubtitle}>Domínios na sua conta</Text>
-                </View>
-                <TouchableOpacity onPress={loadRegisteredDomains} style={styles.refreshBtn}>
-                  <Ionicons name="refresh" size={18} color={Colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-
-              {registeredDomains.length === 0 ? (
-                <View style={styles.regEmptyState}>
-                  <Ionicons name="globe-outline" size={48} color={Colors.textMuted} />
-                  <Text style={styles.regEmptyTitle}>Nenhum domínio registrado</Text>
-                  <Text style={styles.regEmptySubtitle}>Use a pesquisa acima para registrar</Text>
-                </View>
-              ) : (
-                registeredDomains.map((d, i) => {
-                  const domainName = d.domain || (d as any);
-                  const expiry = d.expireDate || d.expire_date;
-                  const days = daysUntil(expiry);
-                  const expiryColor = getExpiryColor(days);
-                  const isConnected = domains.some(cd => cd.domain === domainName);
-
-                  return (
-                    <View key={i} style={styles.regItem}>
-                      <View style={styles.regItemMain}>
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.regItemNameRow}>
-                            <Text style={styles.regItemName} numberOfLines={1}>{domainName}</Text>
-                            {isConnected && (
-                              <View style={styles.connectedBadge}>
-                                <Ionicons name="link" size={10} color={Colors.primary} />
-                                <Text style={styles.connectedBadgeText}>Conectado</Text>
-                              </View>
-                            )}
-                          </View>
-                          {expiry && (
-                            <View style={styles.expiryRow}>
-                              <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
-                              <Text style={styles.expiryText}>
-                                Expira: {new Date(expiry).toLocaleDateString('pt-BR')}
-                              </Text>
-                              {days !== null && (
-                                <View style={[styles.expiryBadge, { backgroundColor: expiryColor + '20' }]}>
-                                  <Text style={[styles.expiryBadgeText, { color: expiryColor }]}>
-                                    {days < 0 ? 'Expirado' : `${days}d`}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          )}
-                        </View>
-                        <TouchableOpacity
-                          style={styles.renewBtn}
-                          onPress={() => { setShowRenewModal({ ...d, domain: domainName }); setRenewYears(1); setRenewStep(1); }}>
-                          <Ionicons name="refresh" size={14} color="#92400e" />
-                          <Text style={styles.renewBtnText}>Renovar</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-
-            <View style={{ height: 32 }} />
-          </ScrollView>
-        )}
-
-        {/* ===== MODAL: CONNECT DOMAIN ===== */}
-        <Modal visible={showAddModal} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Conectar Domínio</Text>
-                <TouchableOpacity onPress={() => { setShowAddModal(false); setNewDomain(''); setSelectedContainer(null); }}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView>
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Domínio</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="meusite.com.br"
-                    placeholderTextColor={Colors.textMuted}
-                    value={newDomain}
-                    onChangeText={setNewDomain}
-                    autoCapitalize="none"
-                    keyboardType="url"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Conectar ao Container</Text>
-                  {containers.length === 0 ? (
-                    <Text style={styles.noContainers}>Nenhum container disponível.</Text>
-                  ) : (
-                    containers.map((c) => (
-                      <TouchableOpacity
-                        key={c.id}
-                        style={[styles.containerOption, selectedContainer === c.id && styles.containerOptionActive]}
-                        onPress={() => setSelectedContainer(c.id)}>
-                        <View style={styles.containerOptionRow}>
-                          <Ionicons name="server" size={18} color={selectedContainer === c.id ? Colors.primary : Colors.textSecondary} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.containerOptionName, selectedContainer === c.id && { color: Colors.primary }]}>{c.name}</Text>
-                            <Text style={styles.containerOptionType}>{c.type} • {c.status}</Text>
-                          </View>
-                          {selectedContainer === c.id && <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />}
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.submitBtn, (submitting || !newDomain.trim() || !selectedContainer) && { opacity: 0.5 }]}
-                  onPress={handleAddDomain}
-                  disabled={submitting || !newDomain.trim() || !selectedContainer}>
-                  {submitting ? <ActivityIndicator color="#fff" /> : (
-                    <>
-                      <Ionicons name="link" size={18} color="#fff" />
-                      <Text style={styles.submitBtnText}>Conectar Domínio</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* ===== MODAL: BUY DOMAIN ===== */}
-        <Modal visible={!!showBuyModal && !payResult} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {buyStep === 1 ? 'Registrar Domínio' : 'Pagamento'}
-                </Text>
-                <TouchableOpacity onPress={closeBuyModal}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView>
-                {/* Domain summary */}
-                {showBuyModal && (
-                  <View style={styles.buySummary}>
-                    <View>
-                      <Text style={styles.buySummaryDomain}>{showBuyModal.domain}</Text>
-                      <View style={styles.resultBadges}>
-                        {showBuyModal.first_year_promo && (
-                          <View style={styles.promoBadge}>
-                            <Text style={styles.promoBadgeText}>Promo</Text>
-                          </View>
-                        )}
-                        {showBuyModal.renewal_price && (
-                          <Text style={styles.renewalPrice}>Renovação: ${showBuyModal.renewal_price}/ano</Text>
-                        )}
-                      </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.buySummaryPrice}>
-  {formatMZN(showBuyModal.price, exchangeRate)}
-</Text>
-<Text style={styles.buySummaryPriceLabel}>~${showBuyModal.price} MZN · por ano</Text>
-                    </View>
-                  </View>
-                )}
-
-                {buyStep === 1 && (
-                  <>
-                    <View style={styles.formGroup}>
-                      <Text style={styles.formLabel}>Conectar a um container (opcional)</Text>
-                      {containers.map((c) => (
-                        <TouchableOpacity
-                          key={c.id}
-                          style={[styles.containerOption, buyLinkContainer === c.id && styles.containerOptionActive]}
-                          onPress={() => setBuyLinkContainer(buyLinkContainer === c.id ? null : c.id)}>
-                          <View style={styles.containerOptionRow}>
-                            <Ionicons name="server" size={18} color={buyLinkContainer === c.id ? Colors.primary : Colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.containerOptionName, buyLinkContainer === c.id && { color: Colors.primary }]}>{c.name}</Text>
-                              <Text style={styles.containerOptionType}>{c.type}</Text>
-                            </View>
-                            {buyLinkContainer === c.id && <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />}
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                      <Text style={styles.formHint}>O domínio será conectado após o pagamento</Text>
-                    </View>
-
-                    <View style={styles.modalBtns}>
-                      <TouchableOpacity style={styles.modalBtnCancel} onPress={closeBuyModal}>
-                        <Text style={styles.modalBtnCancelText}>Cancelar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => setBuyStep(2)}>
-                        <Text style={styles.modalBtnPrimaryText}>Ir para Pagamento</Text>
-                        <Ionicons name="arrow-forward" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-
-                {buyStep === 2 && showBuyModal && (
-                  <>
-                    {renderPaymentForm()}
-                    <View style={styles.modalBtns}>
-                      <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setBuyStep(1)}>
-                        <Text style={styles.modalBtnCancelText}>Voltar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modalBtnBuy, (payProcessing || ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))) && { opacity: 0.5 }]}
-                        onPress={() => submitDomainPayment('buy', showBuyModal.domain, showBuyModal.price)}
-                        disabled={payProcessing || ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))}>
-                        {payProcessing ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="cart" size={18} color="#fff" />}
-                        <Text style={styles.modalBtnPrimaryText}>Pagar e Registrar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* ===== MODAL: RENEW DOMAIN ===== */}
-        <Modal visible={!!showRenewModal && !payResult} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {renewStep === 1 ? 'Renovar Domínio' : 'Pagamento'}
-                </Text>
-                <TouchableOpacity onPress={closeRenewModal}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView>
-                {showRenewModal && (
-                  <View style={styles.renewSummary}>
-                    <Ionicons name="globe" size={24} color="#92400e" />
-                    <Text style={styles.renewSummaryDomain}>{showRenewModal.domain}</Text>
-                  </View>
-                )}
-
-                {renewStep === 1 && (
-                  <>
-                    <View style={styles.formGroup}>
-                      <Text style={styles.formLabel}>Duração da renovação</Text>
-                      <View style={styles.yearsRow}>
-                        {[1, 2, 3, 5].map(y => (
-                          <TouchableOpacity
-                            key={y}
-                            style={[styles.yearBtn, renewYears === y && styles.yearBtnActive]}
-                            onPress={() => setRenewYears(y)}>
-                            <Text style={[styles.yearBtnText, renewYears === y && styles.yearBtnTextActive]}>
-                              {y} ano{y > 1 ? 's' : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    <View style={styles.modalBtns}>
-                      <TouchableOpacity style={styles.modalBtnCancel} onPress={closeRenewModal}>
-                        <Text style={styles.modalBtnCancelText}>Cancelar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.modalBtnRenew} onPress={() => setRenewStep(2)}>
-                        <Text style={styles.modalBtnPrimaryText}>Ir para Pagamento</Text>
-                        <Ionicons name="arrow-forward" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-
-                {renewStep === 2 && showRenewModal && (
-                  <>
-                    {renderPaymentForm()}
-                    <View style={styles.modalBtns}>
-                      <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setRenewStep(1)}>
-                        <Text style={styles.modalBtnCancelText}>Voltar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modalBtnRenew, (payProcessing || ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))) && { opacity: 0.5 }]}
-                        onPress={() => submitDomainPayment('renew', showRenewModal.domain, '10', renewYears)}
-                        disabled={payProcessing || ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))}>
-                        {payProcessing ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="refresh" size={18} color="#fff" />}
-                        <Text style={styles.modalBtnPrimaryText}>Pagar e Renovar ({renewYears}a)</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* ===== MODAL: PAYMENT RESULT ===== */}
-        <Modal visible={!!payResult} animationType="fade" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { borderTopLeftRadius: 20, borderTopRightRadius: 20 }]}>
-              <ScrollView>
-                <View style={styles.payResultHeader}>
-                  <View style={styles.payResultIcon}>
-                    {pollingRef.current ? (
-                      <ActivityIndicator size="large" color={Colors.primary} />
-                    ) : (
-                      <Ionicons name="checkmark-circle" size={48} color={Colors.primary} />
-                    )}
-                  </View>
-                  <Text style={styles.payResultTitle}>
-                    {pollingRef.current ? 'Aguardando Confirmação' : 'Pagamento Iniciado'}
-                  </Text>
-                  <Text style={styles.payResultSubtitle}>
-                    {pollingRef.current ? 'Confirme o pagamento no seu celular' : 'Siga as instruções abaixo'}
-                  </Text>
-                </View>
-
-                {payResult && (
-                  <>
-                    <View style={styles.payResultDetails}>
-                      {[
-                        { label: 'Domínio', value: payResult.domain },
-                        { label: 'Ação', value: payResult.action === 'buy' ? 'Registro' : 'Renovação' },
-                        { label: 'Preço (USD)', value: `$${payResult.price_usd}` },
-                        { label: 'Valor cobrado', value: `${payResult.currency === 'BRL' ? 'R$' : 'MT'} ${parseFloat(payResult.amount).toFixed(0)}` },
-                        { label: 'Referência', value: payResult.reference_code },
-                      ].map((item, i) => (
-                        <View key={i} style={styles.payResultRow}>
-                          <Text style={styles.payResultLabel}>{item.label}</Text>
-                          <TouchableOpacity
-                            onPress={() => copyToClipboard(item.value, `pay-${i}`)}
-                            style={styles.payResultValueRow}>
-                            <Text style={styles.payResultValue}>{item.value}</Text>
-                            {item.label === 'Referência' && (
-                              <Ionicons
-                                name={copiedField === `pay-${i}` ? 'checkmark' : 'copy-outline'}
-                                size={14}
-                                color={Colors.textMuted}
-                              />
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </View>
-
-                    {payResult.payment_details?.instructions && (
-                      <View style={styles.payInstructions}>
-                        <Text style={styles.payInstructionsTitle}>Instruções:</Text>
-                        {payResult.payment_details.instructions.map((inst: string, i: number) => (
-                          <View key={i} style={styles.payInstructionItem}>
-                            <View style={styles.payInstructionNum}>
-                              <Text style={styles.payInstructionNumText}>{i + 1}</Text>
-                            </View>
-                            <Text style={styles.payInstructionText}>{inst}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {payResult.payment_url && (
-                      <TouchableOpacity
-                        style={styles.openPayUrlBtn}
-                        onPress={() => Linking.openURL(payResult.payment_url).catch(() => {})}>
-                        <Ionicons name="open-outline" size={18} color="#fff" />
-                        <Text style={styles.openPayUrlBtnText}>Abrir MercadoPago</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {pollingRef.current && (
-                      <View style={styles.pollingRow}>
-                        <ActivityIndicator size="small" color={Colors.textMuted} />
-                        <Text style={styles.pollingText}>Verificando pagamento automaticamente...</Text>
-                      </View>
-                    )}
-                  </>
-                )}
-
-                <TouchableOpacity
-                  style={styles.payResultCloseBtn}
-                  onPress={() => { closeBuyModal(); closeRenewModal(); }}>
-                  <Text style={styles.payResultCloseBtnText}>Fechar</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    </>
+    <Modal title={`DNS — ${domain}`} onClose={onClose} width={600}>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:12, color:'#64748b', marginBottom:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase' }}>Registos actuais</div>
+        {loading ? <div style={{ color:'#6b7280', fontSize:13 }}>A carregar...</div>
+          : records.length === 0
+          ? <div style={{ color:'#6b7280', fontSize:13 }}>Sem registos DNS personalizados.</div>
+          : records.map((r, i) => (
+            <div key={i} style={{
+              display:'grid', gridTemplateColumns:'1fr 60px 1fr 60px',
+              gap:8, padding:'8px 12px', background:'#1a1d2e', borderRadius:6, marginBottom:4,
+              fontSize:12, color:'#cbd5e1', alignItems:'center'
+            }}>
+              <span style={{ fontFamily:'monospace' }}>{r.Subdomain || r.subdomain || '@'}</span>
+              <Badge label={r.RecordType || r.type || '?'} color="#3b5bdb" />
+              <span style={{ fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.Value || r.content || '—'}</span>
+              <span style={{ color:'#6b7280' }}>{r.Ttl || r.ttl}s</span>
+            </div>
+          ))
+        }
+      </div>
+      <div style={{ borderTop:'1px solid #1e2130', paddingTop:18 }}>
+        <div style={{ fontSize:12, color:'#64748b', marginBottom:12, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase' }}>Adicionar registo</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 90px', gap:10 }}>
+          <Input label="Nome / Subdomínio" placeholder="@ ou www" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} />
+          <Select label="Tipo" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+            {['A','AAAA','CNAME','MX','TXT','NS','SRV'].map(t=><option key={t}>{t}</option>)}
+          </Select>
+        </div>
+        <Input label="Valor / Destino" placeholder="IP, hostname ou valor" value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} />
+        <Input label="TTL (segundos)" type="number" value={form.ttl} onChange={e=>setForm(f=>({...f,ttl:e.target.value}))} />
+        <Btn onClick={addRecord} loading={saving} icon={<Icon d={Icons.plus} size={14} />}>Adicionar</Btn>
+      </div>
+    </Modal>
   );
-
-  // ===== PAYMENT FORM (reusable between buy and renew) =====
-  function renderPaymentForm() {
-    return (
-      <>
-        <View style={styles.formGroup}>
-          <Text style={styles.formLabel}>Método de Pagamento</Text>
-          <View style={styles.payMethodRow}>
-            {([
-              { id: 'mpesa' as const, name: 'M-Pesa', desc: '84/85', icon: '🟢', activeColor: '#22c55e' },
-              { id: 'emola' as const, name: 'e-Mola', desc: '86/87', icon: '🔵', activeColor: '#3b82f6' },
-              { id: 'mercadopago' as const, name: 'MercadoPago', desc: 'Cartão/PIX', icon: '💳', activeColor: '#06b6d4' },
-            ]).map(m => (
-              <TouchableOpacity
-                key={m.id}
-                style={[
-                  styles.payMethodBtn,
-                  payMethod === m.id && { borderColor: m.activeColor, backgroundColor: m.activeColor + '10' },
-                ]}
-                onPress={() => { setPayMethod(m.id); setPayPhoneError(''); }}>
-                <Text style={styles.payMethodIcon}>{m.icon}</Text>
-                <Text style={[styles.payMethodName, payMethod === m.id && { color: m.activeColor, fontWeight: '700' }]}>{m.name}</Text>
-                <Text style={styles.payMethodDesc}>{m.desc}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {(payMethod === 'mpesa' || payMethod === 'emola') && (
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Número de Telefone</Text>
-            <TextInput
-              style={[
-                styles.phoneInput,
-                payPhoneError ? { borderColor: '#ef4444' }
-                : payPhone.length === 9 && !payPhoneError ? { borderColor: '#22c55e' }
-                : {},
-              ]}
-              placeholder={payMethod === 'mpesa' ? '841234567' : '861234567'}
-              placeholderTextColor={Colors.textMuted}
-              value={payPhone}
-              onChangeText={handlePayPhoneChange}
-              keyboardType="phone-pad"
-              maxLength={9}
-            />
-            {payPhoneError ? (
-              <Text style={styles.phoneError}>{payPhoneError}</Text>
-            ) : payPhone.length === 9 && !payPhoneError ? (
-              <View style={styles.phoneValidRow}>
-                <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
-                <Text style={styles.phoneValid}>Número válido</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
-
-        {payMethod === 'mercadopago' && (
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={18} color={Colors.info} />
-            <Text style={styles.infoBoxText}>
-              Será redirecionado para o MercadoPago para pagar com cartão ou PIX.
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.securityNote}>
-          <Ionicons name="shield-checkmark" size={16} color={Colors.textMuted} />
-          <Text style={styles.securityNoteText}>
-            Pagamento seguro. Após confirmação, a ação será executada automaticamente.
-          </Text>
-        </View>
-      </>
-    );
-  }
 }
 
-// ===== STYLES =====
+// ─── NS MODAL ────────────────────────────────────────────────────────────────
+function NsModal({ domain, onClose, toast }) {
+  const [ns, setNs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState('');
+  const [saving, setSaving] = useState(false);
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
+  useEffect(() => {
+    api(`/ns/${domain}`).then(d => { setNs(d.nameservers || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [domain]);
 
-  // Tab Bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: Colors.primary,
-  },
-  tabText: { fontSize: 14, fontWeight: '600', color: Colors.textMuted },
-  tabTextActive: { color: Colors.primary },
-  tabBadge: {
-    backgroundColor: Colors.surfaceVariant,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  tabBadgeActive: { backgroundColor: Colors.primary + '20' },
-  tabBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.textMuted },
-  tabBadgeTextActive: { color: Colors.primary },
+  async function save() {
+    const list = ns.filter(Boolean);
+    if (list.length < 2) { toast('Mínimo 2 nameservers', 'error'); return; }
+    setSaving(true);
+    try {
+      await api(`/ns/${domain}`, { method:'PUT', body: JSON.stringify({ nameservers: list }) });
+      toast('Nameservers actualizados', 'success');
+    } catch(e) { toast(e.message, 'error'); }
+    setSaving(false);
+  }
 
-  // Header
-  headerBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  headerCount: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  return (
+    <Modal title={`Nameservers — ${domain}`} onClose={onClose}>
+      {loading ? <div style={{ color:'#6b7280', fontSize:13 }}>A carregar...</div> : (
+        <>
+          <div style={{ marginBottom:14 }}>
+            {ns.map((n, i) => (
+              <div key={i} style={{ display:'flex', gap:8, marginBottom:6, alignItems:'center' }}>
+                <input value={n} onChange={e => setNs(prev => { const c=[...prev]; c[i]=e.target.value; return c; })}
+                  style={{ flex:1, background:'#1a1d2e', border:'1px solid #2a2f45', borderRadius:7,
+                    padding:'8px 12px', color:'#e2e8f0', fontSize:13, outline:'none', fontFamily:'monospace' }} />
+                <button onClick={() => setNs(prev => prev.filter((_,j)=>j!==i))}
+                  style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer' }}>
+                  <Icon d={Icons.trash} size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:8, marginBottom:18 }}>
+            <input value={input} onChange={e=>setInput(e.target.value)} placeholder="ns1.exemplo.com"
+              style={{ flex:1, background:'#1a1d2e', border:'1px solid #2a2f45', borderRadius:7,
+                padding:'8px 12px', color:'#e2e8f0', fontSize:13, outline:'none', fontFamily:'monospace' }}
+              onKeyDown={e => { if(e.key==='Enter' && input.trim()) { setNs(p=>[...p,input.trim()]); setInput(''); }}} />
+            <Btn size="sm" onClick={() => { if(input.trim()) { setNs(p=>[...p,input.trim()]); setInput(''); }}} icon={<Icon d={Icons.plus} size={13}/>}>Add</Btn>
+          </div>
+          <Btn onClick={save} loading={saving} icon={<Icon d={Icons.check} size={14}/>}>Guardar Nameservers</Btn>
+        </>
+      )}
+    </Modal>
+  );
+}
 
-  // Filters
-  filterRow: { paddingHorizontal: 16, marginBottom: 8, maxHeight: 40 },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  filterTextActive: { color: '#fff' },
+// ─── TRANSFER MODAL ───────────────────────────────────────────────────────────
+function TransferModal({ onClose, toast, onSuccess }) {
+  const [step, setStep] = useState(1); // 1=form, 2=payment
+  const [form, setForm] = useState({
+    domain:'', auth_code:'', years:'1', method:'mpesa', phone:'',
+    first_name:'', last_name:'', email_contact:'', address:'', city:'',
+    state:'Maputo', zip:'0000', country:'MZ', phone_contact:''
+  });
+  const [checking, setChecking] = useState(false);
+  const [info, setInfo] = useState(null);
+  const [paying, setPaying] = useState(false);
 
-  // Empty
-  emptyState: { alignItems: 'center', paddingTop: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, marginTop: 16 },
-  emptySubtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4, textAlign: 'center', paddingHorizontal: 40 },
+  const f = (k) => e => setForm(p=>({...p,[k]:e.target.value}));
 
-  // Card
-  card: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 },
-  domainName: { fontSize: 15, fontWeight: '700', color: Colors.text, flex: 1 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  domainInfo: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 12 },
-  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  infoLabel: { fontSize: 12, color: Colors.textMuted },
-  infoValue: { fontSize: 13, fontWeight: '600', color: Colors.text },
+  async function check() {
+    if (!form.domain) return;
+    setChecking(true);
+    try {
+      const d = await api('/transfer/check', { method:'POST', body: JSON.stringify({ domain: form.domain }) });
+      setInfo(d);
+      setStep(2);
+    } catch(e) { toast(e.message, 'error'); }
+    setChecking(false);
+  }
 
-  // DNS box
-  dnsBox: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 10, padding: 12, marginBottom: 12 },
-  dnsTitle: { fontSize: 13, fontWeight: '700', color: '#92400e', marginBottom: 4 },
-  dnsInstruction: { fontSize: 12, color: '#92400e' },
-  dnsBold: { fontWeight: '800' },
-  ipRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, padding: 10, marginTop: 8, gap: 8, borderWidth: 1, borderColor: '#fde68a' },
-  ipText: { fontSize: 15, fontWeight: '700', color: Colors.text, fontFamily: 'monospace', flex: 1 },
+  async function pay() {
+    setPaying(true);
+    try {
+      const cost = info?.transfer_price || 10;
+      await api('/pay', { method:'POST', body: JSON.stringify({ ...form, action:'transfer', cost }) });
+      toast('Pedido de transferência iniciado! Confirme no email WHOIS.', 'success');
+      onSuccess?.();
+      onClose();
+    } catch(e) { toast(e.message, 'error'); }
+    setPaying(false);
+  }
 
-  // Actions
-  cardActions: { flexDirection: 'row', gap: 8 },
-  actionChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 4 },
-  actionChipText: { fontSize: 13, fontWeight: '600' },
+  return (
+    <Modal title="Transferir Domínio" onClose={onClose} width={560}>
+      {step === 1 && (
+        <>
+          <div style={{ background:'#1a1d2e', borderRadius:8, padding:14, marginBottom:18, fontSize:12, color:'#94a3b8' }}>
+            <div style={{ display:'flex', gap:8, alignItems:'flex-start', marginBottom:8 }}>
+              <Icon d={Icons.warn} size={15} stroke="#f59e0b" />
+              <strong style={{ color:'#fbbf24' }}>Pré-requisitos</strong>
+            </div>
+            <ul style={{ margin:0, padding:'0 0 0 20px', lineHeight:1.8 }}>
+              <li>Domínio não registado/transferido nos últimos 60 dias</li>
+              <li>Domínio desbloqueado no registador actual</li>
+              <li>EPP/Auth Code válido</li>
+              <li>Email WHOIS acessível para confirmar</li>
+            </ul>
+          </div>
+          <Input label="Domínio a transferir" placeholder="exemplo.com" value={form.domain} onChange={f('domain')} />
+          <Input label="Auth Code / EPP" placeholder="Código fornecido pelo registador actual" value={form.auth_code} onChange={f('auth_code')} />
+          <Btn onClick={check} loading={checking} disabled={!form.domain || !form.auth_code}>Verificar & Continuar →</Btn>
+        </>
+      )}
+      {step === 2 && (
+        <>
+          <div style={{ background:'#14532d22', border:'1px solid #166534', borderRadius:8, padding:12, marginBottom:18, fontSize:13 }}>
+            <strong style={{ color:'#86efac' }}>{form.domain}</strong>
+            <span style={{ color:'#94a3b8', marginLeft:10 }}>
+              Transferência — {info?.transfer_price ? `$${info.transfer_price}` : 'Preço a confirmar'}
+            </span>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Input label="Nome" value={form.first_name} onChange={f('first_name')} />
+            <Input label="Apelido" value={form.last_name} onChange={f('last_name')} />
+          </div>
+          <Input label="Email de contacto" type="email" value={form.email_contact} onChange={f('email_contact')} />
+          <Input label="Telefone de contacto" value={form.phone_contact} onChange={f('phone_contact')} />
+          <Input label="Morada" value={form.address} onChange={f('address')} />
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Input label="Cidade" value={form.city} onChange={f('city')} />
+            <Input label="País" value={form.country} onChange={f('country')} />
+          </div>
+          <Select label="Método de pagamento" value={form.method} onChange={f('method')}>
+            <option value="mpesa">M-Pesa</option>
+            <option value="emola">E-Mola</option>
+            <option value="mercadopago">Mercado Pago</option>
+          </Select>
+          {(form.method === 'mpesa' || form.method === 'emola') &&
+            <Input label="Número de telefone" placeholder="84XXXXXXX" value={form.phone} onChange={f('phone')} />
+          }
+          <div style={{ display:'flex', gap:10 }}>
+            <Btn variant="ghost" onClick={() => setStep(1)}>← Voltar</Btn>
+            <Btn onClick={pay} loading={paying}
+              disabled={!form.first_name || !form.email_contact || !form.address || !form.city}>
+              Pagar & Transferir
+            </Btn>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
 
-  // Search
-  searchCard: {
-    backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  searchTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, textAlign: 'center', marginBottom: 4 },
-  searchSubtitle: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', marginBottom: 16 },
-  searchRow: { flexDirection: 'row', gap: 8 },
-  searchInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceVariant,
-  },
-  searchBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    width: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchHint: { fontSize: 11, color: Colors.textMuted, textAlign: 'center', marginTop: 10 },
+// ─── DOMAIN CARD ─────────────────────────────────────────────────────────────
+function DomainCard({ domain, onDns, onNs, onRenew }) {
+  const days = daysUntil(domain.expires);
+  const expColor = expiryColor(days);
 
-  searchingBox: { alignItems: 'center', padding: 32 },
-  searchingText: { fontSize: 14, color: Colors.textMuted, marginTop: 12 },
+  return (
+    <div style={{
+      background:'#0f1117', border:'1px solid #1e2130', borderRadius:10,
+      padding:'16px 18px', transition:'border-color 0.2s',
+    }}
+    onMouseEnter={e=>e.currentTarget.style.borderColor='#3b5bdb44'}
+    onMouseLeave={e=>e.currentTarget.style.borderColor='#1e2130'}
+    >
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <Icon d={Icons.globe} size={16} stroke="#3b5bdb" />
+          <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:'#e2e8f0' }}>{domain.name || domain.domain}</span>
+        </div>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          {domain.locked && <Badge label="Bloqueado" color="#f59e0b" />}
+          {domain.auto_renew && <Badge label="Auto-renew" color="#22c55e" />}
+        </div>
+      </div>
 
-  // Results
-  resultsCard: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: Colors.surfaceVariant,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  resultsHeaderText: { fontSize: 13, fontWeight: '700', color: Colors.text },
-  clearResults: { fontSize: 12, color: Colors.textMuted },
+      <div style={{ fontSize:12, color:'#64748b', marginBottom:14, display:'flex', gap:16, flexWrap:'wrap' }}>
+        {domain.expires && (
+          <span>
+            Expira <strong style={{ color: expColor }}>
+              {fmtDate(domain.expires)}
+              {days !== null && ` (${days > 0 ? `${days}d` : 'Expirado'})`}
+            </strong>
+          </span>
+        )}
+        {domain.action && <span>Acção: <strong style={{ color:'#94a3b8' }}>{domain.action}</strong></span>}
+        {domain.method && <span>Via: <strong style={{ color:'#94a3b8' }}>{domain.method}</strong></span>}
+      </div>
 
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  resultLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 },
-  resultDomain: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  resultBadges: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' },
-  promoBadge: { backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  promoBadgeText: { fontSize: 10, fontWeight: '700', color: '#15803d' },
-  premiumBadge: { backgroundColor: '#f3e8ff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  premiumBadgeText: { fontSize: 10, fontWeight: '700', color: '#7e22ce' },
-  renewalPrice: { fontSize: 10, color: Colors.textMuted },
-  resultRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  resultPrice: { fontSize: 18, fontWeight: '800', color: Colors.text },
-  resultRegularPrice: { fontSize: 11, color: Colors.textMuted, textDecorationLine: 'line-through' },
-  unavailableText: { fontSize: 12, fontWeight: '600', color: '#ef4444' },
+      {/* Alerta de expiração próxima */}
+      {days !== null && days <= 30 && (
+        <div style={{
+          background: days <= 14 ? '#7f1d1d22' : '#78350f22',
+          border: `1px solid ${days <= 14 ? '#991b1b' : '#92400e'}`,
+          borderRadius:6, padding:'6px 10px', fontSize:11, color: days <= 14 ? '#fca5a5' : '#fcd34d',
+          marginBottom:10, display:'flex', gap:6, alignItems:'center'
+        }}>
+          <Icon d={Icons.warn} size={13} stroke={days <= 14 ? '#fca5a5' : '#fcd34d'} />
+          {days <= 0 ? 'Domínio expirado!' : `Expira em ${days} dias. Renove agora!`}
+        </div>
+      )}
 
-  buyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#22c55e',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  buyBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <Btn size="sm" variant="ghost" onClick={() => onDns(domain)} icon={<Icon d={Icons.dns} size={13}/>}>DNS</Btn>
+        <Btn size="sm" variant="ghost" onClick={() => onNs(domain)} icon={<Icon d={Icons.ns} size={13}/>}>Nameservers</Btn>
+        <Btn size="sm" variant="ghost" onClick={() => onRenew(domain)} icon={<Icon d={Icons.refresh} size={13}/>}>Renovar</Btn>
+      </div>
+    </div>
+  );
+}
 
-  // Registered
-  registeredCard: {
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  registeredHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  registeredTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
-  registeredSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  refreshBtn: { padding: 8 },
+// ─── PAYMENTS TABLE ───────────────────────────────────────────────────────────
+function PaymentsTable({ payments }) {
+  if (!payments.length) return (
+    <div style={{ color:'#6b7280', fontSize:13, textAlign:'center', padding:40 }}>Sem histórico de pagamentos.</div>
+  );
+  return (
+    <div style={{ overflowX:'auto' }}>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+        <thead>
+          <tr style={{ borderBottom:'1px solid #1e2130' }}>
+            {['Domínio','Acção','Valor USD','Montante','Método','Estado','Data'].map(h=>(
+              <th key={h} style={{ padding:'8px 12px', textAlign:'left', color:'#64748b', fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase', fontSize:10 }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {payments.map(p => (
+            <tr key={p.id} style={{ borderBottom:'1px solid #0f1117' }}
+              onMouseEnter={e=>e.currentTarget.style.background='#1a1d2e'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              <td style={{ padding:'10px 12px', fontFamily:'monospace', color:'#e2e8f0' }}>{p.domain}</td>
+              <td style={{ padding:'10px 12px' }}><Badge label={p.action} color="#3b5bdb"/></td>
+              <td style={{ padding:'10px 12px', color:'#94a3b8' }}>${p.price_usd}</td>
+              <td style={{ padding:'10px 12px', color:'#94a3b8' }}>{p.amount} {p.currency}</td>
+              <td style={{ padding:'10px 12px', color:'#94a3b8', textTransform:'capitalize' }}>{p.method}</td>
+              <td style={{ padding:'10px 12px' }}><Badge label={p.status} color={statusColor(p.status)}/></td>
+              <td style={{ padding:'10px 12px', color:'#64748b' }}>{fmtDate(p.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  regEmptyState: { alignItems: 'center', paddingVertical: 40 },
-  regEmptyTitle: { fontSize: 15, fontWeight: '600', color: Colors.text, marginTop: 12 },
-  regEmptySubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+// ─── RENEW MODAL ──────────────────────────────────────────────────────────────
+function RenewModal({ domain, onClose, toast, onSuccess }) {
+  const [years, setYears] = useState('1');
+  const [method, setMethod] = useState('mpesa');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  regItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  regItemMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  regItemNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  regItemName: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  connectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary + '15',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    gap: 3,
-  },
-  connectedBadgeText: { fontSize: 10, fontWeight: '600', color: Colors.primary },
+  // Preço estimado (podes ajustar conforme TLD)
+  const estimatedUSD = 12 * parseInt(years);
 
-  expiryRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  expiryText: { fontSize: 11, color: Colors.textMuted },
-  expiryBadge: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 4 },
-  expiryBadgeText: { fontSize: 10, fontWeight: '700' },
+  async function pay() {
+    if ((method === 'mpesa' || method === 'emola') && !phone) { toast('Número obrigatório', 'error'); return; }
+    setLoading(true);
+    try {
+      await api('/pay', { method:'POST', body: JSON.stringify({
+        domain: domain.name || domain.domain,
+        action: 'renew', cost: estimatedUSD, method, phone, years
+      })});
+      toast('Renovação iniciada!', 'success');
+      onSuccess?.();
+      onClose();
+    } catch(e) { toast(e.message, 'error'); }
+    setLoading(false);
+  }
 
-  renewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  renewBtnText: { fontSize: 12, fontWeight: '700', color: '#92400e' },
+  return (
+    <Modal title={`Renovar — ${domain.name || domain.domain}`} onClose={onClose}>
+      <Select label="Anos" value={years} onChange={e=>setYears(e.target.value)}>
+        {['1','2','3','5'].map(y=><option key={y} value={y}>{y} {y==='1'?'ano':'anos'}</option>)}
+      </Select>
+      <div style={{ background:'#1a1d2e', borderRadius:7, padding:'10px 14px', marginBottom:14, fontSize:13, color:'#94a3b8' }}>
+        Estimativa: <strong style={{ color:'#e2e8f0' }}>${estimatedUSD}</strong>
+        <span style={{ fontSize:11, color:'#64748b', marginLeft:8 }}>(preço real calculado no pagamento)</span>
+      </div>
+      <Select label="Método de pagamento" value={method} onChange={e=>setMethod(e.target.value)}>
+        <option value="mpesa">M-Pesa</option>
+        <option value="emola">E-Mola</option>
+        <option value="mercadopago">Mercado Pago</option>
+      </Select>
+      {(method === 'mpesa' || method === 'emola') &&
+        <Input label="Número de telefone" placeholder="84XXXXXXX" value={phone} onChange={e=>setPhone(e.target.value)} />
+      }
+      <Btn onClick={pay} loading={loading} icon={<Icon d={Icons.refresh} size={14}/>}>Renovar Domínio</Btn>
+    </Modal>
+  );
+}
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    maxHeight: '90%',
-  },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.text },
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function DomainManager() {
+  const [tab, setTab] = useState('domains');
+  const [domains, setDomains] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [toasts, setToasts] = useState([]);
+  const [search, setSearch] = useState('');
 
-  // Form
-  formGroup: { marginBottom: 20 },
-  formLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  formInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 15,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceVariant,
-  },
-  formHint: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
-  noContainers: { fontSize: 14, color: Colors.textMuted, fontStyle: 'italic', padding: 12 },
-  containerOption: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    backgroundColor: Colors.surfaceVariant,
-  },
-  containerOptionActive: { borderColor: Colors.primary, backgroundColor: '#eff6ff' },
-  containerOptionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  containerOptionName: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  containerOptionType: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  // Modais
+  const [dnsModal, setDnsModal] = useState(null);
+  const [nsModal, setNsModal] = useState(null);
+  const [renewModal, setRenewModal] = useState(null);
+  const [transferModal, setTransferModal] = useState(false);
 
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    padding: 16,
-    gap: 8,
-  },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  const toast = useCallback((msg, type='info') => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t=>t.id!==id)), 4000);
+  }, []);
 
-  // Buy summary
-  buySummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  buySummaryDomain: { fontSize: 17, fontWeight: '800', color: '#166534' },
-  buySummaryPrice: { fontSize: 24, fontWeight: '800', color: Colors.text },
-  buySummaryPriceLabel: { fontSize: 11, color: Colors.textMuted },
+  const loadDomains = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [d, p] = await Promise.all([
+        api('/my-domains').catch(() => ({ domains: [] })),
+        api('/my-payments').catch(() => ({ payments: [] })),
+      ]);
+      setDomains(d.domains || []);
+      setPayments(p.payments || []);
+    } catch(e) { toast(e.message, 'error'); }
+    setLoading(false);
+  }, [toast]);
 
-  // Renew summary
-  renewSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fef3c7',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    gap: 10,
-  },
-  renewSummaryDomain: { fontSize: 17, fontWeight: '800', color: '#92400e' },
+  useEffect(() => { loadDomains(); }, [loadDomains]);
 
-  // Years
-  yearsRow: { flexDirection: 'row', gap: 8 },
-  yearBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceVariant,
-  },
-  yearBtnActive: { backgroundColor: Colors.primary },
-  yearBtnText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  yearBtnTextActive: { color: '#fff' },
+  const filteredDomains = domains.filter(d =>
+    (d.name || d.domain || '').toLowerCase().includes(search.toLowerCase())
+  );
 
-  // Modal buttons
-  modalBtns: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  modalBtnCancel: {
-    flex: 0.4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  modalBtnCancelText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-  modalBtnPrimary: {
-    flex: 0.6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#22c55e',
-    gap: 6,
-  },
-  modalBtnBuy: {
-    flex: 0.6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#22c55e',
-    gap: 6,
-  },
-  modalBtnRenew: {
-    flex: 0.6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: '#f59e0b',
-    gap: 6,
-  },
-  modalBtnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  const expiringSoon = domains.filter(d => { const days = daysUntil(d.expires); return days !== null && days <= 30; });
 
-  // Payment methods
-  payMethodRow: { flexDirection: 'row', gap: 8 },
-  payMethodBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  payMethodIcon: { fontSize: 20, marginBottom: 4 },
-  payMethodName: { fontSize: 12, fontWeight: '600', color: Colors.text },
-  payMethodDesc: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
+  return (
+    <div style={{
+      minHeight:'100vh', background:'#080b10', fontFamily:'"DM Mono", "Fira Code", monospace',
+      color:'#e2e8f0', padding:'24px 16px'
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;600;700&display=swap');
+        * { box-sizing: border-box; }
+        input, select, button { font-family: inherit; }
+        @keyframes slideIn { from { transform:translateX(20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+        ::-webkit-scrollbar { width:5px; height:5px; }
+        ::-webkit-scrollbar-track { background:#0f1117; }
+        ::-webkit-scrollbar-thumb { background:#2a2f45; border-radius:10px; }
+      `}</style>
 
-  // Phone
-  phoneInput: {
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    color: Colors.text,
-    fontFamily: 'monospace',
-    letterSpacing: 2,
-  },
-  phoneError: { fontSize: 12, color: '#ef4444', marginTop: 4 },
-  phoneValidRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  phoneValid: { fontSize: 12, color: '#22c55e' },
+      <div style={{ maxWidth:960, margin:'0 auto' }}>
 
-  // Info box
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#eff6ff',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  infoBoxText: { fontSize: 13, color: '#1e40af', flex: 1, lineHeight: 18 },
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28, flexWrap:'wrap', gap:12 }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:2 }}>
+              <Icon d={Icons.globe} size={20} stroke="#3b5bdb" />
+              <h1 style={{ margin:0, fontSize:18, fontWeight:700, fontFamily:'"DM Sans", sans-serif', color:'#e2e8f0' }}>
+                Domínios
+              </h1>
+            </div>
+            <p style={{ margin:0, fontSize:12, color:'#64748b' }}>Gestão de domínios via Dynadot</p>
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <Btn variant="ghost" size="sm" onClick={loadDomains} icon={<Icon d={Icons.refresh} size={13}/>}>Actualizar</Btn>
+            <Btn size="sm" onClick={() => setTransferModal(true)} icon={<Icon d={Icons.transfer} size={13}/>}>Transferir</Btn>
+          </div>
+        </div>
 
-  securityNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: Colors.surfaceVariant,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  securityNoteText: { fontSize: 12, color: Colors.textMuted, flex: 1, lineHeight: 16 },
+        {/* Alertas de expiração */}
+        {expiringSoon.length > 0 && (
+          <div style={{
+            background:'#78350f22', border:'1px solid #92400e', borderRadius:8,
+            padding:'10px 14px', marginBottom:18, fontSize:12, color:'#fcd34d',
+            display:'flex', gap:8, alignItems:'center'
+          }}>
+            <Icon d={Icons.warn} size={15} stroke="#fcd34d" />
+            <span><strong>{expiringSoon.length}</strong> domínio(s) a expirar nos próximos 30 dias.</span>
+          </div>
+        )}
 
-  // Payment result
-  payResultHeader: { alignItems: 'center', marginBottom: 20 },
-  payResultIcon: { marginBottom: 12 },
-  payResultTitle: { fontSize: 20, fontWeight: '700', color: Colors.text },
-  payResultSubtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
+        {/* Stats */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:10, marginBottom:22 }}>
+          {[
+            { label:'Total domínios', value: domains.length, color:'#3b5bdb' },
+            { label:'A expirar (30d)', value: expiringSoon.length, color: expiringSoon.length > 0 ? '#f59e0b' : '#22c55e' },
+            { label:'Pagamentos', value: payments.length, color:'#64748b' },
+            { label:'Completados', value: payments.filter(p=>p.status==='completed').length, color:'#22c55e' },
+          ].map(s => (
+            <div key={s.label} style={{ background:'#0f1117', border:'1px solid #1e2130', borderRadius:8, padding:'12px 14px' }}>
+              <div style={{ fontSize:22, fontWeight:700, color:s.color }}>{s.value}</div>
+              <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
 
-  payResultDetails: {
-    backgroundColor: Colors.surfaceVariant,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    gap: 10,
-  },
-  payResultRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  payResultLabel: { fontSize: 13, color: Colors.textMuted },
-  payResultValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  payResultValue: { fontSize: 13, fontWeight: '700', color: Colors.text },
+        {/* Tabs */}
+        <div style={{ display:'flex', gap:4, marginBottom:18, borderBottom:'1px solid #1e2130', paddingBottom:0 }}>
+          {[
+            { key:'domains', label:'Meus Domínios', icon:Icons.globe },
+            { key:'payments', label:'Histórico', icon:Icons.clock },
+          ].map(t => (
+            <button key={t.key} onClick={()=>setTab(t.key)} style={{
+              background:'none', border:'none', cursor:'pointer', padding:'8px 14px',
+              fontSize:13, fontWeight:600, color: tab===t.key ? '#3b5bdb' : '#64748b',
+              borderBottom: tab===t.key ? '2px solid #3b5bdb' : '2px solid transparent',
+              marginBottom:-1, display:'flex', alignItems:'center', gap:6,
+              transition:'color 0.2s',
+            }}>
+              <Icon d={t.icon} size={14} stroke="currentColor" />
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-  payInstructions: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  payInstructionsTitle: { fontSize: 14, fontWeight: '700', color: '#1e40af', marginBottom: 10 },
-  payInstructionItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  payInstructionNum: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#bfdbfe',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  payInstructionNumText: { fontSize: 10, fontWeight: '800', color: '#1e40af' },
-  payInstructionText: { fontSize: 12, color: '#1e40af', flex: 1, lineHeight: 18 },
+        {/* Search */}
+        {tab === 'domains' && (
+          <div style={{ position:'relative', marginBottom:16 }}>
+            <Icon d={Icons.search} size={14} stroke="#64748b" />
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Pesquisar domínios..."
+              style={{
+                width:'100%', background:'#0f1117', border:'1px solid #1e2130', borderRadius:7,
+                padding:'9px 12px 9px 32px', color:'#e2e8f0', fontSize:13, outline:'none'
+              }}
+            />
+            <div style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
+              <Icon d={Icons.search} size={14} stroke="#64748b" />
+            </div>
+          </div>
+        )}
 
-  openPayUrlBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0891b2',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    gap: 8,
-  },
-  openPayUrlBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+        {/* Content */}
+        {loading ? (
+          <div style={{ textAlign:'center', padding:60, color:'#64748b', fontSize:13 }}>A carregar...</div>
+        ) : tab === 'domains' ? (
+          filteredDomains.length === 0 ? (
+            <div style={{
+              textAlign:'center', padding:60, color:'#64748b', fontSize:13,
+              background:'#0f1117', border:'1px solid #1e2130', borderRadius:10
+            }}>
+              {search ? 'Nenhum domínio encontrado.' : 'Ainda não tens domínios registados.'}
+            </div>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:12 }}>
+              {filteredDomains.map((d, i) => (
+                <DomainCard key={i} domain={d}
+                  onDns={() => setDnsModal(d)}
+                  onNs={() => setNsModal(d)}
+                  onRenew={() => setRenewModal(d)}
+                />
+              ))}
+            </div>
+          )
+        ) : (
+          <div style={{ background:'#0f1117', border:'1px solid #1e2130', borderRadius:10, overflow:'hidden' }}>
+            <PaymentsTable payments={payments} />
+          </div>
+        )}
+      </div>
 
-  pollingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  pollingText: { fontSize: 12, color: Colors.textMuted },
-
-  payResultCloseBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  payResultCloseBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-});
+      {/* Modais */}
+      {dnsModal && <DnsModal domain={dnsModal.name||dnsModal.domain} onClose={()=>setDnsModal(null)} toast={toast} />}
+      {nsModal && <NsModal domain={nsModal.name||nsModal.domain} onClose={()=>setNsModal(null)} toast={toast} />}
+      {renewModal && <RenewModal domain={renewModal} onClose={()=>setRenewModal(null)} toast={toast} onSuccess={loadDomains} />}
+      {transferModal && <TransferModal onClose={()=>setTransferModal(false)} toast={toast} onSuccess={loadDomains} />}
+      <Toast toasts={toasts} />
+    </div>
+  );
+}

@@ -186,6 +186,22 @@ export default function DomainsPage() {
   const [payResult, setPayResult] = useState(null);
   const [payPollingId, setPayPollingId] = useState(null);
 
+// Dados do registrante
+const [registrantForm, setRegistrantForm] = useState({
+  first_name: '', last_name: '', email_contact: '',
+  phone_contact: '', address: '', city: '',
+  state: 'Maputo', zip: '0000', country: 'MZ'
+});
+
+// Transferência
+const [showTransferModal, setShowTransferModal] = useState(false);
+const [transferTab, setTransferTab] = useState('in'); // 'in' | 'out'
+const [transferForm, setTransferForm] = useState({ domain: '', auth_code: '' });
+const [transferOut, setTransferOut] = useState({ domain: '' });
+const [transferResult, setTransferResult] = useState(null);
+const [transferOutResult, setTransferOutResult] = useState(null);
+const [transferProcessing, setTransferProcessing] = useState(false);
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
@@ -323,99 +339,79 @@ export default function DomainsPage() {
   const closeRenewModal = () => { setShowRenewModal(null); setRenewYears(1); resetPayState(); };
 
   // ===== DOMAIN PAYMENT =====
-  const submitDomainPayment = async (action, domain, cost, years) => {
-    if ((payMethod === 'mpesa' || payMethod === 'emola') && payPhone.length !== 9) {
-      showToast('Digite um número válido com 9 dígitos', 'error'); return;
-    }
-    if (payPhoneError) { showToast('Corrija o número de telefone', 'error'); return; }
-
-    setPayProcessing(true);
-    try {
-      let transactionId = null;
-
-      if (payMethod === 'mpesa' || payMethod === 'emola') {
-        const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
-        const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || 'sua_api_key'}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            valor: Math.ceil(parseFloat(cost) * exchangeRate).toString(),
-            numero_celular: payPhone,
-            usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
-          })
-        });
-        const alaudaData = await alaudaRes.json();
-        if (!alaudaData.success && !alaudaData.data) {
-          showToast(alaudaData.message || alaudaData.error || 'Erro ao processar pagamento móvel', 'error');
-          setPayProcessing(false);
-          return;
-        }
-        const payData = alaudaData.data || alaudaData;
-        transactionId = payData.payment?.transaction_id || payData.transaction_id;
-      }
-
-      const body = { domain, action, cost, method: payMethod, years: years || 1 };
-      if (payMethod === 'mpesa' || payMethod === 'emola') body.phone = payPhone;
-      if (transactionId) body.transaction_id = transactionId;
-
-      const res = await fetch(`${API}/api/registrar/pay`, {
-        method: 'POST', headers: hdrs(), body: JSON.stringify(body)
+  const submitDomainPaymentWithRegistrant = async (action, domain, cost, years, registrant) => {
+  if ((payMethod === 'mpesa' || payMethod === 'emola') && payPhone.length !== 9) {
+    showToast('Digite um número válido com 9 dígitos', 'error'); return;
+  }
+  setPayProcessing(true);
+  try {
+    let transactionId = null;
+    if (payMethod === 'mpesa' || payMethod === 'emola') {
+      const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
+      const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valor: Math.ceil(parseFloat(cost) * exchangeRate).toString(),
+          numero_celular: payPhone,
+          usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
+        })
       });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setPayResult(data);
-
-        if (data.payment_url) window.open(data.payment_url, '_blank');
-
-        if (data.payment_id) {
-          const interval = setInterval(async () => {
-            try {
-              const sRes = await fetch(`${API}/api/registrar/pay/${data.payment_id}/status`, { headers: hdrs() });
-              if (sRes.ok) {
-                const sData = await sRes.json();
-                if (sData.payment?.status === 'completed') {
-                  clearInterval(interval); setPayPollingId(null);
-                  showToast(`🎉 ${action === 'buy' ? 'Domínio registrado' : 'Domínio renovado'} com sucesso!`);
-
-                  if (action === 'buy' && buyLinkContainer) {
-                    try {
-                      await fetch(`${API}/api/domains`, {
-                        method: 'POST', headers: hdrs(),
-                        body: JSON.stringify({ containerId: buyLinkContainer, domain })
-                      });
-                      showToast(`Domínio ${domain} conectado ao container`, 'info');
-                    } catch {}
-                  }
-
-                  closeBuyModal(); closeRenewModal(); loadData();
-                } else if (sData.payment?.status === 'failed') {
-                  clearInterval(interval); setPayPollingId(null);
-                  showToast('Pagamento falhou. Tente novamente.', 'error');
-                }
-              }
-            } catch {}
-          }, 5000);
-          setPayPollingId(interval);
-          setTimeout(() => { clearInterval(interval); setPayPollingId(null); }, 600000);
-        }
-      } else {
-        showToast(data.error || 'Erro ao processar pagamento', 'error');
-      }
-    } catch (err) {
-      console.error('Erro pagamento domínio:', err);
-      showToast('Erro de conexão', 'error');
+      const ad = await alaudaRes.json();
+      transactionId = ad?.data?.payment?.transaction_id || ad?.transaction_id;
     }
-    finally { setPayProcessing(false); }
-  };
+    const body = {
+      domain, action, cost, method: payMethod, years: years || 1,
+      ...registrant,
+      ...(payMethod !== 'mercadopago' ? { phone: payPhone } : {}),
+      ...(transactionId ? { transaction_id: transactionId } : {})
+    };
+    const res = await fetch(`${API}/api/registrar/pay`, { method: 'POST', headers: hdrs(), body: JSON.stringify(body) });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      setPayResult(data);
+      if (data.payment_url) window.open(data.payment_url, '_blank');
+      if (data.payment_id) {
+        const interval = setInterval(async () => {
+          try {
+            const sRes = await fetch(`${API}/api/registrar/pay/${data.payment_id}/status`, { headers: hdrs() });
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData.payment?.status === 'completed') {
+                clearInterval(interval); setPayPollingId(null);
+                showToast(`🎉 Domínio ${action === 'buy' ? 'registrado' : 'renovado'}!`);
+                closeBuyModal(); closeRenewModal(); loadData(); resetRegistrant();
+              } else if (sData.payment?.status === 'failed') {
+                clearInterval(interval); setPayPollingId(null);
+                showToast('Pagamento falhou.', 'error');
+              }
+            }
+          } catch {}
+        }, 5000);
+        setPayPollingId(interval);
+        setTimeout(() => { clearInterval(interval); setPayPollingId(null); }, 600000);
+      }
+    } else {
+      showToast(data.error || 'Erro ao processar pagamento', 'error');
+    }
+  } catch { showToast('Erro de conexão', 'error'); }
+  finally { setPayProcessing(false); }
+};
 
   const buyDomain = () => {
-    if (!showBuyModal) return;
-    submitDomainPayment('buy', showBuyModal.domain, showBuyModal.price);
-  };
+  if (!showBuyModal) return;
+
+
+  submitDomainPaymentWithRegistrant(
+    'buy', 
+    showBuyModal.domain, 
+    showBuyModal.price, 
+    1, 
+    registrantForm
+  );
+};
+
+
 
   const renewDomain = () => {
     if (!showRenewModal) return;
@@ -495,6 +491,84 @@ export default function DomainsPage() {
     } catch { showToast('Erro de conexão', 'error'); }
     finally { setSavingNs(false); }
   };
+  
+  const resetRegistrant = () => setRegistrantForm({
+  first_name: '', last_name: '', email_contact: '',
+  phone_contact: '', address: '', city: '',
+  state: 'Maputo', zip: '0000', country: 'MZ'
+});
+
+const closeTransferModal = () => {
+  setShowTransferModal(false);
+  setTransferForm({ domain: '', auth_code: '' });
+  setTransferOut({ domain: '' });
+  setTransferResult(null);
+  setTransferOutResult(null);
+  setTransferProcessing(false);
+  resetPayState();
+};
+
+const submitTransferIn = async () => {
+  if (!transferForm.domain || !transferForm.auth_code) {
+    showToast('Preencha domínio e auth code', 'error'); return;
+  }
+  if (!registrantForm.first_name || !registrantForm.email_contact || !registrantForm.address || !registrantForm.city) {
+    showToast('Preencha todos os dados do registrante', 'error'); return;
+  }
+  if ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || payPhoneError)) {
+    showToast('Número de telefone inválido', 'error'); return;
+  }
+  setTransferProcessing(true);
+  try {
+    let transactionId = null;
+    const cost = 10; // preço estimado transferência
+    if (payMethod === 'mpesa' || payMethod === 'emola') {
+      const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
+      const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valor: Math.ceil(cost * exchangeRate).toString(),
+          numero_celular: payPhone,
+          usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
+        })
+      });
+      const ad = await alaudaRes.json();
+      transactionId = ad?.data?.payment?.transaction_id || ad?.transaction_id;
+    }
+    const body = {
+      ...transferForm, cost, method: payMethod, years: 1, ...registrantForm,
+      ...(payMethod !== 'mercadopago' ? { phone: payPhone } : {}),
+      ...(transactionId ? { transaction_id: transactionId } : {})
+    };
+    const res = await fetch(`${API}/api/registrar/transfer/in`, { method: 'POST', headers: hdrs(), body: JSON.stringify(body) });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      setTransferResult(data);
+      if (data.payment_url) window.open(data.payment_url, '_blank');
+      showToast('Transferência iniciada! Confirme o email WHOIS.', 'success');
+    } else {
+      showToast(data.error || 'Erro ao iniciar transferência', 'error');
+    }
+  } catch { showToast('Erro de conexão', 'error'); }
+  finally { setTransferProcessing(false); }
+};
+
+const submitTransferOut = async () => {
+  if (!transferOut.domain) { showToast('Informe o domínio', 'error'); return; }
+  setTransferProcessing(true);
+  try {
+    const res = await fetch(`${API}/api/registrar/transfer/out/${transferOut.domain}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      setTransferOutResult(data);
+      showToast('Auth code gerado com sucesso!', 'success');
+    } else {
+      showToast(data.error || 'Erro ao gerar auth code', 'error');
+    }
+  } catch { showToast('Erro de conexão', 'error'); }
+  finally { setTransferProcessing(false); }
+};
 
   // ===== COMPUTED =====
   const allDomainNames = registeredDomains.map(d => d.domain || d).filter(Boolean);
@@ -618,6 +692,11 @@ export default function DomainsPage() {
                 <button onClick={loadData} className="p-2 hover:bg-gray-100 rounded-lg" title="Atualizar">
                   <RefreshCw className="w-4 h-4 text-gray-500" />
                 </button>
+                
+                <button onClick={() => setShowTransferModal(true)}
+  className="hidden sm:flex items-center gap-1 text-xs text-white/80 hover:text-white border border-white/30 rounded-lg px-3 py-1.5">
+  <ArrowRight className="w-3.5 h-3.5" /> Transferir
+</button>
               </div>
               <button onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shadow-sm">
@@ -1341,103 +1420,133 @@ export default function DomainsPage() {
                   </div>
                 </div>
               </div>
-
+              
               {payStep === 1 && (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Conectar a um container (opcional)
-                    </label>
-                    <select value={buyLinkContainer} onChange={e => setBuyLinkContainer(e.target.value)}
-                      className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
-                      <option value="">Não conectar agora</option>
-                      {containers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
-                    </select>
-                    <p className="text-xs text-gray-400 mt-1">O domínio será conectado automaticamente após o pagamento</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button onClick={closeBuyModal}
-                      className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Cancelar</button>
-                    <button onClick={() => setPayStep(2)}
-                      className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium flex items-center justify-center gap-2">
-                      <ArrowRight className="w-4 h-4" /> Ir para Pagamento
-                    </button>
-                  </div>
-                </>
-              )}
+  <>
+    <p className="text-xs text-gray-500 mb-3">Dados do Registrante (WHOIS)</p>
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
+        <input value={registrantForm.first_name} onChange={e => setRegistrantForm(p=>({...p,first_name:e.target.value}))}
+          placeholder="João" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Apelido *</label>
+        <input value={registrantForm.last_name} onChange={e => setRegistrantForm(p=>({...p,last_name:e.target.value}))}
+          placeholder="Silva" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+      </div>
+    </div>
+    <div className="mt-3">
+      <label className="block text-xs font-medium text-gray-700 mb-1">Email de contacto *</label>
+      <input type="email" value={registrantForm.email_contact} onChange={e => setRegistrantForm(p=>({...p,email_contact:e.target.value}))}
+        placeholder="joao@email.com" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div className="mt-3">
+      <label className="block text-xs font-medium text-gray-700 mb-1">Telefone de contacto *</label>
+      <input value={registrantForm.phone_contact} onChange={e => setRegistrantForm(p=>({...p,phone_contact:e.target.value}))}
+        placeholder="841234567" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div className="mt-3">
+      <label className="block text-xs font-medium text-gray-700 mb-1">Morada *</label>
+      <input value={registrantForm.address} onChange={e => setRegistrantForm(p=>({...p,address:e.target.value}))}
+        placeholder="Av. Eduardo Mondlane, 123" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div className="grid grid-cols-2 gap-3 mt-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Cidade *</label>
+        <input value={registrantForm.city} onChange={e => setRegistrantForm(p=>({...p,city:e.target.value}))}
+          placeholder="Maputo" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">País</label>
+        <input value={registrantForm.country} onChange={e => setRegistrantForm(p=>({...p,country:e.target.value}))}
+          placeholder="MZ" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+      </div>
+    </div>
+    <div className="flex gap-3 mt-5">
+      <button onClick={closeBuyModal} className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Cancelar</button>
+      <button
+        onClick={() => setPayStep(2)}
+        disabled={!registrantForm.first_name || !registrantForm.last_name || !registrantForm.email_contact || !registrantForm.address || !registrantForm.city}
+        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2">
+        <ArrowRight className="w-4 h-4" /> Continuar
+      </button>
+    </div>
+  </>
+)}
 
-              {payStep === 2 && (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Método de Pagamento</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'mpesa', name: 'M-Pesa', desc: '84/85', active: 'border-green-500 bg-green-50', icon: '🟢' },
-                        { id: 'emola', name: 'e-Mola', desc: '86/87', active: 'border-blue-500 bg-blue-50', icon: '🔵' },
-                        { id: 'mercadopago', name: 'MercadoPago', desc: 'Cartão/PIX', active: 'border-cyan-500 bg-cyan-50', icon: '💳' }
-                      ].map(m => (
-                        <button key={m.id} onClick={() => { setPayMethod(m.id); setPayPhoneError(''); }}
-                          className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all text-center ${
-                            payMethod === m.id ? m.active : 'border-gray-200 hover:border-gray-300'
-                          }`}>
-                          <span className="text-lg mb-0.5">{m.icon}</span>
-                          <span className="text-xs font-semibold">{m.name}</span>
-                          <span className="text-[10px] text-gray-400">{m.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+{payStep === 2 && (
+  <>
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Conectar a um container (opcional)</label>
+      <select value={buyLinkContainer} onChange={e => setBuyLinkContainer(e.target.value)}
+        className="w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+        <option value="">Não conectar agora</option>
+        {containers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
+      </select>
+    </div>
+    <div className="flex gap-3">
+      <button onClick={() => setPayStep(1)} className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Voltar</button>
+      <button onClick={() => setPayStep(3)}
+        className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium flex items-center justify-center gap-2">
+        <ArrowRight className="w-4 h-4" /> Ir para Pagamento
+      </button>
+    </div>
+  </>
+)}
 
-                  {(payMethod === 'mpesa' || payMethod === 'emola') && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Número de Telefone</label>
-                      <input
-                        type="tel"
-                        placeholder={payMethod === 'mpesa' ? '841234567' : '861234567'}
-                        value={payPhone}
-                        onChange={e => handlePayPhoneChange(e.target.value)}
-                        maxLength={9}
-                        className={`w-full px-4 py-3 border-2 rounded-xl font-mono text-lg tracking-wider focus:outline-none focus:ring-2 ${
-                          payPhoneError ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
-                          : payPhone.length === 9 && !payPhoneError ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
-                          : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                        }`}
-                      />
-                      {payPhoneError && (
-                        <p className="text-xs text-red-600 mt-1 flex items-start gap-1"><AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />{payPhoneError}</p>
-                      )}
-                      {!payPhoneError && payPhone.length === 9 && (
-                        <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Número válido</p>
-                      )}
-                    </div>
-                  )}
+{payStep === 3 && (
+  <div className="space-y-4">
+    <div className="bg-gray-50 p-3 rounded-lg border">
+      <p className="text-xs font-bold text-gray-500 uppercase">Resumo da Compra</p>
+      <div className="flex justify-between mt-2">
+        <span className="text-sm font-medium">{showBuyModal.domain}</span>
+        <span className="text-sm font-bold text-blue-600">{showBuyModal.price} MT</span>
+      </div>
+    </div>
 
-                  {payMethod === 'mercadopago' && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                      <p className="text-xs text-blue-700 flex items-start gap-2">
-                        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>Será redirecionado para o MercadoPago para pagar com cartão ou PIX.</span>
-                      </p>
-                    </div>
-                  )}
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-2">Método de Pagamento</label>
+      <div className="grid grid-cols-2 gap-2">
+        <button 
+          onClick={() => setPayMethod('mpesa')}
+          className={`p-2 border rounded-lg text-sm ${payMethod === 'mpesa' ? 'border-green-500 bg-green-50' : ''}`}
+        >
+          M-Pesa
+        </button>
+        <button 
+          onClick={() => setPayMethod('emola')}
+          className={`p-2 border rounded-lg text-sm ${payMethod === 'emola' ? 'border-blue-500 bg-blue-50' : ''}`}
+        >
+          e-Mola
+        </button>
+      </div>
+    </div>
 
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-start gap-2">
-                    <Shield className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-500">Pagamento seguro. Após confirmação, o domínio será registrado automaticamente na sua conta.</p>
-                  </div>
+    {(payMethod === 'mpesa' || payMethod === 'emola') && (
+      <input 
+        type="tel" 
+        placeholder="84/86/87..." 
+        value={payPhone} 
+        onChange={e => setPayPhone(e.target.value)}
+        className="w-full px-3 py-2 border rounded-lg text-sm"
+      />
+    )}
 
-                  <div className="flex gap-3">
-                    <button onClick={() => setPayStep(1)}
-                      className="px-4 py-2.5 border rounded-lg text-gray-700 hover:bg-gray-50 text-sm">Voltar</button>
-                    <button onClick={buyDomain}
-                      disabled={payProcessing || ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))}
-                      className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2">
-                      {payProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                      Pagar e Registrar
-                    </button>
-                  </div>
-                </>
-              )}
+    <div className="flex gap-3 pt-2">
+      <button onClick={() => setPayStep(2)} className="flex-1 py-2 text-sm border rounded-lg">Voltar</button>
+      <button 
+        onClick={buyDomain} // <--- Agora este botão chama a função com todos os dados
+        disabled={payProcessing || (payMethod !== 'mercadopago' && payPhone.length !== 9)}
+        className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold text-sm"
+      >
+        {payProcessing ? 'Processando...' : 'Finalizar e Pagar'}
+      </button>
+    </div>
+  </div>
+)}
+
+             
             </div>
           </div>
         )}
@@ -1671,6 +1780,212 @@ export default function DomainsPage() {
         )}
 
       </div>
+      
+      {showTransferModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold">Transferência de Domínio</h3>
+        <button onClick={closeTransferModal} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
+      </div>
+
+      {/* Tabs IN / OUT */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
+        <button onClick={() => setTransferTab('in')}
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${transferTab === 'in' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+          Receber (Entrada)
+        </button>
+        <button onClick={() => setTransferTab('out')}
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${transferTab === 'out' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+          Enviar (Saída)
+        </button>
+      </div>
+
+      {/* ── ENTRADA ── */}
+      {transferTab === 'in' && !transferResult && (
+        <>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-xs text-yellow-800 space-y-1">
+            <p className="font-semibold flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> Pré-requisitos</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Domínio não transferido nos últimos 60 dias</li>
+              <li>Domínio desbloqueado no registrar atual</li>
+              <li>Auth Code (EPP) válido</li>
+              <li>Acesso ao email WHOIS para confirmar</li>
+            </ul>
+          </div>
+
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Domínio *</label>
+              <input value={transferForm.domain} onChange={e => setTransferForm(p=>({...p,domain:e.target.value}))}
+                placeholder="exemplo.com" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Auth Code / EPP *</label>
+              <input value={transferForm.auth_code} onChange={e => setTransferForm(p=>({...p,auth_code:e.target.value}))}
+                placeholder="Código do registrar atual" className="w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-gray-700 mb-2">Dados do Registrante</p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nome *</label>
+              <input value={registrantForm.first_name} onChange={e => setRegistrantForm(p=>({...p,first_name:e.target.value}))}
+                placeholder="João" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Apelido *</label>
+              <input value={registrantForm.last_name} onChange={e => setRegistrantForm(p=>({...p,last_name:e.target.value}))}
+                placeholder="Silva" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Email *</label>
+              <input type="email" value={registrantForm.email_contact} onChange={e => setRegistrantForm(p=>({...p,email_contact:e.target.value}))}
+                placeholder="joao@email.com" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Telefone *</label>
+              <input value={registrantForm.phone_contact} onChange={e => setRegistrantForm(p=>({...p,phone_contact:e.target.value}))}
+                placeholder="841234567" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Morada *</label>
+              <input value={registrantForm.address} onChange={e => setRegistrantForm(p=>({...p,address:e.target.value}))}
+                placeholder="Av. Eduardo Mondlane, 123" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Cidade *</label>
+                <input value={registrantForm.city} onChange={e => setRegistrantForm(p=>({...p,city:e.target.value}))}
+                  placeholder="Maputo" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">País</label>
+                <input value={registrantForm.country} onChange={e => setRegistrantForm(p=>({...p,country:e.target.value}))}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-gray-700 mb-2">Pagamento</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {[
+              { id: 'mpesa', name: 'M-Pesa', desc: '84/85', active: 'border-green-500 bg-green-50', icon: '🟢' },
+              { id: 'emola', name: 'e-Mola', desc: '86/87', active: 'border-blue-500 bg-blue-50', icon: '🔵' },
+              { id: 'mercadopago', name: 'MercadoPago', desc: 'Cartão/PIX', active: 'border-cyan-500 bg-cyan-50', icon: '💳' }
+            ].map(m => (
+              <button key={m.id} onClick={() => { setPayMethod(m.id); setPayPhoneError(''); }}
+                className={`flex flex-col items-center py-2.5 px-2 rounded-xl border-2 transition-all text-center ${payMethod === m.id ? m.active : 'border-gray-200 hover:border-gray-300'}`}>
+                <span className="text-base mb-0.5">{m.icon}</span>
+                <span className="text-xs font-semibold">{m.name}</span>
+                <span className="text-[10px] text-gray-400">{m.desc}</span>
+              </button>
+            ))}
+          </div>
+          {(payMethod === 'mpesa' || payMethod === 'emola') && (
+            <div className="mb-4">
+              <input type="tel" placeholder={payMethod === 'mpesa' ? '841234567' : '861234567'}
+                value={payPhone} onChange={e => handlePayPhoneChange(e.target.value)} maxLength={9}
+                className={`w-full px-4 py-3 border-2 rounded-xl font-mono text-lg focus:outline-none ${
+                  payPhoneError ? 'border-red-300' : payPhone.length === 9 && !payPhoneError ? 'border-green-300' : 'border-gray-300'
+                }`} />
+              {payPhoneError && <p className="text-xs text-red-600 mt-1">{payPhoneError}</p>}
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-2">
+            <button onClick={closeTransferModal} className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 text-sm">Cancelar</button>
+            <button onClick={submitTransferIn} disabled={transferProcessing ||
+              !transferForm.domain || !transferForm.auth_code ||
+              !registrantForm.first_name || !registrantForm.email_contact || !registrantForm.city ||
+              ((payMethod === 'mpesa' || payMethod === 'emola') && (payPhone.length !== 9 || !!payPhoneError))}
+              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2">
+              {transferProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+              Iniciar Transferência
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Resultado transferência entrada */}
+      {transferTab === 'in' && transferResult && (
+        <div className="text-center">
+          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+          <h4 className="font-bold text-gray-900 mb-1">Transferência Iniciada!</h4>
+          <p className="text-sm text-gray-500 mb-4">Verifique o email WHOIS para confirmar.</p>
+          <div className="bg-gray-50 rounded-lg p-3 text-left text-sm space-y-1 mb-4">
+            <div className="flex justify-between"><span className="text-gray-500">Domínio</span><span className="font-bold">{transferResult.domain}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Referência</span>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-xs">{transferResult.reference_code}</span>
+                <button onClick={() => { cpy(transferResult.reference_code); showToast('Copiado!'); }}><Copy className="w-3 h-3 text-gray-400" /></button>
+              </div>
+            </div>
+          </div>
+          <button onClick={closeTransferModal} className="w-full px-4 py-2.5 border rounded-lg text-gray-700 text-sm">Fechar</button>
+        </div>
+      )}
+
+      {/* ── SAÍDA ── */}
+      {transferTab === 'out' && !transferOutResult && (
+        <>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800">
+            <p className="font-semibold mb-1 flex items-center gap-1"><Info className="w-3.5 h-3.5" /> Como funciona</p>
+            <p>Iremos desbloquear o domínio e gerar o Auth Code (EPP) para transferir para outro registrar. Este processo é gratuito.</p>
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Domínio a transferir *</label>
+            <select value={transferOut.domain} onChange={e => setTransferOut({ domain: e.target.value })}
+              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+              <option value="">Selecione um domínio</option>
+              {allDomainNames.map((d, i) => <option key={i} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-xs text-red-700">
+            <p className="font-semibold mb-1">⚠️ Atenção</p>
+            <p>Após iniciar a transferência você tem 5 dias para concluir no novo registrar. O domínio será desbloqueado automaticamente.</p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={closeTransferModal} className="flex-1 px-4 py-2.5 border rounded-lg text-gray-700 text-sm">Cancelar</button>
+            <button onClick={submitTransferOut} disabled={transferProcessing || !transferOut.domain}
+              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2">
+              {transferProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+              Gerar Auth Code
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Resultado saída */}
+      {transferTab === 'out' && transferOutResult && (
+        <div>
+          <div className="text-center mb-4">
+            <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-2" />
+            <h4 className="font-bold text-gray-900">Auth Code Gerado!</h4>
+            <p className="text-sm text-gray-500">Use este código no novo registrar para concluir a transferência.</p>
+          </div>
+          <div className="bg-gray-900 rounded-xl p-4 mb-4">
+            <p className="text-xs text-gray-400 mb-1">Auth Code / EPP</p>
+            <div className="flex items-center justify-between gap-2">
+              <code className="text-green-400 font-mono text-sm break-all">{transferOutResult.auth_code}</code>
+              <button onClick={() => { cpy(transferOutResult.auth_code); showToast('Auth code copiado!'); }}
+                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg flex-shrink-0">
+                <Copy className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          </div>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800 mb-4">
+            {transferOutResult.warning || 'Após iniciar no novo registrar, confirme por email. Prazo: 5 dias.'}
+          </div>
+          <button onClick={closeTransferModal} className="w-full px-4 py-2.5 border rounded-lg text-gray-700 text-sm">Fechar</button>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
       {/* Toast */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

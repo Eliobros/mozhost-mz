@@ -110,7 +110,7 @@ const CoinsPurchase = () => {
   };
 
   // Detectar método automático baseado no número
-  const detectPaymentMethod = (phone) => {
+  const detectPaymentMethod = (phone: string) => {
     if (phone.length >= 2) {
       const prefix = phone.substring(0, 2);
       if (['84', '85'].includes(prefix)) {

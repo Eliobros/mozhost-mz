@@ -118,8 +118,31 @@ const TermsConditionsPage = ({ onBack }) => {
                     <li>• Proxy ou VPN não autorizados</li>
                   </ul>
                 </div>
+                
+                <div className="p-4 bg-red-50 border border-red-200 rounded mt-4">
+  <h4 className="font-medium text-red-900 mb-2">🚫 Abuso de Contas Múltiplas</h4>
+  <p className="text-sm text-red-700 mb-2">
+    É estritamente proibido criar múltiplas contas com o objetivo de obter 
+    benefícios gratuitos de forma fraudulenta, como Coins de boas-vindas.
+  </p>
+  <ul className="text-sm text-red-700 space-y-1">
+    <li>• O endereço IP de cada utilizador é registado pela plataforma</li>
+    <li>• Contas identificadas serão permanentemente banidas</li>
+    <li>• Em casos de abuso grave poderão ser tomadas medidas legais</li>
+  </ul>
+</div>
               </div>
             </section>
+            
+            <div className="p-4 bg-red-50 border border-red-200 rounded mt-4">
+  <h4 className="font-medium text-red-900 mb-2">⚡ Suspensão Imediata</h4>
+  <p className="text-sm text-red-700">
+    O MozHost reserva-se o direito de suspender ou encerrar qualquer container 
+    ou conta imediatamente e sem aviso prévio caso seja detetado comportamento 
+    que comprometa a estabilidade da infraestrutura, gere ataques DDoS, 
+    consumo excessivo de recursos ou viole qualquer política de Uso Proibido.
+  </p>
+</div>
 
             {/* Limites de Recursos */}
             <section className="mb-8">
@@ -156,7 +179,16 @@ const TermsConditionsPage = ({ onBack }) => {
                   </tbody>
                 </table>
               </div>
+              
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+  <strong>🪙 Coins e Créditos Internos:</strong> As Coins ou créditos internos 
+  da plataforma são ferramentas exclusivas do ecossistema MozHost. Não possuem 
+  valor monetário real, não são reembolsáveis e não podem ser convertidas 
+  em dinheiro (MZN ou USD).
+</div>
             </section>
+            
+            
 
             {/* Responsabilidades */}
             <section className="mb-8">
@@ -172,16 +204,17 @@ const TermsConditionsPage = ({ onBack }) => {
                     <li>• Reportar problemas de segurança</li>
                   </ul>
                 </div>
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">🛡️ Nossas Responsabilidades</h4>
-                  <ul className="text-gray-700 space-y-2">
-                    <li>• Manter a plataforma funcionando</li>
-                    <li>• Proteger a infraestrutura</li>
-                    <li>• Fornecer suporte técnico</li>
-                    <li>• Manter backups do sistema</li>
-                    <li>• Garantir uptime de 99.9%</li>
-                  </ul>
-                </div>
+              <div>
+  <h4 className="font-medium text-gray-900 mb-3">🛡️ Nossas Responsabilidades</h4>
+  <ul className="text-gray-700 space-y-2">
+    <li>• Manter a plataforma funcionando</li>
+    <li>• Proteger a infraestrutura</li>
+    <li>• Fornecer suporte técnico</li>
+    <li>• Manter backups do sistema</li>
+    <li>• Garantir uptime de 99.9% <span className="text-xs text-gray-500">(planos Basic e Pro)</span></li>
+    <li>• Plano Free oferecido em regime de melhor esforço <span className="text-xs text-gray-500">(sem SLA garantido)</span></li>
+  </ul>
+</div>
               </div>
             </section>
 
@@ -213,17 +246,25 @@ const TermsConditionsPage = ({ onBack }) => {
             {/* Limitação de Responsabilidade */}
             <section className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">8. Limitação de Responsabilidade</h2>
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-                <p className="text-gray-700 mb-3">
-                  <strong>IMPORTANTE:</strong> O MozHost é fornecido "como está" sem garantias de qualquer tipo.
-                </p>
-                <ul className="text-gray-700 space-y-2">
-                  <li>• Não garantimos disponibilidade 100% do tempo</li>
-                  <li>• Não somos responsáveis por perda de dados</li>
-                  <li>• Não nos responsabilizamos pelo conteúdo dos usuários</li>
-                  <li>• Nossa responsabilidade máxima é limitada ao valor pago</li>
-                </ul>
-              </div>
+             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+  <p className="text-gray-700 mb-3">
+    <strong>IMPORTANTE:</strong> O MozHost é fornecido "como está" 
+    sem garantias de qualquer tipo.
+  </p>
+  <ul className="text-gray-700 space-y-2">
+    <li>• Não garantimos disponibilidade 100% do tempo</li>
+    <li>• Não somos responsáveis por perda de dados</li>
+    <li>• Não nos responsabilizamos pelo conteúdo dos utilizadores</li>
+    <li>• Nossa responsabilidade máxima é limitada ao valor pago</li>
+  </ul>
+  <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800">
+    <strong>⚖️ Responsabilidade por Danos a Terceiros:</strong> O utilizador 
+    é o único responsável legal — civil e criminal — pelo tráfego, dados e 
+    conteúdos que passam pelo seu container. O MozHost atua exclusivamente 
+    como provedor de infraestrutura (intermediário técnico), não tendo 
+    qualquer responsabilidade sobre o uso que o utilizador faz do serviço.
+  </div>
+</div>
             </section>
 
             {/* Modificações */}
@@ -256,8 +297,8 @@ const TermsConditionsPage = ({ onBack }) => {
                 </p>
                 <div className="space-y-2 text-sm">
                   <p><strong>Empresa:</strong> Eliobros Tech</p>
-                  <p><strong>Email:</strong> legal@mozhost.com</p>
-                  <p><strong>Telefone:</strong> +258 XX XXX XXXX</p>
+                  <p><strong>Email:</strong> legal@mozhost.shop</p>
+                  <p><strong>Telefone:</strong> +258 86 284 0075</p>
                   <p><strong>Endereço:</strong> Maputo, Moçambique</p>
                 </div>
               </div>
@@ -267,8 +308,8 @@ const TermsConditionsPage = ({ onBack }) => {
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm text-gray-600">
-              <p>© 2025 Eliobros Tech. Todos os direitos reservados.</p>
-              <p>Versão 1.0 - Janeiro 2025</p>
+              <p>© 2026 Eliobros Tech - MozHost. Todos os direitos reservados.</p>
+              
             </div>
           </div>
         </div>

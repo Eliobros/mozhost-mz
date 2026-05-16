@@ -58,7 +58,22 @@ async function executeDomainAction(payment) {
       domain: payment.domain,
       duration: String(payment.years || 1)
     });
-  }
+  } else if (payment.action === 'transfer') {
+  await dynadotRequest('transfer', {
+    domain: payment.domain,
+    auth_code: payment.auth_code,
+    duration: String(payment.years || 1),
+    registrant_first_name: payment.first_name,
+    registrant_last_name: payment.last_name,
+    registrant_email: payment.email_contact,
+    registrant_phone_num: payment.phone_contact,
+    registrant_address1: payment.address,
+    registrant_city: payment.city,
+    registrant_state: payment.state || 'Maputo',
+    registrant_zip_code: payment.zip || '0000',
+    registrant_country: payment.country || 'MZ',
+  });
+}
 }
 
 // ===== DOMÍNIOS =====
@@ -546,5 +561,285 @@ router.post('/webhook/:method', async (req, res) => {
     res.status(500).json({ error: 'Erro no webhook' });
   }
 });
+
+// ===== TRANSFERÊNCIAS =====
+
+// POST /api/registrar/transfer/out/:domain
+// Gera EPP/auth code e desbloqueia o domínio para transferência saída (gratuito)
+router.post('/transfer/out/:domain', auth, async (req, res) => {
+  try {
+    const { domain } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    // Verifica se o domínio pertence ao usuário
+    const payments = await database.query(
+      `SELECT * FROM domain_payments 
+       WHERE domain = ? AND user_id = ? AND status = 'completed' AND action IN ('buy', 'transfer')
+       LIMIT 1`,
+      [domain, userId]
+    );
+    if (!payments.length) {
+      return res.status(403).json({ error: 'Domínio não encontrado ou não pertence ao usuário' });
+    }
+
+    // 1. Desbloquear o domínio na Dynadot
+    await dynadotRequest('set_option', {
+      domain,
+      option: 'locked',
+      value: 'no'
+    });
+
+    // 2. Obter o auth code (EPP code)
+    const data = await dynadotRequest('get_transfer_auth_code', { domain });
+
+    const authCode = data.AuthCode || data.GetTransferAuthCodeResponse?.AuthCode;
+    if (!authCode) {
+      throw new Error('Não foi possível obter o auth code. Tente novamente em alguns minutos.');
+    }
+
+    console.log(`🔓 Transfer out: ${domain} desbloqueado | user ${userId}`);
+
+    res.json({
+      success: true,
+      domain,
+      auth_code: authCode,
+      message: 'Domínio desbloqueado. Use o auth code no seu novo registrar para concluir a transferência.',
+      warning: 'Após iniciar a transferência no novo registrar, você tem 5 dias para confirmar por email.'
+    });
+
+  } catch (error) {
+    console.error('Erro transfer out:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/registrar/transfer/in
+// Inicia transferência de domínio externo para MozHost (com pagamento)
+router.post('/transfer/in', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const {
+      domain, auth_code, cost, method, phone, years, transaction_id,
+      first_name, last_name, organization, email_contact,
+      address, city, state, zip, country, phone_contact
+    } = req.body;
+
+    // Validações
+    if (!domain || !auth_code || !cost || !method) {
+      return res.status(400).json({ error: 'domain, auth_code, cost e method são obrigatórios' });
+    }
+    if (!['mpesa', 'emola', 'mercadopago'].includes(method)) {
+      return res.status(400).json({ error: 'Método inválido. Use: mpesa, emola ou mercadopago' });
+    }
+    if ((method === 'mpesa' || method === 'emola') && !phone) {
+      return res.status(400).json({ error: 'Número de telefone é obrigatório para pagamento móvel' });
+    }
+    if (!first_name || !last_name || !email_contact || !address || !city || !phone_contact) {
+      return res.status(400).json({ error: 'Dados de contato são obrigatórios para transferência' });
+    }
+
+    const USD_TO_MT = parseFloat(process.env.USD_TO_MT_RATE) || 63;
+    const priceUsd = parseFloat(cost);
+    const priceMt = Math.ceil(priceUsd * USD_TO_MT);
+    const amount = method === 'mercadopago' ? Math.ceil(priceUsd * 5.5) : priceMt;
+    const currency = method === 'mercadopago' ? 'BRL' : 'MZN';
+
+    const users = await database.query('SELECT id, email FROM users WHERE id = ?', [userId]);
+    if (!users.length) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const referenceCode = `TRF${timestamp}${random}`;
+
+    await database.query(
+      `INSERT INTO domain_payments 
+        (user_id, domain, action, price_usd, amount, currency, method, phone, years,
+         reference_code, status, auth_code,
+         first_name, last_name, organization, email_contact,
+         address, city, state, zip, country, phone_contact, created_at)
+       VALUES (?, ?, 'transfer', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        userId, domain, priceUsd, amount, currency, method, phone || null, years || 1,
+        referenceCode, auth_code,
+        first_name, last_name, organization || null, email_contact,
+        address, city, state || 'Maputo', zip || '0000', country || 'MZ', phone_contact
+      ]
+    );
+
+    const paymentId = (await database.query('SELECT LAST_INSERT_ID() as id'))[0].id;
+
+    let paymentDetails = {};
+    let paymentUrl = null;
+
+    if ((method === 'mpesa' || method === 'emola') && transaction_id) {
+      await database.query(
+        'UPDATE domain_payments SET transaction_id = ?, status = "processing" WHERE id = ?',
+        [transaction_id, paymentId]
+      );
+      const phoneClean = phone.replace(/^258/, '');
+      paymentDetails = {
+        provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+        phone: phoneClean,
+        reference: referenceCode,
+        transaction_id,
+        instructions: [
+          'Aguarde a notificação no seu celular',
+          `Digite seu PIN ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'} para confirmar`,
+          `Valor: ${amount} MT`,
+          `Referência: ${referenceCode}`
+        ]
+      };
+
+    } else if (method === 'mercadopago') {
+      try {
+        const alaudaRes = await axios.post(
+          `${ALAUDA_API_URL}/mercadopago`,
+          {
+            email: users[0].email,
+            amount: parseFloat(amount),
+            description: `Transferência de domínio: ${domain}`,
+            usuario_id: userId.toString(),
+            back_urls: {
+              success: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/domains?payment=success&ref=${referenceCode}`,
+              failure: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/domains?payment=failure`,
+              pending: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/domains?payment=pending`
+            },
+            notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/registrar/webhook/mercadopago`
+          },
+          { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}`, 'Content-Type': 'application/json' } }
+        );
+
+        const alaudaData = alaudaRes.data.data || alaudaRes.data;
+        paymentUrl = alaudaData.payment?.init_point || alaudaData.payment?.sandbox_init_point;
+        paymentDetails = {
+          provider: 'Mercado Pago',
+          url: paymentUrl,
+          preference_id: alaudaData.payment?.id
+        };
+
+        if (alaudaData.payment?.id) {
+          await database.query(
+            'UPDATE domain_payments SET transaction_id = ? WHERE id = ?',
+            [alaudaData.payment.id, paymentId]
+          );
+        }
+      } catch (alaudaError) {
+        console.error('❌ Erro Alauda MercadoPago (transfer):', alaudaError.response?.data || alaudaError.message);
+        return res.status(500).json({ error: 'Erro ao criar pagamento MercadoPago' });
+      }
+
+    } else {
+      // M-Pesa / E-Mola sem transaction_id (backend chama Alauda diretamente)
+      try {
+        const phoneClean = phone.replace(/^258/, '');
+        const endpoint = method === 'mpesa' ? '/mpesa' : '/emola';
+
+        const alaudaRes = await axios.post(
+          `${ALAUDA_API_URL}${endpoint}`,
+          {
+            valor: amount.toString(),
+            numero_celular: phoneClean,
+            usuario_id: userId.toString()
+          },
+          { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}`, 'Content-Type': 'application/json' } }
+        );
+
+        const alaudaData = alaudaRes.data.data || alaudaRes.data;
+        const phoneCleanFinal = phone.replace(/^258/, '');
+        paymentDetails = {
+          provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+          phone: phoneCleanFinal,
+          reference: referenceCode,
+          transaction_id: alaudaData.payment?.transaction_id,
+          instructions: [
+            'Aguarde a notificação no seu celular',
+            `Digite seu PIN ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'} para confirmar`,
+            `Valor: ${amount} MT`,
+            `Referência: ${referenceCode}`
+          ]
+        };
+
+        if (alaudaData.payment?.transaction_id) {
+          await database.query(
+            'UPDATE domain_payments SET transaction_id = ?, status = "processing" WHERE id = ?',
+            [alaudaData.payment.transaction_id, paymentId]
+          );
+        }
+      } catch (alaudaError) {
+        console.error('❌ Erro Alauda (transfer in):', alaudaError.response?.data || alaudaError.message);
+        return res.status(500).json({ error: 'Erro ao processar pagamento móvel. Tente novamente.' });
+      }
+    }
+
+    console.log(`💳 Transfer in: ID ${paymentId} | ${domain} | $${priceUsd} → ${amount} ${currency} | ${method}`);
+
+    res.json({
+      success: true,
+      payment_id: paymentId,
+      reference_code: referenceCode,
+      domain,
+      action: 'transfer',
+      price_usd: priceUsd,
+      amount,
+      currency,
+      payment_details: paymentDetails,
+      payment_url: paymentUrl,
+      status: 'pending'
+    });
+
+  } catch (error) {
+    console.error('Erro transfer in:', error);
+    res.status(500).json({ error: 'Falha ao processar transferência' });
+  }
+});
+
+// GET /api/registrar/transfer/status/:domain
+// Verifica status de uma transferência em andamento
+router.get('/transfer/status/:domain', auth, async (req, res) => {
+  try {
+    const { domain } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    const payments = await database.query(
+      `SELECT id, domain, status, created_at, completed_at, error_message 
+       FROM domain_payments 
+       WHERE domain = ? AND user_id = ? AND action = 'transfer' 
+       ORDER BY created_at DESC LIMIT 1`,
+      [domain, userId]
+    );
+
+    if (!payments.length) {
+      return res.status(404).json({ error: 'Nenhuma transferência encontrada para este domínio' });
+    }
+
+    const payment = payments[0];
+
+    // Se ainda pendente/processing, consulta status na Dynadot também
+    let dynadotStatus = null;
+    if (['pending', 'processing'].includes(payment.status)) {
+      try {
+        const data = await dynadotRequest('check_transfer', { domain });
+        dynadotStatus = data.TransferStatus || null;
+      } catch (_) {
+        // silencia — nem sempre disponível
+      }
+    }
+
+    res.json({
+      success: true,
+      domain,
+      status: payment.status,
+      dynadot_status: dynadotStatus,
+      created_at: payment.created_at,
+      completed_at: payment.completed_at,
+      error_message: payment.error_message || null
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao verificar status da transferência' });
+  }
+});
+
+
 
 module.exports = router;

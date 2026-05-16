@@ -281,19 +281,26 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 <div className="p-4 bg-gray-50 rounded">
                   <h4 className="font-medium text-gray-900 mb-2">📅 Períodos de Retenção</h4>
                   <div className="grid md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <strong>Dados da conta:</strong> Enquanto conta ativa + 1 ano
-                    </div>
-                    <div>
-                      <strong>Logs de acesso:</strong> 2 anos
-                    </div>
-                    <div>
-                      <strong>Dados de pagamento:</strong> 7 anos (obrigatório legal)
-                    </div>
-                    <div>
-                      <strong>Conteúdo containers:</strong> 30 dias após exclusão
-                    </div>
-                  </div>
+  <div>
+    <strong>Dados da conta:</strong> Enquanto conta ativa + 1 ano
+  </div>
+  <div>
+    <strong>Logs de acesso:</strong> 2 anos
+  </div>
+  <div>
+    <strong>Dados de pagamento:</strong> 7 anos (obrigatório legal)
+  </div>
+  <div>
+    <strong>Conteúdo containers:</strong> 30 dias após exclusão
+  </div>
+</div>
+<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+  <strong>⚠️ Exclusão de Conta:</strong> Ao solicitar a exclusão da sua conta, 
+  os seus dados serão mantidos por 30 dias para fins de recuperação. Após esse 
+  período, todos os dados — incluindo containers, arquivos, configurações e 
+  informações pessoais — serão permanentemente eliminados e não poderão 
+  ser recuperados.
+</div>
                 </div>
               </div>
             </section>
@@ -330,23 +337,27 @@ const PrivacyPolicyPage = ({ onBack }) => {
             </section>
 
             {/* Transferência internacional */}
-            <section className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">9. Transferência Internacional</h2>
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-                <p className="text-yellow-800 mb-3">
-                  <strong>Localização dos Dados:</strong> Seus dados são armazenados em servidores 
-                  localizados em Moçambique e podem ser processados em outros países para fins de:
-                </p>
-                <ul className="text-sm text-yellow-700 space-y-1">
-                  <li>• Backup e recuperação de desastres</li>
-                  <li>• Processamento de pagamentos</li>
-                  <li>• Suporte técnico especializado</li>
-                </ul>
-                <p className="text-xs text-yellow-600 mt-3">
-                  Garantimos o mesmo nível de proteção em todas as transferências.
-                </p>
-              </div>
-            </section>
+        <section className="mb-8">
+  <h2 className="text-xl font-semibold text-gray-900 mb-4">9. Transferência Internacional</h2>
+  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+    <p className="text-yellow-800 mb-3">
+      <strong>Localização dos Dados:</strong> Seus dados são armazenados em servidores 
+      da Contabo GmbH, localizados fisicamente em Lauterbourg, França, União Europeia.
+    </p>
+    <p className="text-yellow-800 mb-3">
+      A Contabo segue as normas europeias de proteção de dados (GDPR), garantindo um 
+      alto nível de proteção. Seus dados podem também ser processados para fins de:
+    </p>
+    <ul className="text-sm text-yellow-700 space-y-1">
+      <li>• Backup e recuperação de desastres</li>
+      <li>• Processamento de pagamentos</li>
+      <li>• Suporte técnico especializado</li>
+    </ul>
+    <p className="text-xs text-yellow-600 mt-3">
+      Garantimos o mesmo nível de proteção em todas as operações, em conformidade com o GDPR.
+    </p>
+  </div>
+</section>
 
             {/* Menores de idade */}
             <section className="mb-8">
@@ -367,11 +378,60 @@ const PrivacyPolicyPage = ({ onBack }) => {
                 Podemos atualizar esta política periodicamente. Mudanças significativas serão 
                 notificadas via email e através da plataforma com 30 dias de antecedência.
               </p>
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-                <strong>Versão atual:</strong> 1.0 (Janeiro 2025)<br />
-                <strong>Próxima revisão:</strong> Julho 2025
-              </div>
+             
             </section>
+            
+            <section className="mb-8">
+  <h2 className="text-xl font-semibold text-gray-900 mb-4">12. Política de Domínios</h2>
+
+  <div className="space-y-4">
+    {/* Subdomínio Gratuito */}
+    <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+      <h4 className="font-medium text-blue-900 mb-2">🌐 Subdomínio Gratuito</h4>
+      <ul className="text-sm text-blue-800 space-y-1">
+        <li>• Todo utilizador recebe um subdomínio gratuito (ex: app.mozhost.shop)</li>
+        <li>• Proibido usar nomes ofensivos, vulgares ou que imitem marcas conhecidas</li>
+        <li>• Exemplos proibidos: mpesa.mozhost.shop, vodacom.mozhost.shop</li>
+        <li>• O MozHost reserva-se o direito de revogar subdomínios que violem os termos</li>
+        <li>• O subdomínio é vinculado à conta e não pode ser transferido</li>
+      </ul>
+    </div>
+
+    {/* Domínio Próprio */}
+    <div className="p-4 bg-green-50 border border-green-200 rounded">
+      <h4 className="font-medium text-green-900 mb-2">🔗 Domínio Próprio</h4>
+      <ul className="text-sm text-green-800 space-y-1">
+        <li>• O utilizador pode ligar o seu próprio domínio à plataforma</li>
+        <li>• O domínio pertence sempre ao utilizador, nunca ao MozHost</li>
+        <li>• O utilizador é responsável pela renovação e gestão do domínio</li>
+        <li>• O MozHost não se responsabiliza por domínios expirados ou mal configurados</li>
+        <li>• Domínios usados para actividades ilegais serão bloqueados imediatamente</li>
+      </ul>
+    </div>
+
+    {/* Compra de Domínio */}
+    <div className="p-4 bg-purple-50 border border-purple-200 rounded">
+      <h4 className="font-medium text-purple-900 mb-2">🛒 Compra de Domínio via MozHost</h4>
+      <ul className="text-sm text-purple-800 space-y-1">
+        <li>• Domínios são adquiridos via parceiro Dynadot</li>
+        <li>• O registo e renovação estão sujeitos às políticas da Dynadot</li>
+        <li>• O domínio comprado pertence ao utilizador</li>
+        <li>• Sem reembolso após o registo do domínio</li>
+        <li>• O MozHost não se responsabiliza por falhas ou indisponibilidade da Dynadot</li>
+      </ul>
+    </div>
+
+    {/* SSL */}
+    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+      <h4 className="font-medium text-yellow-900 mb-2">🔒 SSL/HTTPS</h4>
+      <ul className="text-sm text-yellow-800 space-y-1">
+        <li>• Certificado SSL gratuito fornecido automaticamente para todos os domínios</li>
+        <li>• Renovação automática gerida pelo MozHost</li>
+        <li>• Em caso de domínio próprio mal configurado o SSL pode não funcionar</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
             {/* Contato */}
             <section className="mb-8">
@@ -384,10 +444,10 @@ const PrivacyPolicyPage = ({ onBack }) => {
                   Para questões sobre privacidade, exercer seus direitos ou reportar preocupações:
                 </p>
                 <div className="space-y-2 text-sm">
-                  <p><strong>Email Privacidade:</strong> privacy@mozhost.com</p>
+                  <p><strong>Email Privacidade:</strong> privacy@mozhost.shop</p>
                   <p><strong>Responsável DPO:</strong> Habibo Julio (Eliobros Tech)</p>
-                  <p><strong>Telefone:</strong> +258 XX XXX XXXX</p>
-                  <p><strong>Endereço:</strong> Maputo, Moçambique</p>
+                  <p><strong>Telefone:</strong> +258 86 284 0075</p>
+                  <p><strong>Endereço:</strong> Marracuene, Maputo - Moçambique</p>
                   <p><strong>Tempo de resposta:</strong> Até 30 dias</p>
                 </div>
               </div>
@@ -397,8 +457,8 @@ const PrivacyPolicyPage = ({ onBack }) => {
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm text-gray-600">
-              <p>© 2025 Eliobros Tech. Todos os direitos reservados.</p>
-              <p>Política v1.0 - Janeiro 2025</p>
+              <p>© 2026 Eliobros Tech - MozHost. Todos os direitos reservados.</p>
+             
             </div>
           </div>
         </div>

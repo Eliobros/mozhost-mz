@@ -196,7 +196,7 @@ const useMongoAuthState = async (collection) => {
           const data = {};
           await Promise.all(
             ids.map(async (id) => {
-              let value = await readData(`${type}-${id}`);
+              let value = await readData(\`\${type}-\${id}\`);
               if (type === 'app-state-sync-key' && value) {
                 value = proto.Message.AppStateSyncKeyData.fromObject(value);
               }
@@ -210,7 +210,7 @@ const useMongoAuthState = async (collection) => {
           for (const category of Object.keys(data)) {
             for (const id of Object.keys(data[category])) {
               const value = data[category][id];
-              const key = `${category}-${id}`;
+              const key = \`\${category}-\${id}\`;
               tasks.push(value ? writeData(key, value) : removeData(key));
             }
           }
@@ -282,9 +282,9 @@ function loadCommands() {
     try {
       const command = require(path.join(commandsPath, file));
       commands.set(command.name, command);
-      console.log(`✅ Comando carregado: ${command.name}`);
+      console.log(\`✅ Comando carregado: \${command.name}\`);
     } catch (error) {
-      console.error(`❌ Erro ao carregar comando ${file}:`, error.message);
+      console.error(\`❌ Erro ao carregar comando \${file}:\`, error.message);
     }
   }
 }
@@ -306,12 +306,12 @@ async function handleMessage(sock, msg) {
   if (!command) return;
 
   try {
-    console.log(`📨 Executando comando: ${cmdName}`);
+    console.log(\`📨 Executando comando: \${cmdName}\`);
     await command.execute(sock, msg, args);
   } catch (error) {
-    console.error(`❌ Erro ao executar comando ${cmdName}:`, error);
+    console.error(\`❌ Erro ao executar comando \${cmdName}:\`, error);
     await sock.sendMessage(msg.key.remoteJid, {
-      text: `❌ Erro ao executar comando: ${error.message}`
+      text: \`❌ Erro ao executar comando: \${error.message}\`
     });
   }
 }
@@ -375,8 +375,8 @@ async function connectToWhatsApp(collection) {
       const botNumber = me.id.split(':')[0];
       const botName = me.name || me.verifiedName || 'Bot';
 
-      console.log(`📱 Número: ${botNumber}`);
-      console.log(`👤 Nome: ${botName}`);
+      console.log(\`📱 Número: \${botNumber}\`);
+      console.log(\`👤 Nome: \${botName}\`);
 
       saveState({
         connected: true,
@@ -413,8 +413,8 @@ async function start() {
   console.log('║   🤖 MozHost Bot (Baileys)        ║');
   console.log('╚════════════════════════════════════╝');
   console.log('');
-  console.log(`📌 Prefix: ${prefix}`);
-  console.log(`👤 Owner: ${ownerNumber || 'Não configurado'}`);
+  console.log(\`📌 Prefix: \${prefix}\`);
+  console.log(\`👤 Owner: \${ownerNumber || 'Não configurado'}\`);
   console.log('');
 
   // Verificar MONGO_URI
@@ -439,7 +439,7 @@ async function start() {
 
   // Carregar comandos
   loadCommands();
-  console.log(`✅ ${commands.size} comando(s) carregado(s)`);
+  console.log(\`✅ \${commands.size} comando(s) carregado(s)\`);
   console.log('');
 
   // Conectar ao WhatsApp
