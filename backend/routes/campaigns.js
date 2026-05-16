@@ -1,10 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const database = require('../models/database');
-const { authenticateAdmin } = require('../middleware/auth');
 const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Verificação simples de admin
+const checkAdmin = (req, res, next) => {
+  const password = req.query.password || req.body.password;
+  if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+    return res.status(401).json({ success: false, message: 'Senha inválida' });
+  }
+  req.user = { username: 'admin' };
+  next();
+};
 
 // Função que substitui os {{prefixos}}
 function aplicarTemplate(template, usuario) {
@@ -13,13 +22,13 @@ function aplicarTemplate(template, usuario) {
     .replace(/{{email}}/g, usuario.email)
     .replace(/{{coins}}/g, usuario.coins)
     .replace(/{{plan}}/g, usuario.plan)
-    .replace(/{{link}}/g, 'https://mozhost.com/dashboard')
+    .replace(/{{link}}/g, 'https://mozhost.shop/dashboard')
 }
 
 // ============================================
 // SALVAR TEMPLATE
 // ============================================
-router.post('/admin/campaigns/template', authenticateAdmin, async (req, res) => {
+router.post('/admin/campaigns/template', checkAdmin, async (req, res) => {
   try {
     const { assunto, corpo } = req.body;
 
@@ -33,7 +42,7 @@ router.post('/admin/campaigns/template', authenticateAdmin, async (req, res) => 
     await database.query(`
       INSERT INTO email_templates (assunto, corpo)
       VALUES (?, ?)
-      ON DUPLICATE KEY UPDATE assunto = VALUES(assunto), corpo = VALUES(corpo)
+      ON DUPLICATE KEY UPDATE assunto = VALUES(assunto), corpo = VALUES(corpo), updated_at = NOW()
     `, [assunto, corpo]);
 
     res.json({
@@ -54,7 +63,7 @@ router.post('/admin/campaigns/template', authenticateAdmin, async (req, res) => 
 // ============================================
 // BUSCAR TEMPLATE
 // ============================================
-router.get('/admin/campaigns/template', authenticateAdmin, async (req, res) => {
+router.get('/admin/campaigns/template', checkAdmin, async (req, res) => {
   try {
     const templates = await database.query(
       'SELECT * FROM email_templates ORDER BY updated_at DESC LIMIT 1'
@@ -77,7 +86,7 @@ router.get('/admin/campaigns/template', authenticateAdmin, async (req, res) => {
 // ============================================
 // ENVIAR CAMPANHA
 // ============================================
-router.post('/admin/campaigns/send', authenticateAdmin, async (req, res) => {
+router.post('/admin/campaigns/send', checkAdmin, async (req, res) => {
   try {
     const { tipo } = req.body;
 
@@ -88,7 +97,6 @@ router.post('/admin/campaigns/send', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Busca template salvo
     const templates = await database.query(
       'SELECT * FROM email_templates ORDER BY updated_at DESC LIMIT 1'
     );
@@ -102,7 +110,6 @@ router.post('/admin/campaigns/send', authenticateAdmin, async (req, res) => {
 
     const template = templates[0];
 
-    // Queries por tipo
     const queries = {
       todos: `
         SELECT id, username, email, coins, plan
@@ -158,7 +165,7 @@ router.post('/admin/campaigns/send', authenticateAdmin, async (req, res) => {
         const assunto = aplicarTemplate(template.assunto, user);
 
         await resend.emails.send({
-          from: 'MozHost <noreply@mozhost.com>',
+          from: 'MozHost <noreply@mozhost.shop>',
           to: user.email,
           subject: assunto,
           html: corpo
@@ -171,7 +178,7 @@ router.post('/admin/campaigns/send', authenticateAdmin, async (req, res) => {
       }
     }
 
-    console.log(`[Campaign] Tipo: ${tipo} | Admin: ${req.user.username} | Enviados: ${enviados} | Erros: ${erros}`);
+    console.log(`[Campaign] Tipo: ${tipo} | Enviados: ${enviados} | Erros: ${erros}`);
 
     res.json({
       success: true,

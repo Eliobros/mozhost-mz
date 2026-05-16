@@ -34,7 +34,7 @@ const grupos = [
   useEffect(() => {
     const fetchTemplate = async () => {
       try {
-        const res = await fetch(`${API}/api/admin/campaigns/template`, { headers });
+        const res = await fetch(`${API}/api/admin/campaigns/template?password=${encodeURIComponent(password)}`, { headers });
         const data = await res.json();
         if (data.success && data.template) {
           setAssunto(data.template.assunto);
@@ -50,23 +50,22 @@ const grupos = [
   }, []);
 
   const salvarTemplate = async () => {
-    setErro('');
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/admin/campaigns/template`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ assunto, corpo })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      alert('Template salvo com sucesso!');
-    } catch (err: any) {
-      setErro(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const res = await fetch(`${API}/api/admin/campaigns/template?password=${encodeURIComponent(password)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assunto, corpo })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    alert('Template salvo com sucesso!');
+  } catch (err: any) {
+    setErro(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const enviarCampanha = async () => {
     if (!confirm('Tens certeza que queres enviar para todos os usuários sem container?')) return;
