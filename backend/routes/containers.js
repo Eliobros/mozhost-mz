@@ -274,7 +274,7 @@ body('template')
       },
       subscription: {
         expiresAt: subscription.expiresAt,
-        daysLeft: 30
+        daysLeft: 7
       }
     };
 

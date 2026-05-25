@@ -99,13 +99,15 @@ PMA_PASSWORD=${dbInfo.dbPassword}
 
       // Se for Python, usar template legado (por enquanto)
       if (type === 'python') {
-        await this.createPythonTemplate(containerPath);
-        return;
-      }
+  await this.createPythonTemplate(containerPath);
+  await fs.writeFile(path.join(containerPath, '.env'), ''); // ← adicionar
+  return;
+}
 
       // Para API e Bots, usar template-manager
       console.log(`📦 Aplicando template: ${templateType}`);
       await templateManager.applyTemplate(containerPath, templateType);
+      await fs.writeFile(path.join(containerPath, '.env'), ''); // ← adicionar
       
       await execAsync(`chmod -R 775 ${containerPath}`);
       
@@ -189,11 +191,14 @@ DirectoryIndex index.php
    * Template Python legado (mantido por compatibilidade)
    */
   async createPythonTemplate(containerPath) {
-    const files = {
-      'requirements.txt': 'flask==2.3.3',
-      'main.py': `from flask import Flask, jsonify
+  const files = {
+    'requirements.txt': 'flask==2.3.3\npython-dotenv',
+    'main.py': `from flask import Flask, jsonify
+from dotenv import load_dotenv
 from datetime import datetime
 import os
+
+load_dotenv()
 
 app = Flask(__name__)
 PORT = int(os.environ.get('PORT', 8000))
@@ -207,12 +212,14 @@ def hello():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=False)`
-    };
+  };
 
-    for (const [filename, content] of Object.entries(files)) {
-      await fs.writeFile(path.join(containerPath, filename), content);
-    }
+  for (const [filename, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(containerPath, filename), content);
   }
+
+  await fs.writeFile(path.join(containerPath, '.env'), '');
+}
 }
 
 module.exports = DockerFileManager;

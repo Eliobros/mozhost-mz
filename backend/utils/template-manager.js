@@ -60,7 +60,9 @@ class TemplateManager {
     return {
       directories: [],
       files: {
-        'index.js': `const express = require('express');
+        'index.js': `
+        require('dotenv').config()
+        const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -95,7 +97,8 @@ app.listen(PORT, () => {
             dev: 'nodemon index.js'
           },
           dependencies: {
-            express: '^4.18.2'
+            express: '^4.18.2',
+            dotenv: '^16.0.0'
           },
           devDependencies: {
             nodemon: '^3.0.1'
@@ -131,7 +134,8 @@ API criada automaticamente pelo MozHost.
           start: 'node index.js'
         },
         dependencies: {
-          express: '^4.18.2'
+          express: '^4.18.2',
+          dotenv: '^16.0.0'
         }
       },
       startCommand: 'npm start',
@@ -147,6 +151,7 @@ API criada automaticamente pelo MozHost.
       directories: ['commands', 'utils'],
       files: {
         'index.js': `
+        require('dotenv').config();
         const { default: makeWASocket, DisconnectReason, initAuthCreds, BufferJSON, proto } = require('baileys');
 const P = require('pino');
 const fs = require('fs');
@@ -589,7 +594,8 @@ BOT_VERSION=1.0.0`,
             'baileys': 'latest',
             'pino': '^8.16.1',
             'qrcode-terminal': '^0.12.0',
-            'qrcode': '^1.5.3'
+            'qrcode': '^1.5.3',
+            'dotenv': '^16.0.0'
           }
         }, null, 2),
 
@@ -650,7 +656,8 @@ Dúvidas? Entre em contato pelo painel MozHost!
           'baileys': 'latest',
           'pino': '^8.16.1',
           'qrcode-terminal': '^0.12.0',
-          'qrcode': '^1.5.3'
+          'qrcode': '^1.5.3',
+          'dotenv': '^16.0.0'
         }
       },
       startCommand: 'npm start',
@@ -1069,7 +1076,8 @@ BOT_VERSION=1.0.0`,
           dependencies: {
             'whatsapp-web.js': '^1.23.0',
             'qrcode-terminal': '^0.12.0',
-            'qrcode': '^1.5.3'
+            'qrcode': '^1.5.3',
+            'dotenv': '^16.0.0'
           },
           devDependencies: {
             'nodemon': '^3.0.1'
@@ -1131,7 +1139,8 @@ Dúvidas? Entre em contato pelo painel MozHost!
         dependencies: {
           'whatsapp-web.js': '^1.23.0',
           'qrcode-terminal': '^0.12.0',
-          'qrcode': '^1.5.3'
+          'qrcode': '^1.5.3',
+          'dotenv': '^16.0.0'
         }
       },
       startCommand: 'npm start',
