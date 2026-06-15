@@ -68,24 +68,31 @@ const grupos = [
 };
 
   const enviarCampanha = async () => {
-    if (!confirm('Tens certeza que queres enviar para todos os usuários sem container?')) return;
-    setErro('');
-    setResultado(null);
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/admin/campaigns/send`, {
-        method: 'POST',
-        headers
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      setResultado(data);
-    } catch (err: any) {
-      setErro(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!confirm('Tens certeza que queres enviar para o grupo selecionado?')) return;
+  setErro('');
+  setResultado(null);
+  setLoading(true);
+  try {
+    const res = await fetch(`${API}/api/admin/campaigns/send`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        password,
+        tipo,       // grupo selecionado
+        assunto,
+        corpo
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    setResultado(data);
+  } catch (err: any) {
+    setErro(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+     
 
   if (loadingTemplate) {
     return (
