@@ -1,3 +1,4 @@
+
 // services/supportBridge.js
 // Bridge bidirecional: painel do usuário ↔ agente no WhatsApp via Baileys
 
@@ -38,6 +39,16 @@ function attachSocket(waSocket) {
  * Chamado pela route ou pelo function calling da IA.
  */
 async function createTicket({ userId, summary, lastMessage, conversationHistory = [] }) {
+  // Verifica se já existe ticket aberto
+  const existing = await database.query(
+    `SELECT id FROM support_tickets WHERE user_id = ? AND status IN ('waiting','active') LIMIT 1`,
+    [userId]
+  );
+  if (existing.length > 0) {
+    console.log(`ℹ️  Ticket já existe para userId ${userId}: #${existing[0].id}`);
+    return { ticketId: existing[0].id, userId, alreadyExists: true };
+  }
+
   // Buscar dados do usuário
   const users = await database.query(
     'SELECT id, username, email FROM users WHERE id = ?',
@@ -49,7 +60,7 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
 
   // Inserir ticket
   const result = await database.query(
-    `INSERT INTO support_tickets 
+    `INSERT INTO support_tickets
      (user_id, status, summary, last_message, conversation_history, created_at)
      VALUES (?, 'waiting', ?, ?, ?, NOW())`,
     [userId, summary, lastMessage, JSON.stringify(conversationHistory)]
@@ -64,7 +75,6 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
 
   return { ticketId, userId, username: user.username };
 }
-
 // ─── Notificar agentes ────────────────────────────────────────────────────────
 
 async function notifyAgents({ ticketId, user, summary, lastMessage }) {
@@ -159,21 +169,40 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
   return true;
 }
 
-async function notifyOtherAgents({ ticketId, agentName, agentPhone }) {
-  if (!_waSocket) return;
+async function notifyAgents({ ticketId, user, summary, lastMessage }) {
+  if (!_waSocket) {
+    console.warn('⚠️  Baileys não está conectado — agentes não notificados');
+    return;
+  }
 
-  const msg = `ℹ️ Ticket #${ticketId} foi aceite por *${agentName}*.`;
+  const buttons = [
+    { buttonId: 'aceitar_suporte', buttonText: { displayText: '✅ Aceitar' }, type: 1 },
+    { buttonId: 'recusar_suporte', buttonText: { displayText: '❌ Recusar' }, type: 1 }
+  ];
+
+  const buttonMessage = {
+    text:
+      `🎫 *Novo Ticket de Suporte #${ticketId}*\n\n` +
+      `👤 *Usuário:* ${user.username} (${user.email})\n` +
+      `📝 *Resumo:* ${summary}\n` +
+      `💬 *Última msg:* ${lastMessage}\n\n` +
+      `Escolha uma opção abaixo:`,
+    footer: "MozHost Bot",
+    buttons,
+    headerType: 1
+  };
 
   const targets = AGENT_GROUP_JID
     ? [AGENT_GROUP_JID]
-    : AGENT_NUMBERS
-        .filter(n => n !== agentPhone)
-        .map(n => `${n}@s.whatsapp.net`);
+    : AGENT_NUMBERS.map(n => `${n}@s.whatsapp.net`);
 
   for (const jid of targets) {
     try {
-      await _waSocket.sendMessage(jid, { text: msg });
-    } catch {}
+      await _waSocket.sendMessage(jid, buttonMessage, { quoted: null });
+      console.log(`📤 Ticket #${ticketId} notificado com botões para ${jid}`);
+    } catch (err) {
+      console.error(`❌ Falha ao notificar ${jid}:`, err.message);
+    }
   }
 }
 
@@ -219,7 +248,7 @@ async function userToAgent({ ticketId, userId, message }) {
  */
 async function agentToUser({ ticketId, agentPhone, agentName, message }) {
   const tickets = await database.query(
-    `SELECT id, user_id, status FROM support_tickets 
+    `SELECT id, user_id, status FROM support_tickets
      WHERE id = ? AND agent_phone = ? AND status = 'active'`,
     [ticketId, agentPhone]
   );
@@ -322,18 +351,41 @@ async function handleIncomingWhatsApp({ messages, type }) {
     if (!msg.message || msg.key.fromMe) continue;
 
     const jid = msg.key.remoteJid;
-    const isGroup = jid.endsWith('@g.us');
-
-    // Extrair número do remetente
-    const phone = isGroup
-      ? msg.key.participant?.replace('@s.whatsapp.net', '')
-      : jid.replace('@s.whatsapp.net', '');
-
-    // Verificar se é um agente autorizado
+    const phone = jid.replace('@s.whatsapp.net', '');
     if (!AGENT_NUMBERS.includes(phone)) continue;
+    handled = true;
 
-    handled = true; // é agente — o bot normal não deve processar
+    // 🔘 Resposta de botão
+    const btnResponse = msg.message.buttonsResponseMessage;
+    if (btnResponse) {
+      const id = btnResponse.selectedButtonId;
+      const agentName = await getAgentName(phone);
 
+      if (id === 'aceitar_suporte') {
+        // pega o primeiro ticket em espera
+        const tickets = await database.query(
+          `SELECT id FROM support_tickets WHERE status = 'waiting' ORDER BY created_at ASC LIMIT 1`
+        );
+        if (tickets.length > 0) {
+          await agentClaimTicket({ ticketId: tickets[0].id, agentPhone: phone, agentName });
+        }
+        continue;
+      }
+
+      if (id === 'recusar_suporte') {
+        // pega o ticket ativo do agente
+        const tickets = await database.query(
+          `SELECT id FROM support_tickets WHERE agent_phone = ? AND status = 'active' ORDER BY claimed_at DESC LIMIT 1`,
+          [phone]
+        );
+        if (tickets.length > 0) {
+          await closeTicket({ ticketId: tickets[0].id, agentPhone: phone });
+        }
+        continue;
+      }
+    }
+
+    // 📝 Fallback em texto (ACEITAR/ENCERRAR)
     const text = (
       msg.message.conversation ||
       msg.message.extendedTextMessage?.text ||
@@ -342,13 +394,11 @@ async function handleIncomingWhatsApp({ messages, type }) {
 
     if (!text) continue;
 
-    // ── Comandos de controlo ─────────────────────────────────────────────────
     const acceptMatch = text.match(/^ACEITAR\s+(\d+)$/i);
     const closeMatch  = text.match(/^ENCERRAR\s+(\d+)$/i);
 
     if (acceptMatch) {
       const ticketId = parseInt(acceptMatch[1]);
-      // Tentar descobrir o nome do agente no banco ou usar o número
       const agentName = await getAgentName(phone);
       await agentClaimTicket({ ticketId, agentPhone: phone, agentName });
       continue;
@@ -360,21 +410,17 @@ async function handleIncomingWhatsApp({ messages, type }) {
       continue;
     }
 
-    // ── Mensagem normal — descobrir ticket activo deste agente ───────────────
-    // Formato esperado do agente: qualquer texto (vai pro usuário do ticket activo)
-    // Suporte a múltiplos tickets: agente pode ter só 1 activo de cada vez
+    // Mensagem normal → encaminhar pro usuário
     const activeTickets = await database.query(
-      `SELECT id FROM support_tickets 
-       WHERE agent_phone = ? AND status = 'active'
-       ORDER BY claimed_at DESC LIMIT 1`,
+      `SELECT id FROM support_tickets WHERE agent_phone = ? AND status = 'active' ORDER BY claimed_at DESC LIMIT 1`,
       [phone]
     );
 
-    if (activeTickets.length === 0) continue;
-
-    const ticketId = activeTickets[0].id;
-    const agentName = await getAgentName(phone);
-    await agentToUser({ ticketId, agentPhone: phone, agentName, message: text });
+    if (activeTickets.length > 0) {
+      const ticketId = activeTickets[0].id;
+      const agentName = await getAgentName(phone);
+      await agentToUser({ ticketId, agentPhone: phone, agentName, message: text });
+    }
   }
 
   return handled;

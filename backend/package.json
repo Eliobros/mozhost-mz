@@ -20,6 +20,7 @@
   "dependencies": {
     "@getbrevo/brevo": "^2.5.0",
     "@google/generative-ai": "^0.24.1",
+    "@leifermendez/baileys-mod": "^6.8.5",
     "@sendinblue/client": "^3.3.1",
     "@simplewebauthn/server": "^13.3.0",
     "adm-zip": "^0.5.16",
@@ -39,6 +40,7 @@
     "fs-extra": "^11.3.3",
     "helmet": "^7.2.0",
     "http-proxy-middleware": "^2.0.9",
+    "jimp": "^0.16.13",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",

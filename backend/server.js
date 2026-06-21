@@ -370,7 +370,7 @@ async function startServer() {
       const sock = getWhatsAppSocket(); // getter que exportas do utils/whatsapp.js
       if (sock) {
         supportBridge.init(io, sock);
-        sock.ev.on('messages.upsert', supportBridge.handleIncomingWhatsApp);
+       
         console.log('🤝 SupportBridge conectado ao Baileys');
       } else {
         console.warn('⚠️  Baileys ainda não conectado — bridge iniciará sem WA');

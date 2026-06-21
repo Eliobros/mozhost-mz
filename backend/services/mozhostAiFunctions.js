@@ -875,18 +875,28 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
   },
   
   async escalar_para_suporte({ motivo }, userId) {
-  const result = await database.query(
-    `INSERT INTO support_tickets 
-     (user_id, status, summary, created_at) 
-     VALUES (?, 'waiting', ?, NOW())`,
-    [userId, motivo]
-  );
+  const supportBridge = require('./supportBridge');
 
-  return {
-    sucesso: true,
-    ticketId: result.insertId,
-    mensagem: 'Ticket de suporte criado'
-  };
+  try {
+    const result = await supportBridge.createTicket({
+      userId,
+      summary: motivo,
+      lastMessage: motivo,
+      conversationHistory: []
+    });
+
+    return {
+      sucesso: true,
+      ticketId: result.ticketId,
+      mensagem: 'Ticket de suporte criado e agentes notificados'
+    };
+  } catch (error) {
+    console.error('❌ Erro ao escalar para suporte:', error.message);
+    return {
+      sucesso: false,
+      erro: `Falha ao criar ticket: ${error.message}`
+    };
+  }
 },
 
   async estatisticas_whatsapp() {
