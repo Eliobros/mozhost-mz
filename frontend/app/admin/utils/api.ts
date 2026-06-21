@@ -1,5 +1,6 @@
 // admin/utils/api.ts
-const API_BASE = 'https://api.mozhost.shop/api/admin';
+export const API_ROOT = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
+const API_BASE = `${API_ROOT}/api/admin`;
 
 export const adminAPI = {
   // Stats

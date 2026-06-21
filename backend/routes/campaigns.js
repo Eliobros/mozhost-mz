@@ -5,9 +5,13 @@ const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verificação simples de admin
+// Verificação simples de admin (mesmo padrão das outras rotas /api/admin)
 const checkAdmin = (req, res, next) => {
-  const password = req.query.password || req.body.password;
+  const password =
+    req.query.password ||
+    req.body?.password ||
+    req.headers['x-admin-password'];
+
   if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
     return res.status(401).json({ success: false, message: 'Senha inválida' });
   }
@@ -136,6 +140,15 @@ router.post('/admin/campaigns/send', checkAdmin, async (req, res) => {
         SELECT id, username, email, coins, plan
         FROM users
         WHERE plan IN ('basic', 'pro') AND email_verified = TRUE
+      `,
+      abandonados: `
+        SELECT id, username, email, coins, plan
+        FROM users
+        WHERE email_verified = TRUE
+          AND (
+            is_active = FALSE
+            OR id NOT IN (SELECT DISTINCT user_id FROM containers)
+          )
       `
     };
 

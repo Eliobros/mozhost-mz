@@ -105,7 +105,7 @@ app.options('*', (req, res) => {
   if (!reqOrigin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(reqOrigin)) {
     res.header('Access-Control-Allow-Origin', reqOrigin || '');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-API-Key, x-admin-password');
     res.header('Access-Control-Allow-Credentials', 'true');
     return res.sendStatus(200);
   }

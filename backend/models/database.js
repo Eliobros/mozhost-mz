@@ -365,6 +365,16 @@ console.log('✅ Email tables initialized successfully');
 
       console.log('✅ WhatsApp accounts table initialized successfully');
 
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS email_templates (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          assunto VARCHAR(255) NOT NULL,
+          corpo MEDIUMTEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing database:', error);
