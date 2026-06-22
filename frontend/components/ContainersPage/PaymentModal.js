@@ -115,8 +115,8 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       ];
     } else {
       return [
-        { amount: 50, coins: 500, popular: false },
-        { amount: 100, coins: 1100, popular: true, bonus: '+100 bonus' },
+        { amount: 100, coins: 500, popular: false },
+        { amount: 150, coins: 1100, popular: true, bonus: '+100 bonus' },
         { amount: 200, coins: 2300, popular: false, bonus: '+300 bonus' },
         { amount: 500, coins: 6000, popular: false, bonus: '+1000 bonus' }
       ];
