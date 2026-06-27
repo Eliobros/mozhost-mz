@@ -183,7 +183,7 @@ const CreateContainerModal = ({
               </label>
               <select
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value, template: e.target.value === 'nodejs' ? 'api' : e.target.value })}
+                onChange={(e) => setForm({ ...form, type: e.target.value, template: e.target.value })}
                 disabled={isCreating}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >

@@ -511,6 +511,173 @@ server {
   };
 }
 
+  /**
+   * Aplica novas variáveis de ambiente ao container, recriando-o (Node/Python)
+   * ou atualizando o compose (PHP). Similar ao auto-redeploy do Vercel.
+   * @param {string} containerId - ID do container (linha do banco)
+   * @param {object} newEnv - Objeto com as variáveis de ambiente {KEY: 'value', ...}
+   */
+  async applyEnvironmentVariables(containerId, newEnv = {}) {
+    const containerInfo = await database.query(
+      'SELECT * FROM containers WHERE id = ?',
+      [containerId]
+    );
+
+    if (!containerInfo.length) {
+      throw new Error('Container não encontrado');
+    }
+
+    const c = containerInfo[0];
+    const containerPath = path.join(this.containersPath, containerId);
+    await this.fileManager.createContainerDir(containerPath);
+
+    // 1. Backup defensivo em arquivo .env.host (sempre)
+    const envHostContent = Object.entries(newEnv)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+    await fs.writeFile(path.join(containerPath, '.env.host'), envHostContent);
+
+    if (c.type === 'php') {
+      // 2. PHP: atualiza docker-compose.yml + reroda `docker-compose up -d`
+      await this.composeManager.updateComposeEnvironment(containerPath, newEnv);
+
+      if (c.status === 'running') {
+        try {
+          await this.composeManager.startCompose(containerPath);
+        } catch (error) {
+          await this._setStatus(containerId, 'error');
+          throw new Error(`Falha ao reiniciar compose: ${error.message}`);
+        }
+      } else {
+        // Apenas deixou o compose pronto; não inicia se estava parado
+        console.log(`ℹ️ Compose atualizado; container permanece ${c.status}`);
+      }
+      return;
+    }
+
+    // 3. Node/Python/Static-API/Bot: stop → remove → create → start
+    // IMPORTANTE: PORT e NODE_ENV são reservados — sobrescrevê-los quebra
+    // o port-forwarding do Docker e o proxy Nginx. Usuário não deve definir esses.
+    const oldContainer = this.docker.getContainer(c.docker_container_id);
+    const wasRunning = c.status === 'running';
+
+    if (wasRunning) {
+      try { await oldContainer.stop(); } catch (_e) { /* já parado ok */ }
+    }
+    try { await oldContainer.remove(); } catch (_e) { /* já removido/inexistente ok */ }
+    // 🛡️ Pequena pausa para o Docker liberar totalmente o nome — evita "name in use"
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Regenerar config (mesmo padrão do createNodePythonContainer)
+    const imageConfig = this.getImageConfig(c.type);
+
+    if (!c.port) {
+      throw new Error('Container sem porta registrada. Recrie-o manualmente antes de atualizar variáveis.');
+    }
+    const port = c.port;
+
+    const containerConfig = {
+      Image: imageConfig.image,
+      name: `mozhost_${containerId}`,
+      ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
+      HostConfig: {
+        PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+        Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
+        CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
+        CpuPeriod: 100000,
+        RestartPolicy: { Name: 'unless-stopped' },
+        Binds: [`${containerPath}:/app/code:rw`],
+        NetworkMode: 'bridge'
+      },
+      Env: [
+        `NODE_ENV=production`,
+        `PORT=${imageConfig.internalPort}`,
+        ...Object.entries(newEnv).map(([k, v]) => `${k}=${v}`)
+      ],
+      WorkingDir: '/app',
+      Cmd: imageConfig.cmd
+    };
+
+    // 🛡️ RECUPERAÇÃO: se createContainer falhar após remover o antigo, recria
+    // com as vars do banco para não deixar o usuário sem container.
+    let newContainer;
+    try {
+      newContainer = await this.docker.createContainer(containerConfig);
+    } catch (error) {
+      console.error(`❌ Falha ao recriar com novas vars. Tentando restaurar...`);
+      // Parse defensivo do JSON do banco (pode estar vazio/null/malformado)
+      let oldEnv = {};
+      try {
+        const parsed = c.environment ? JSON.parse(c.environment) : {};
+        oldEnv = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+      } catch (_envErr) {
+        oldEnv = {};
+      }
+      const recoveryConfig = {
+        ...containerConfig,
+        Env: [
+          `NODE_ENV=production`,
+          `PORT=${imageConfig.internalPort}`,
+          ...Object.entries(oldEnv).map(([k, v]) => `${k}=${v}`)
+        ]
+      };
+      try {
+        const recoveryContainer = await this.docker.createContainer(recoveryConfig);
+        await database.query(
+          'UPDATE containers SET docker_container_id = ?, port = ? WHERE id = ?',
+          [recoveryContainer.id, port, containerId]
+        );
+        // Status reflete o estado real: restaurado, não erro
+        await this._setStatus(containerId, wasRunning ? 'running' : 'stopped');
+        if (wasRunning) {
+          try { await recoveryContainer.start(); } catch (_sErr) { /* best-effort */ }
+        }
+        throw new Error(`Falha ao aplicar novas vars (estado anterior restaurado): ${error.message}`);
+      } catch (e2) {
+        await this._setStatus(containerId, 'error');
+        throw new Error(`Falha crítica: container removido e impossível recriar. Causa original: ${error.message}`);
+      }
+    }
+
+    await database.query(
+      'UPDATE containers SET docker_container_id = ?, port = ? WHERE id = ?',
+      [newContainer.id, port, containerId]
+    );
+
+    if (wasRunning) {
+      try {
+        await newContainer.start();
+        await this._setStatus(containerId, 'running');
+      } catch (error) {
+        await this._setStatus(containerId, 'error');
+        throw new Error(`Recriado, mas falhou ao iniciar: ${error.message}`);
+      }
+    } else {
+      await this._setStatus(containerId, 'stopped');
+    }
+
+    if (c.type !== 'static') {
+      try {
+        await this.nginxManager.createSiteNginxConfig(containerId, c.domain, port);
+      } catch (error) {
+        console.warn('⚠️  Aviso ao atualizar Nginx:', error.message);
+      }
+    }
+
+    console.log(`✅ Variáveis de ambiente aplicadas ao container ${containerId}`);
+  }
+
+  async _setStatus(containerId, status) {
+    try {
+      await database.query(
+        'UPDATE containers SET status = ?, updated_at = NOW() WHERE id = ?',
+        [status, containerId]
+      );
+    } catch (error) {
+      console.error('Falha ao atualizar status:', error.message);
+    }
+  }
+
   async startContainer(containerId) {
     try {
       const containerInfo = await database.query(

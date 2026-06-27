@@ -118,6 +118,55 @@ class DockerComposeManager {
     return stdout;
   }
 
+  /**
+   * Atualiza o bloco `environment` do serviço PHP no docker-compose.yml,
+   * preservando as variáveis internas do MySQL e mesclando as do usuário.
+   * @param {string} containerPath - Caminho do container no host
+   * @param {object} userEnvVars - Variáveis de ambiente vindas do painel
+   */
+  async updateComposeEnvironment(containerPath, userEnvVars = {}) {
+    try {
+      const composePath = path.join(containerPath, 'docker-compose.yml');
+      if (!(await fs.pathExists(composePath))) {
+        console.warn(`⚠️  docker-compose.yml não encontrado em ${composePath}`);
+        return;
+      }
+
+      const ymlContent = await fs.readFile(composePath, 'utf8');
+      const compose = yaml.load(ymlContent);
+
+      if (!compose.services || !compose.services.php) {
+        console.warn(`⚠️  Serviço 'php' não definido em docker-compose.yml`);
+        return;
+      }
+
+      // Preserva vars internas do MySQL (não permite sobrescrita pelo usuário)
+      const internalKeys = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+      const existingEnv = compose.services.php.environment || {};
+
+      // Filtra userEnvVars para impedir sobrescrita de vars internas
+      const safeUserEnv = Object.fromEntries(
+        Object.entries(userEnvVars).filter(([k]) => !internalKeys.includes(k))
+      );
+
+      // 🛡️ Só preserva as chaves internas do existingEnv; assim, vars do
+      // usuário removidas na próxima edição realmente somem do YAML.
+      const preservedInternal = Object.fromEntries(
+        Object.entries(existingEnv).filter(([k]) => internalKeys.includes(k))
+      );
+
+      compose.services.php.environment = { ...preservedInternal, ...safeUserEnv };
+
+      const newYml = yaml.dump(compose);
+      await fs.writeFile(composePath, newYml);
+
+      console.log(`✅ docker-compose.yml atualizado com ${Object.keys(userEnvVars).length} variáveis do usuário`);
+    } catch (error) {
+      console.error(`❌ Erro ao atualizar docker-compose.yml:`, error.message);
+      throw error;
+    }
+  }
+
   async enableApacheModRewrite(containerId) {
     try {
       await execAsync(`docker exec mozhost_php_${containerId} a2enmod rewrite`);

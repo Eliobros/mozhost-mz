@@ -4,11 +4,13 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion
-} = require('@leifermendez/baileys-mod'); // 👈 usando baileys-mod
+} = require('baileys')
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 require('dotenv').config();
+const qrcode = require('qrcode-terminal'); // 👈 no topo
+
 
 let sock = null;
 let isConnected = false;
@@ -25,10 +27,13 @@ async function initializeWhatsApp() {
       const authPath = path.join(__dirname, '../.auth');
       if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
 
-      const { version } = await fetchLatestBaileysVersion();
-      console.log(`📱 Usando WhatsApp Web v${version.join('.')}`);
+//      const { version, isLatest } = await fetchLatestBaileysVersion();
+//      console.log(`📱 Usando WhatsApp Web v${version.join('.')} - isLatest: ${isLatest}`);
 
       const { state, saveCreds } = await useMultiFileAuthState(authPath);
+//      console.log(`📱 Usando WhatsApp Web v${version.join('.')} - isLatest: ${isLatest}`);
+      const { version, isLatest } = await fetchLatestBaileysVersion(); // 👈 aqui
+     console.log(`📱 Usando WhatsApp Web v${version.join('.')} - isLatest: ${isLatest}`);
 
       sock = makeWASocket({
         version,
@@ -42,12 +47,15 @@ async function initializeWhatsApp() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          currentQR = qr;
-          fs.writeFileSync(path.join(authPath, 'qr.txt'), qr);
-          console.log('📱 QR Code gerado e salvo em .auth/qr.txt');
-        }
+  currentQR = qr;
+  qrcode.generate(qr, { small: true }); // 👈 renderiza no terminal
+  fs.writeFileSync(path.join(authPath, 'qr.txt'), qr);
+  console.log('📱 QR Code gerado!');
+}
+  
 
         if (connection === 'close') {
+	console.log('🔌 Close reason:', JSON.stringify(lastDisconnect?.error?.output));
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
           if (shouldReconnect) {
             isConnected = false;
@@ -76,23 +84,20 @@ async function initializeWhatsApp() {
 
       sock.ev.on('creds.update', saveCreds);
 
-      sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message) return;
+      sock.ev.on('messages.upsert', async ({ messages, type }) => {
+   console.log('📨 type:', type, '| de:', messages[0]?.key?.remoteJid);
+  console.log('📨 fromMe:', messages[0]?.key?.fromMe);
+  // resto do código...
+  const supportBridge = require('../services/supportBridge');
+  const handled = await supportBridge.handleIncomingWhatsApp({ messages, type });
+  if (handled) return;
 
-        const btnResponse = msg.message.buttonsResponseMessage;
-        if (btnResponse) {
-          const id = btnResponse.selectedButtonId;
-          if (id === 'aceitar_suporte') {
-            console.log('🎟️ Ticket aceito!');
-          } else if (id === 'recusar_suporte') {
-            console.log('🚫 Ticket recusado!');
-          }
-        } else {
-          const whatsappBotService = require('../services/whatsappBotService');
-          await whatsappBotService.handleMessage(sock, msg);
-        }
-      });
+  const msg = messages[0];
+  if (!msg?.message) return;
+
+  const whatsappBotService = require('../services/whatsappBotService');
+  await whatsappBotService.handleMessage(sock, msg);
+});
 
     } catch (error) {
       console.error('❌ Erro ao inicializar WhatsApp:', error);

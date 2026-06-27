@@ -1,18 +1,13 @@
-
 // services/supportBridge.js
 // Bridge bidirecional: painel do usuário ↔ agente no WhatsApp via Baileys
 
 const database = require('../models/database');
 
 // ─── Referências injetadas no init() ────────────────────────────────────────
-let _io = null;       // Socket.IO server
-let _waSocket = null; // Baileys socket (makeWASocket)
+let _io = null;
+let _waSocket = null;
 
-// Número(s) dos agentes de suporte no formato internacional sem +
-// ex: '258841234567' (Mozambique)
 const AGENT_NUMBERS = (process.env.SUPPORT_AGENT_NUMBERS || '').split(',').filter(Boolean);
-
-// Grupo WhatsApp dos agentes (opcional — se preferires grupo ao invés de DM)
 const AGENT_GROUP_JID = process.env.SUPPORT_AGENT_GROUP_JID || null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -23,10 +18,6 @@ function init(io, waSocket) {
   console.log('✅ SupportBridge iniciado');
 }
 
-/**
- * Chamado pelo whatsapp.js quando o Baileys conecta ou reconecta.
- * Actualiza o socket sem precisar de reiniciar o bridge.
- */
 function attachSocket(waSocket) {
   _waSocket = waSocket;
   console.log('🔄 SupportBridge: socket Baileys actualizado');
@@ -34,12 +25,7 @@ function attachSocket(waSocket) {
 
 // ─── Criar ticket ─────────────────────────────────────────────────────────────
 
-/**
- * Cria um ticket de suporte e notifica os agentes via WhatsApp.
- * Chamado pela route ou pelo function calling da IA.
- */
 async function createTicket({ userId, summary, lastMessage, conversationHistory = [] }) {
-  // Verifica se já existe ticket aberto
   const existing = await database.query(
     `SELECT id FROM support_tickets WHERE user_id = ? AND status IN ('waiting','active') LIMIT 1`,
     [userId]
@@ -49,7 +35,6 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
     return { ticketId: existing[0].id, userId, alreadyExists: true };
   }
 
-  // Buscar dados do usuário
   const users = await database.query(
     'SELECT id, username, email FROM users WHERE id = ?',
     [userId]
@@ -58,7 +43,6 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
   if (users.length === 0) throw new Error('Usuário não encontrado');
   const user = users[0];
 
-  // Inserir ticket
   const result = await database.query(
     `INSERT INTO support_tickets
      (user_id, status, summary, last_message, conversation_history, created_at)
@@ -67,14 +51,13 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
   );
 
   const ticketId = result.insertId;
-
   console.log(`🎫 Ticket #${ticketId} criado para ${user.username}`);
 
-  // Notificar agentes via WhatsApp
   await notifyAgents({ ticketId, user, summary, lastMessage });
 
   return { ticketId, userId, username: user.username };
 }
+
 // ─── Notificar agentes ────────────────────────────────────────────────────────
 
 async function notifyAgents({ ticketId, user, summary, lastMessage }) {
@@ -88,8 +71,8 @@ async function notifyAgents({ ticketId, user, summary, lastMessage }) {
     `👤 *Usuário:* ${user.username} (${user.email})\n` +
     `📝 *Resumo:* ${summary}\n` +
     `💬 *Última msg:* ${lastMessage}\n\n` +
-    `Para aceitar este ticket, responda:\n` +
-    `*ACEITAR ${ticketId}*`;
+    `Para aceitar responda: *ACEITAR ${ticketId}*\n` +
+    `Para recusar responda: *RECUSAR ${ticketId}*`;
 
   const targets = AGENT_GROUP_JID
     ? [AGENT_GROUP_JID]
@@ -107,12 +90,7 @@ async function notifyAgents({ ticketId, user, summary, lastMessage }) {
 
 // ─── Agente aceita ticket ─────────────────────────────────────────────────────
 
-/**
- * Chamado quando o Baileys recebe "ACEITAR <ticketId>" de um agente.
- * Garante que apenas o primeiro agente a aceitar fica com o ticket (atomic update).
- */
 async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
-  // UPDATE atômico — só actualiza se ainda estiver 'waiting'
   const result = await database.query(
     `UPDATE support_tickets
      SET status = 'active',
@@ -124,7 +102,6 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
   );
 
   if (result.affectedRows === 0) {
-    // Outro agente já pegou o ticket
     if (_waSocket) {
       const jid = `${agentPhone}@s.whatsapp.net`;
       await _waSocket.sendMessage(jid, {
@@ -136,7 +113,6 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
 
   console.log(`✅ Ticket #${ticketId} aceite por ${agentName} (${agentPhone})`);
 
-  // Buscar userId do ticket
   const tickets = await database.query(
     'SELECT user_id FROM support_tickets WHERE id = ?',
     [ticketId]
@@ -144,15 +120,11 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
 
   if (tickets.length === 0) return false;
 
-  const userId = tickets[0].user_id;
-
-  // Notificar painel do usuário via Socket.IO
   _io.to(`ticket_${ticketId}`).emit('agente_entrou', {
     agentName,
     ticketId
   });
 
-  // Confirmar ao agente
   if (_waSocket) {
     const jid = `${agentPhone}@s.whatsapp.net`;
     await _waSocket.sendMessage(jid, {
@@ -163,54 +135,31 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
     });
   }
 
-  // Notificar outros agentes que o ticket foi aceite
   await notifyOtherAgents({ ticketId, agentName, agentPhone });
 
   return true;
 }
 
-async function notifyAgents({ ticketId, user, summary, lastMessage }) {
-  if (!_waSocket) {
-    console.warn('⚠️  Baileys não está conectado — agentes não notificados');
-    return;
-  }
+// ─── Notificar outros agentes ─────────────────────────────────────────────────
 
-  const buttons = [
-    { buttonId: 'aceitar_suporte', buttonText: { displayText: '✅ Aceitar' }, type: 1 },
-    { buttonId: 'recusar_suporte', buttonText: { displayText: '❌ Recusar' }, type: 1 }
-  ];
+async function notifyOtherAgents({ ticketId, agentName, agentPhone }) {
+  if (!_waSocket) return;
 
-  const buttonMessage = {
-    text:
-      `🎫 *Novo Ticket de Suporte #${ticketId}*\n\n` +
-      `👤 *Usuário:* ${user.username} (${user.email})\n` +
-      `📝 *Resumo:* ${summary}\n` +
-      `💬 *Última msg:* ${lastMessage}\n\n` +
-      `Escolha uma opção abaixo:`,
-    footer: "MozHost Bot",
-    buttons,
-    headerType: 1
-  };
-
-  const targets = AGENT_GROUP_JID
-    ? [AGENT_GROUP_JID]
-    : AGENT_NUMBERS.map(n => `${n}@s.whatsapp.net`);
-
-  for (const jid of targets) {
+  const others = AGENT_NUMBERS.filter(n => n !== agentPhone);
+  for (const n of others) {
     try {
-      await _waSocket.sendMessage(jid, buttonMessage, { quoted: null });
-      console.log(`📤 Ticket #${ticketId} notificado com botões para ${jid}`);
+      const jid = `${n}@s.whatsapp.net`;
+      await _waSocket.sendMessage(jid, {
+        text: `ℹ️ O ticket #${ticketId} foi aceite por ${agentName}.`
+      });
     } catch (err) {
-      console.error(`❌ Falha ao notificar ${jid}:`, err.message);
+      console.error(`❌ Falha ao notificar agente ${n}:`, err.message);
     }
   }
 }
 
 // ─── Usuário envia mensagem pro agente ───────────────────────────────────────
 
-/**
- * Chamado pela route POST /api/support/message (usuário → agente).
- */
 async function userToAgent({ ticketId, userId, message }) {
   const tickets = await database.query(
     `SELECT id, agent_phone, agent_name, status, user_id
@@ -226,10 +175,8 @@ async function userToAgent({ ticketId, userId, message }) {
   if (ticket.status !== 'active') throw new Error('Ticket não está activo');
   if (!ticket.agent_phone) throw new Error('Nenhum agente conectado');
 
-  // Salvar mensagem no histórico
   await saveChatMessage({ ticketId, from: 'user', message });
 
-  // Enviar pro agente via Baileys
   if (_waSocket) {
     const jid = `${ticket.agent_phone}@s.whatsapp.net`;
     await _waSocket.sendMessage(jid, {
@@ -242,10 +189,6 @@ async function userToAgent({ ticketId, userId, message }) {
 
 // ─── Agente envia mensagem pro usuário ───────────────────────────────────────
 
-/**
- * Chamado pelo handler do Baileys quando agente responde no WhatsApp.
- * O texto do agente NÃO começa com ACEITAR/ENCERRAR.
- */
 async function agentToUser({ ticketId, agentPhone, agentName, message }) {
   const tickets = await database.query(
     `SELECT id, user_id, status FROM support_tickets
@@ -258,10 +201,8 @@ async function agentToUser({ ticketId, agentPhone, agentName, message }) {
     return;
   }
 
-  // Salvar mensagem
   await saveChatMessage({ ticketId, from: 'agent', agentName, message });
 
-  // Emitir pro painel do usuário via Socket.IO
   _io.to(`ticket_${ticketId}`).emit('nova_mensagem', {
     message,
     agentName,
@@ -271,9 +212,6 @@ async function agentToUser({ ticketId, agentPhone, agentName, message }) {
 
 // ─── Encerrar ticket ─────────────────────────────────────────────────────────
 
-/**
- * Chamado quando agente envia "ENCERRAR <ticketId>" no WhatsApp.
- */
 async function closeTicket({ ticketId, agentPhone }) {
   const result = await database.query(
     `UPDATE support_tickets
@@ -294,10 +232,8 @@ async function closeTicket({ ticketId, agentPhone }) {
 
   console.log(`🔒 Ticket #${ticketId} encerrado por ${agentPhone}`);
 
-  // Notificar painel do usuário
   _io.to(`ticket_${ticketId}`).emit('ticket_encerrado', { ticketId });
 
-  // Confirmar ao agente
   if (_waSocket) {
     const jid = `${agentPhone}@s.whatsapp.net`;
     await _waSocket.sendMessage(jid, {
@@ -318,7 +254,6 @@ async function cancelTicket({ ticketId, userId }) {
 
   if (result.affectedRows === 0) throw new Error('Ticket não encontrado ou já encerrado');
 
-  // Se tinha agente, notificar no WhatsApp
   const tickets = await database.query(
     'SELECT agent_phone FROM support_tickets WHERE id = ?',
     [ticketId]
@@ -336,13 +271,6 @@ async function cancelTicket({ ticketId, userId }) {
 
 // ─── Handler principal do Baileys ─────────────────────────────────────────────
 
-/**
- * Conecta ao evento messages.upsert do Baileys.
- * Chama este handler no teu index.js / baileys.js:
- *
- *   const bridge = require('./services/supportBridge');
- *   sock.ev.on('messages.upsert', bridge.handleIncomingWhatsApp);
- */
 async function handleIncomingWhatsApp({ messages, type }) {
   if (type !== 'notify') return false;
   let handled = false;
@@ -351,7 +279,14 @@ async function handleIncomingWhatsApp({ messages, type }) {
     if (!msg.message || msg.key.fromMe) continue;
 
     const jid = msg.key.remoteJid;
-    const phone = jid.replace('@s.whatsapp.net', '');
+
+    // 👇 Resolve número real mesmo quando vem @lid
+    const senderJid = msg.key.participantPn || msg.key.participant || jid;
+    const phone = senderJid.replace(/:[0-9]+@/, '@').replace('@s.whatsapp.net', '');
+
+    console.log('📞 Sender resolvido:', phone);
+    console.log('📋 Agentes:', AGENT_NUMBERS);
+
     if (!AGENT_NUMBERS.includes(phone)) continue;
     handled = true;
 
@@ -362,7 +297,6 @@ async function handleIncomingWhatsApp({ messages, type }) {
       const agentName = await getAgentName(phone);
 
       if (id === 'aceitar_suporte') {
-        // pega o primeiro ticket em espera
         const tickets = await database.query(
           `SELECT id FROM support_tickets WHERE status = 'waiting' ORDER BY created_at ASC LIMIT 1`
         );
@@ -373,7 +307,6 @@ async function handleIncomingWhatsApp({ messages, type }) {
       }
 
       if (id === 'recusar_suporte') {
-        // pega o ticket ativo do agente
         const tickets = await database.query(
           `SELECT id FROM support_tickets WHERE agent_phone = ? AND status = 'active' ORDER BY claimed_at DESC LIMIT 1`,
           [phone]
@@ -385,7 +318,7 @@ async function handleIncomingWhatsApp({ messages, type }) {
       }
     }
 
-    // 📝 Fallback em texto (ACEITAR/ENCERRAR)
+    // 📝 Texto (ACEITAR / RECUSAR / ENCERRAR)
     const text = (
       msg.message.conversation ||
       msg.message.extendedTextMessage?.text ||
@@ -395,12 +328,19 @@ async function handleIncomingWhatsApp({ messages, type }) {
     if (!text) continue;
 
     const acceptMatch = text.match(/^ACEITAR\s+(\d+)$/i);
+    const refuseMatch = text.match(/^RECUSAR\s+(\d+)$/i);
     const closeMatch  = text.match(/^ENCERRAR\s+(\d+)$/i);
 
     if (acceptMatch) {
       const ticketId = parseInt(acceptMatch[1]);
       const agentName = await getAgentName(phone);
       await agentClaimTicket({ ticketId, agentPhone: phone, agentName });
+      continue;
+    }
+
+    if (refuseMatch) {
+      const ticketId = parseInt(refuseMatch[1]);
+      await closeTicket({ ticketId, agentPhone: phone });
       continue;
     }
 
@@ -429,8 +369,6 @@ async function handleIncomingWhatsApp({ messages, type }) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function getAgentName(phone) {
-  // Podes ter uma tabela de agentes ou usar env
-  // Por ora, tenta buscar no banco pelo phone
   try {
     const agents = await database.query(
       'SELECT agent_name FROM support_agents WHERE phone = ? LIMIT 1',

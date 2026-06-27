@@ -189,11 +189,13 @@ router.post('/', [
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
   .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'static'])
-  .withMessage('Type must be nodejs, python, php, api, bot-baileys,  bot-wwebjs, or static'),
-body('template')
-  .optional()
-  .isIn(['api', 'bot-baileys', 'bot-wwebjs', 'static'])
-  .withMessage('Template must be api, bot-baileys, bot-wwebjs or static'),
+  .withMessage('Type must be nodejs, python, php, api, bot-baileys,  bot-wwebjs, or static'),  body('template')
+    .optional()
+    .isIn([
+      'api', 'bot-baileys', 'bot-wwebjs', 'static',
+      'nodejs', 'python', 'php'
+    ])
+    .withMessage('Template must be api, bot-baileys, bot-wwebjs, static, nodejs, python or php'),
   body('environment')
     .optional()
     .isObject()
@@ -590,6 +592,19 @@ router.patch('/:id', [
       `UPDATE containers SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
+
+    // ✨ NOVO: Auto-aplicar env vars (Vercel-like): recria container se necessário
+    if (environment !== undefined) {
+      try {
+        await dockerManager.applyEnvironmentVariables(id, environment);
+      } catch (error) {
+        console.error(`⚠️ Configurações salvas, mas falhou ao reaplicar vars:`, error.message);
+        return res.status(500).json({
+          error: 'Configurações salvas no banco, mas falhou ao reaplicar no container',
+          details: error.message
+        });
+      }
+    }
 
     res.json({
       message: 'Container updated successfully'

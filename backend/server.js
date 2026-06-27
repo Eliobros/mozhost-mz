@@ -366,17 +366,7 @@ async function startServer() {
 
     // ✅ NOVO: inicializar bridge APÓS o WhatsApp estar a arrancar
     // Aguarda um pouco para o Baileys conectar antes de ligar o bridge
-    setTimeout(() => {
-      const sock = getWhatsAppSocket(); // getter que exportas do utils/whatsapp.js
-      if (sock) {
-        supportBridge.init(io, sock);
-       
-        console.log('🤝 SupportBridge conectado ao Baileys');
-      } else {
-        console.warn('⚠️  Baileys ainda não conectado — bridge iniciará sem WA');
-        supportBridge.init(io, null);
-      }
-    }, 5000);
+    supportBridge.init(io, null);
 
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');
