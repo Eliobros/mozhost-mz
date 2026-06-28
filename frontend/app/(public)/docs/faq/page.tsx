@@ -118,7 +118,7 @@ export default function FAQPage() {
       questions: [
         {
           q: 'Posso usar domínio próprio?',
-          a: 'Atualmente todos os containers recebem um subdomínio gratuito (seu-container.mozhost.topaziocoin.online). Suporte a domínio customizado está em desenvolvimento.'
+          a: 'Atualmente todos os containers recebem um subdomínio gratuito (seu-container.mozhost.shop). Suporte a domínio customizado está em desenvolvimento.'
         },
         {
           q: 'Vocês suportam HTTPS?',

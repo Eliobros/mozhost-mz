@@ -235,9 +235,9 @@ router.post('/create', async (req, res) => {
           description: `MozHost - ${coins} coins`,
           usuario_id: finalUserId.toString(),
           back_urls: {
-            success: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/success`,
-            failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/failure`,
-            pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/pending`
+            success: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/success`,
+            failure: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/failure`,
+            pending: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/pending`
           },
           notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/payment/webhook/mercadopago`
         };
@@ -610,7 +610,7 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
       .fillColor('#6b7280')
       .text('Hospedagem de Bots & APIs', { align: 'center' })
       .moveDown(0.5)
-      .text('mozhost.topaziocoin.online', { align: 'center' });
+      .text('mozhost.shop', { align: 'center' });
 
     // Linha divisória
     doc

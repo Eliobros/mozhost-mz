@@ -146,7 +146,7 @@ export default function CLIUploadPage() {
                   <div>⠸ Upload: 83/83 arquivos...</div>
                   <div className="text-green-400 mt-1">✅ Deploy concluído com sucesso!</div>
                   <div className="mt-2 text-gray-400">📦 Arquivos enviados: 83</div>
-                  <div className="text-cyan-300">🌐 URL: https://seu-app.mozhost.topaziocoin.online</div>
+                  <div className="text-cyan-300">🌐 URL: https://seu-app.mozhost.shop</div>
                 </div>
               </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">

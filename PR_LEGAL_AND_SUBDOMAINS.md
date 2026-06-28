@@ -12,7 +12,7 @@ Esta PR implementa **duas funcionalidades críticas** para o MozHost:
 - ✅ **Compliance legal** 100% completo
 
 ### 🌐 **Sistema de Subdomínios**
-- ✅ **URLs profissionais**: `usuario-container.mozhost.topaziocoin.online`
+- ✅ **URLs profissionais**: `usuario-container.mozhost.shop`
 - ✅ **Proxy reverso** com Nginx configurado
 - ✅ **Resolução dinâmica** de containers
 - ✅ **Interface atualizada** com links clicáveis
@@ -70,11 +70,11 @@ SUBDOMAIN_SYSTEM.md           # Documentação completa
 4. Veja footer em todas as páginas
 
 ### **Sistema de Subdomínios**
-1. Configure DNS wildcard: `*.mozhost -> mozhost.topaziocoin.online`
+1. Configure DNS wildcard: `*.mozhost -> mozhost.shop`
 2. Execute: `./setup_subdomains.sh`
 3. Instale dependência: `npm install http-proxy-middleware`
 4. Crie container - verá URL clicável
-5. Acesse: `usuario-container.mozhost.topaziocoin.online`
+5. Acesse: `usuario-container.mozhost.shop`
 
 ## 🌟 **Highlights Técnicos**
 
@@ -116,7 +116,7 @@ Valor: SEU_IP_SERVIDOR
 
 Tipo: CNAME
 Nome: *.mozhost  
-Valor: mozhost.topaziocoin.online
+Valor: mozhost.shop
 ```
 
 ### **2. Nginx**

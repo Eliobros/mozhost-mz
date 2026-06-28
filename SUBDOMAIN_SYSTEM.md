@@ -4,12 +4,12 @@
 
 Cada container criado no MozHost ganha automaticamente uma URL de acesso:
 ```
-https://usuario-container.mozhost.topaziocoin.online
+https://usuario-container.mozhost.shop
 ```
 
 ### Exemplos:
-- Usuário "joao" criou container "meubot" → `joao-meubot.mozhost.topaziocoin.online`
-- Usuário "maria" criou container "api-vendas" → `maria-api-vendas.mozhost.topaziocoin.online`
+- Usuário "joao" criou container "meubot" → `joao-meubot.mozhost.shop`
+- Usuário "maria" criou container "api-vendas" → `maria-api-vendas.mozhost.shop`
 
 ## 🔧 Configuração Necessária
 
@@ -24,7 +24,7 @@ TTL: 300
 
 Tipo: CNAME  
 Nome: *.mozhost
-Valor: mozhost.topaziocoin.online
+Valor: mozhost.shop
 TTL: 300
 ```
 
@@ -45,7 +45,7 @@ cd backend && npm start
 
 ## 🚀 Fluxo de Funcionamento
 
-1. **Usuário acessa**: `joao-meubot.mozhost.topaziocoin.online`
+1. **Usuário acessa**: `joao-meubot.mozhost.shop`
 2. **DNS resolve**: Para o IP do seu servidor
 3. **Nginx recebe**: E envia para `localhost:3001/proxy/joao-meubot`
 4. **Backend processa**: Encontra container do usuário "joao" com nome "meubot"
@@ -68,7 +68,7 @@ setup_subdomains.sh         # Script de instalação
 
 ### Verificar se DNS está funcionando:
 ```bash
-nslookup teste.mozhost.topaziocoin.online
+nslookup teste.mozhost.shop
 # Deve retornar o IP do seu servidor
 ```
 
@@ -110,7 +110,7 @@ limit_req zone=containers burst=20 nodelay;
 ### Configurar Let's Encrypt:
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d mozhost.topaziocoin.online -d *.mozhost.topaziocoin.online
+sudo certbot --nginx -d mozhost.shop -d *.mozhost.shop
 ```
 
 ### Renovação automática:
@@ -141,7 +141,7 @@ sudo crontab -e
 3. Verificar logs: `docker logs CONTAINER_ID`
 
 ### Subdomínio não resolve:
-1. Verificar DNS: `nslookup SUBDOMAIN.mozhost.topaziocoin.online`
+1. Verificar DNS: `nslookup SUBDOMAIN.mozhost.shop`
 2. Verificar Nginx: `sudo nginx -t`
 3. Verificar logs: `sudo tail -f /var/log/nginx/error.log`
 
@@ -174,7 +174,7 @@ app.get('/users', (req, res) => {
 ### Bot WhatsApp:
 ```javascript
 // Container "whatsbot" do usuário "empresa"  
-// Webhook: empresa-whatsbot.mozhost.topaziocoin.online/webhook
+// Webhook: empresa-whatsbot.mozhost.shop/webhook
 
 app.post('/webhook', (req, res) => {
   // Processar mensagem
@@ -185,7 +185,7 @@ app.post('/webhook', (req, res) => {
 ### Site/Landing Page:
 ```javascript
 // Container "site" do usuário "freelancer"
-// Acesso: freelancer-site.mozhost.topaziocoin.online
+// Acesso: freelancer-site.mozhost.shop
 
 app.get('/', (req, res) => {
   res.render('index');

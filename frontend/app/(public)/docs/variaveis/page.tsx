@@ -357,7 +357,7 @@ export default function VariaveisPage() {
                 <p className="text-sm text-gray-600 mb-1">Definir variáveis via CLI</p>
                 <div className="bg-gray-900 text-gray-100 p-3 rounded-lg font-mono text-sm overflow-x-auto">
                   <p><span className="text-green-400">$</span> mozhost env:set \</p>
-                  <p className="ml-4">DB_HOST=meu-db-mysql.mozhost.topaziocoin.online \</p>
+                  <p className="ml-4">DB_HOST=meu-db-mysql.mozhost.shop \</p>
                   <p className="ml-4">DB_PORT=5101 \</p>
                   <p className="ml-4">DB_USER=user_tevfao6tux \</p>
                   <p className="ml-4">DB_PASS=minha-senha-segura \</p>

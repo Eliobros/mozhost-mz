@@ -350,7 +350,7 @@ export default function CriarDatabasePage() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <p className="text-xs text-gray-500 mb-1">Host:</p>
-                  <code className="text-sm font-mono text-gray-900 break-all">teste-final-mysql.mozhost.topaziocoin.online</code>
+                  <code className="text-sm font-mono text-gray-900 break-all">teste-final-mysql.mozhost.shop</code>
                 </div>
                 <button className="ml-2 text-gray-400 hover:text-gray-600">
                   📋
@@ -436,7 +436,7 @@ export default function CriarDatabasePage() {
           <div>
             <h3 className="font-semibold text-gray-900 mb-2">String de Conexão (MySQL/MariaDB):</h3>
             <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <p>mysql://user_tevfao6tux:sua_senha@teste-final-mysql.mozhost.topaziocoin.online:5101/db_a4vcv35wm9</p>
+              <p>mysql://user_tevfao6tux:sua_senha@teste-final-mysql.mozhost.shop:5101/db_a4vcv35wm9</p>
             </div>
           </div>
 
@@ -448,7 +448,7 @@ export default function CriarDatabasePage() {
               <br/><br/>
               <p className="text-green-400">const</p> connection = mysql.<p className="text-blue-400">createConnection</p>(&#123;
               <br/>
-              <span className="ml-4">host: <span className="text-yellow-300">'teste-final-mysql.mozhost.topaziocoin.online'</span>,</span>
+              <span className="ml-4">host: <span className="text-yellow-300">'teste-final-mysql.mozhost.shop'</span>,</span>
               <br/>
               <span className="ml-4">port: <span className="text-yellow-300">5101</span>,</span>
               <br/>
@@ -469,7 +469,7 @@ export default function CriarDatabasePage() {
               <br/><br/>
               connection = pymysql.<p className="text-blue-400">connect</p>(
               <br/>
-              <span className="ml-4">host=<span className="text-yellow-300">'teste-final-mysql.mozhost.topaziocoin.online'</span>,</span>
+              <span className="ml-4">host=<span className="text-yellow-300">'teste-final-mysql.mozhost.shop'</span>,</span>
               <br/>
               <span className="ml-4">port=<span className="text-yellow-300">5101</span>,</span>
               <br/>
@@ -488,7 +488,7 @@ export default function CriarDatabasePage() {
             <div className="bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-sm overflow-x-auto">
               <p className="text-purple-400">&lt;?php</p>
               <br/>
-              <p className="text-green-400">$host</p> = <span className="text-yellow-300">'teste-final-mysql.mozhost.topaziocoin.online'</span>;
+              <p className="text-green-400">$host</p> = <span className="text-yellow-300">'teste-final-mysql.mozhost.shop'</span>;
               <br/>
               <p className="text-green-400">$port</p> = <span className="text-yellow-300">5101</span>;
               <br/>

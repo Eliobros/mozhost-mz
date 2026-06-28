@@ -113,7 +113,7 @@ export default function APIReferencePage() {
       "name": "meu-bot",
       "type": "nodejs",
       "status": "running",
-      "domain": "meu-bot.mozhost.topaziocoin.online",
+      "domain": "meu-bot.mozhost.shop",
       "port": 3001
     }
   ]

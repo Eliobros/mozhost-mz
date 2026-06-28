@@ -77,7 +77,7 @@ class DockerManager {
         .replace(/-+/g, '-')          // Remover hífens duplos
         .replace(/^-|-$/g, '');       // Remover hífens no início/fim
 
-      const domain = `${subdomain}.mozhost.topaziocoin.online`;
+      const domain = `${subdomain}.mozhost.shop`;
       console.log(`🌐 Domínio gerado: ${domain}`);
 
       // Salvar no banco

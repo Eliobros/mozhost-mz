@@ -142,7 +142,7 @@ class WhatsAppBotService {
             `Seu código: *${code}*\n\n` +
             `⏰ Válido por 15 minutos\n\n` +
             `📱 Acesse o painel MozHost e digite este código na seção "Vincular WhatsApp"\n\n` +
-            `🔗 https://mozhost.topaziocoin.online`
+            `🔗 https://mozhost.shop`
     });
   }
 
@@ -178,7 +178,7 @@ class WhatsAppBotService {
             `👤 ${user.username}\n` +
             `🪙 Coins: *${user.coins}*\n\n` +
             `Acesse o painel para comprar mais coins:\n` +
-            `🔗 https://mozhost.topaziocoin.online`
+            `🔗 https://mozhost.shop`
     });
   }
 
@@ -193,7 +193,7 @@ class WhatsAppBotService {
 
     if (containers.length === 0) {
       await sock.sendMessage(from, {
-        text: `📦 *Seus Containers*\n\nVocê ainda não tem containers.\n\nAcesse o painel para criar:\n🔗 https://mozhost.topaziocoin.online`
+        text: `📦 *Seus Containers*\n\nVocê ainda não tem containers.\n\nAcesse o painel para criar:\n🔗 https://mozhost.shop`
       });
       return;
     }
@@ -259,7 +259,7 @@ class WhatsAppBotService {
 
     if (payments.length === 0) {
       await sock.sendMessage(from, {
-        text: `💳 *Pagamentos*\n\nNenhum pagamento encontrado.\n\nAcesse o painel para comprar coins:\n🔗 https://mozhost.topaziocoin.online`
+        text: `💳 *Pagamentos*\n\nNenhum pagamento encontrado.\n\nAcesse o painel para comprar coins:\n🔗 https://mozhost.shop`
       });
       return;
     }
@@ -317,7 +317,7 @@ class WhatsAppBotService {
 
     if (containers.length === 0) {
       await sock.sendMessage(from, {
-        text: `🌐 *Seus Domínios*\n\nNenhum domínio configurado.\n\nAcesse o painel para configurar:\n🔗 https://mozhost.topaziocoin.online`
+        text: `🌐 *Seus Domínios*\n\nNenhum domínio configurado.\n\nAcesse o painel para configurar:\n🔗 https://mozhost.shop`
       });
       return;
     }
@@ -336,7 +336,7 @@ class WhatsAppBotService {
     await sock.sendMessage(from, {
       text: `💬 *Suporte MozHost*\n\n` +
             `📧 Email: suporte@mozhost.com\n` +
-            `🌐 Site: https://mozhost.topaziocoin.online\n\n` +
+            `🌐 Site: https://mozhost.shop\n\n` +
             `Responda esta mensagem e nossa equipe irá atendê-lo em breve!`
     });
   }

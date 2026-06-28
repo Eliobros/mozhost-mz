@@ -282,7 +282,7 @@ Adicione este código **DENTRO da função `initializeWhatsApp()`**, após `sock
                       `Seu código: *${code}*\n\n` +
                       `⏰ Válido por 15 minutos\n\n` +
                       `📱 Acesse o painel MozHost e digite este código na seção "Vincular WhatsApp"\n\n` +
-                      `🔗 https://mozhost.topaziocoin.online/whatsapp-link`
+                      `🔗 https://mozhost.shop/whatsapp-link`
               });
             }
             
@@ -355,7 +355,7 @@ Adicione este código **DENTRO da função `initializeWhatsApp()`**, após `sock
               
               if (containers.length === 0) {
                 await sock.sendMessage(msg.key.remoteJid, {
-                  text: `📦 *Seus Containers*\n\nVocê ainda não tem containers.\n\nAcesse o painel para criar: https://mozhost.topaziocoin.online`
+                  text: `📦 *Seus Containers*\n\nVocê ainda não tem containers.\n\nAcesse o painel para criar: https://mozhost.shop`
                 });
               } else {
                 const statusEmoji = { running: '🟢', stopped: '🔴', error: '⚠️', starting: '🟡' };
@@ -378,7 +378,7 @@ Adicione este código **DENTRO da função `initializeWhatsApp()`**, após `sock
                       `🪙 500 Coins - 450 MT (10% desconto)\n` +
                       `🪙 1000 Coins - 800 MT (20% desconto)\n\n` +
                       `📱 Acesse o painel para comprar:\n` +
-                      `https://mozhost.topaziocoin.online/billing`
+                      `https://mozhost.shop/billing`
               });
             }
             

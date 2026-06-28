@@ -16,20 +16,20 @@ TTL: 300
 ```
 Tipo: CNAME
 Nome: *.mozhost
-Valor: mozhost.topaziocoin.online
+Valor: mozhost.shop
 TTL: 300
 ```
 
 ## ✅ Resultado
 Após configurar, qualquer subdomínio funcionará:
-- `api1.mozhost.topaziocoin.online` → SEU_IP_SERVIDOR
-- `botwhats.mozhost.topaziocoin.online` → SEU_IP_SERVIDOR
-- `qualquercoisa.mozhost.topaziocoin.online` → SEU_IP_SERVIDOR
+- `api1.mozhost.shop` → SEU_IP_SERVIDOR
+- `botwhats.mozhost.shop` → SEU_IP_SERVIDOR
+- `qualquercoisa.mozhost.shop` → SEU_IP_SERVIDOR
 
 ## 🔍 Como testar
 ```bash
 # Teste se o wildcard DNS está funcionando
-nslookup teste123.mozhost.topaziocoin.online
+nslookup teste123.mozhost.shop
 # Deve retornar o IP do seu servidor
 ```
 

@@ -123,7 +123,7 @@ API criada automaticamente pelo MozHost.
 ## Documentação
 
 - [Express.js](https://expressjs.com/)
-- [MozHost Docs](https://docs.mozhost.topaziocoin.online)
+- [MozHost Docs](https://docs.mozhost.shop)
 `
       },
       packageJson: {
@@ -511,7 +511,7 @@ start().catch(err => {
 ╰────────────────────
 
 🤖 *Bot criado com MozHost*
-🌐 mozhost.topaziocoin.online
+🌐 mozhost.shop
     \`.trim();
 
     await sock.sendMessage(msg.key.remoteJid, {
@@ -638,7 +638,7 @@ module.exports = {
 ## 📚 Documentação
 
 - [Baileys](https://github.com/WhiskeySockets/Baileys)
-- [MozHost](https://mozhost.topaziocoin.online)
+- [MozHost](https://mozhost.shop)
 
 ## 🆘 Suporte
 
@@ -957,7 +957,7 @@ start().catch(err => {
 ╰────────────────────
 
 🤖 *Bot criado com MozHost*
-🌐 mozhost.topaziocoin.online
+🌐 mozhost.shop
     \`.trim();
 
     await msg.reply(menuText);
@@ -1025,7 +1025,7 @@ module.exports = {
     await client.sendMessage(msg.from, media, {
       sendMediaAsSticker: true,
       stickerName: 'MozHost Bot',
-      stickerAuthor: 'mozhost.topaziocoin.online'
+      stickerAuthor: 'mozhost.shop'
     });
   }
 };`,
@@ -1122,7 +1122,7 @@ module.exports = {
 ## 📚 Documentação
 
 - [whatsapp-web.js](https://wwebjs.dev/)
-- [MozHost](https://mozhost.topaziocoin.online)
+- [MozHost](https://mozhost.shop)
 
 ## 🆘 Suporte
 

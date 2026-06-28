@@ -15,7 +15,7 @@ const database = require('../models/database');
 
 const RP_NAME = 'MozHost';
 const RP_ID = process.env.RP_ID || 'mozhost.shop'; // domínio do frontend
-const ORIGIN = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+const ORIGIN = process.env.FRONTEND_URL || 'https://mozhost.shop';
 
 // Armazenamento temporário de challenges (em produção pode usar Redis)
 const challengeStore = new Map();

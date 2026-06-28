@@ -25,7 +25,7 @@ export default function DominioPage() {
         <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm mb-4">
           <span className="text-gray-400"># Formato do subdomínio automático</span>
           <br />
-          https://<span className="text-green-400">nome-do-container</span>.mozhost.topaziocoin.online
+          https://<span className="text-green-400">nome-do-container</span>.mozhost.shop
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
@@ -34,19 +34,19 @@ export default function DominioPage() {
             <div className="bg-gray-50 p-3 rounded">
               <p className="text-sm text-gray-700">
                 Container <code className="bg-gray-200 px-2 py-0.5 rounded">bot-whatsapp</code> →{' '}
-                <code className="text-blue-600 font-mono text-xs">https://bot-whatsapp.mozhost.topaziocoin.online</code>
+                <code className="text-blue-600 font-mono text-xs">https://bot-whatsapp.mozhost.shop</code>
               </p>
             </div>
             <div className="bg-gray-50 p-3 rounded">
               <p className="text-sm text-gray-700">
                 Container <code className="bg-gray-200 px-2 py-0.5 rounded">api-vendas</code> →{' '}
-                <code className="text-blue-600 font-mono text-xs">https://api-vendas.mozhost.topaziocoin.online</code>
+                <code className="text-blue-600 font-mono text-xs">https://api-vendas.mozhost.shop</code>
               </p>
             </div>
             <div className="bg-gray-50 p-3 rounded">
               <p className="text-sm text-gray-700">
                 Container <code className="bg-gray-200 px-2 py-0.5 rounded">meu-site</code> →{' '}
-                <code className="text-blue-600 font-mono text-xs">https://meu-site.mozhost.topaziocoin.online</code>
+                <code className="text-blue-600 font-mono text-xs">https://meu-site.mozhost.shop</code>
               </p>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function DominioPage() {
             <br />
             <span className="text-cyan-400">Nome:</span>    app
             <br />
-            <span className="text-cyan-400">Valor:</span>   nome-do-container.mozhost.topaziocoin.online
+            <span className="text-cyan-400">Valor:</span>   nome-do-container.mozhost.shop
             <br />
             <span className="text-cyan-400">TTL:</span>     3600
             <br />
@@ -199,7 +199,7 @@ export default function DominioPage() {
             <br />
             <span className="text-cyan-400">Nome:</span>    @
             <br />
-            <span className="text-cyan-400">Valor:</span>   nome-do-container.mozhost.topaziocoin.online
+            <span className="text-cyan-400">Valor:</span>   nome-do-container.mozhost.shop
             <br />
             <span className="text-cyan-400">TTL:</span>     3600
           </div>

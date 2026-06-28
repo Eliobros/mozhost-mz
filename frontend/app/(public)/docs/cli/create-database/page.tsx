@@ -113,7 +113,7 @@ export default function CLICreateDatabasePage() {
             <div className="text-green-400">● 🐬 <span className="text-white font-bold">meu-banco</span> <span className="text-gray-500">(8c4c48eb)</span></div>
             <div className="ml-4 text-gray-400">Tipo: mysql</div>
             <div className="ml-4 text-gray-400">Status: <span className="text-green-400">running</span></div>
-            <div className="ml-4 text-gray-400">Host: <span className="text-cyan-400">meu-banco-mysql.mozhost.topaziocoin.online</span></div>
+            <div className="ml-4 text-gray-400">Host: <span className="text-cyan-400">meu-banco-mysql.mozhost.shop</span></div>
             <div className="ml-4 text-gray-400">Porta: 5101</div>
             <div className="ml-4 text-gray-400">Database: db_a4vcv35wm9</div>
           </div>
@@ -122,7 +122,7 @@ export default function CLICreateDatabasePage() {
             <div className="text-green-400">● 🍃 <span className="text-white font-bold">api-mongo</span> <span className="text-gray-500">(7b3a92cd)</span></div>
             <div className="ml-4 text-gray-400">Tipo: mongodb</div>
             <div className="ml-4 text-gray-400">Status: <span className="text-green-400">running</span></div>
-            <div className="ml-4 text-gray-400">Host: <span className="text-cyan-400">api-mongo-mongodb.mozhost.topaziocoin.online</span></div>
+            <div className="ml-4 text-gray-400">Host: <span className="text-cyan-400">api-mongo-mongodb.mozhost.shop</span></div>
             <div className="ml-4 text-gray-400">Porta: 5102</div>
             <div className="ml-4 text-gray-400">Database: db_mongo_xyz</div>
             <div className="ml-4 text-gray-400">Containers: meu-bot, api-rest</div>
@@ -215,7 +215,7 @@ export default function CLICreateDatabasePage() {
             <div className="ml-2 text-white mb-1">  Nome: meu-banco</div>
             <div className="ml-2 text-white mb-1">  Tipo: mysql</div>
             <div className="ml-2 text-white mb-1">  Status: running</div>
-            <div className="ml-2 text-cyan-400 mb-1">  Host: meu-banco-mysql.mozhost.topaziocoin.online</div>
+            <div className="ml-2 text-cyan-400 mb-1">  Host: meu-banco-mysql.mozhost.shop</div>
             <div className="ml-2 text-white mb-1">  Porta: 5101</div>
             <div className="ml-2 text-white mb-1">  Database: db_a4vcv35wm9</div>
             <div className="ml-2 text-white mb-1">  Username: user_tevfao6tux</div>
@@ -223,7 +223,7 @@ export default function CLICreateDatabasePage() {
             <div className="ml-2 text-yellow-400 mb-3">  💰 Custo: 5 coins/dia</div>
             
             <div className="text-gray-400 mb-1">🔗 Connection String:</div>
-            <div className="ml-2 text-cyan-400 mb-3">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.topaziocoin.online:5101/db_a4vcv35wm9</div>
+            <div className="ml-2 text-cyan-400 mb-3">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.shop:5101/db_a4vcv35wm9</div>
             
             <div className="text-gray-400 mb-1">💡 Dicas:</div>
             <div className="ml-2 text-white mb-1">  • Guarde a senha em local seguro</div>
@@ -266,14 +266,14 @@ export default function CLICreateDatabasePage() {
         {/* Output */}
         <div className="bg-gray-900 text-gray-300 p-6 rounded-lg font-mono text-sm">
           <div className="text-cyan-400 font-bold mb-3">🔑 Credenciais de meu-banco</div>
-          <div className="text-white mb-1">  Host: <span className="text-cyan-400">meu-banco-mysql.mozhost.topaziocoin.online</span></div>
+          <div className="text-white mb-1">  Host: <span className="text-cyan-400">meu-banco-mysql.mozhost.shop</span></div>
           <div className="text-white mb-1">  Porta: <span className="text-cyan-400">5101</span></div>
           <div className="text-white mb-1">  Database: <span className="text-cyan-400">db_a4vcv35wm9</span></div>
           <div className="text-white mb-1">  Username: <span className="text-cyan-400">user_tevfao6tux</span></div>
           <div className="text-white mb-3">  Password: <span className="text-yellow-400">Abc123!@#XyZ</span></div>
           
           <div className="text-gray-400 mb-1">🔗 Connection String:</div>
-          <div className="text-cyan-400 mb-3">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.topaziocoin.online:5101/db_a4vcv35wm9</div>
+          <div className="text-cyan-400 mb-3">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.shop:5101/db_a4vcv35wm9</div>
           
           <div className="text-gray-400">💡 Copie e cole em suas variáveis de ambiente</div>
         </div>
@@ -328,7 +328,7 @@ export default function CLICreateDatabasePage() {
           <div className="text-white mb-1">  Nome: meu-banco</div>
           <div className="text-white mb-1">  Tipo: mysql</div>
           <div className="text-white mb-1">  Status: <span className="text-green-400">running</span></div>
-          <div className="text-cyan-400 mb-1">  Host: meu-banco-mysql.mozhost.topaziocoin.online</div>
+          <div className="text-cyan-400 mb-1">  Host: meu-banco-mysql.mozhost.shop</div>
           <div className="text-white mb-1">  Porta: 5101</div>
           <div className="text-white mb-1">  Database: db_a4vcv35wm9</div>
           <div className="text-white mb-1">  Username: user_tevfao6tux</div>
@@ -343,7 +343,7 @@ export default function CLICreateDatabasePage() {
           <div className="text-gray-400 mb-3">   Atualizado em: 21/12/2025, 17:45:12</div>
           
           <div className="text-gray-400 mb-1">🔗 Connection String:</div>
-          <div className="text-cyan-400">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.topaziocoin.online:5101/db_a4vcv35wm9</div>
+          <div className="text-cyan-400">  mysql://user_tevfao6tux:Abc123!@#XyZ@meu-banco-mysql.mozhost.shop:5101/db_a4vcv35wm9</div>
         </div>
       </section>
 

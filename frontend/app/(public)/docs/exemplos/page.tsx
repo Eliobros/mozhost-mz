@@ -168,7 +168,7 @@ app.listen(PORT, () => console.log(\`🚀 API rodando na porta \${PORT}\`));`}</
 
         <div className="bg-blue-50 border-l-4 border-blue-600 p-4">
           <p className="text-sm text-gray-700">
-            <strong>Acesso:</strong> Após deploy, sua API estará disponível em <code className="bg-gray-100 px-1 rounded">https://seu-container.mozhost.topaziocoin.online/api/tasks</code>
+            <strong>Acesso:</strong> Após deploy, sua API estará disponível em <code className="bg-gray-100 px-1 rounded">https://seu-container.mozhost.shop/api/tasks</code>
           </p>
         </div>
       </section>
@@ -211,7 +211,7 @@ bot.help((ctx) => {
 });
 
 bot.command('info', (ctx) => {
-  ctx.reply('🇲🇿 MozHost - Plataforma moçambicana de hospedagem\\n\\n📦 Hospede bots e APIs\\n💰 A partir de 50 MT\\n🌐 mozhost.topaziocoin.online');
+  ctx.reply('🇲🇿 MozHost - Plataforma moçambicana de hospedagem\\n\\n📦 Hospede bots e APIs\\n💰 A partir de 50 MT\\n🌐 mozhost.shop');
 });
 
 bot.command('ping', (ctx) => {
@@ -345,7 +345,7 @@ client.on('messageCreate', (message) => {
   }
 
   if (message.content === '!info') {
-    message.reply('🇲🇿 Bot hospedado na MozHost!\\n📦 mozhost.topaziocoin.online');
+    message.reply('🇲🇿 Bot hospedado na MozHost!\\n📦 mozhost.shop');
   }
 
   if (message.content === '!help') {
@@ -392,7 +392,7 @@ client.login(process.env.DISCORD_TOKEN);`}</pre>
             <div className="bg-green-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0">✓</div>
             <div>
               <h3 className="font-semibold text-gray-900">Pronto!</h3>
-              <p className="text-gray-600 text-sm">Seu projeto estará online em <code className="bg-gray-100 px-1 rounded">seu-container.mozhost.topaziocoin.online</code></p>
+              <p className="text-gray-600 text-sm">Seu projeto estará online em <code className="bg-gray-100 px-1 rounded">seu-container.mozhost.shop</code></p>
             </div>
           </div>
         </div>

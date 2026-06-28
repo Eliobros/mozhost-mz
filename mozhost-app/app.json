@@ -2,7 +2,7 @@
   "expo": {
     "name": "MozHost",
     "slug": "mozhost-app",
-    "version": "1.2.1",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
       "bundleIdentifier": "com.eliobrostech.mozhost"
     },
     "android": {
-     "versionCode": 4,
+     "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#1e3a5f"
       },

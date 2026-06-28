@@ -1,0 +1,13 @@
+QR Code gerado!
+1|seevidor  | Error creating database: Error: Failed to create database: Command failed: cd /root/mozhost/user-data/databases/9502891e-7c21-4607-977b-4067e339627d && docker compose up -d
+1|seevidor  | time="2026-06-28T17:07:03+02:00" level=warning msg="/root/mozhost/user-data/databases/9502891e-7c21-4607-977b-4067e339627d/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+1|seevidor  |  Network 9502891e-7c21-4607-977b-4067e339627d_default Creating
+1|seevidor  |  Network 9502891e-7c21-4607-977b-4067e339627d_default Created
+1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Creating
+1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Created
+1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Starting
+1|seevidor  | Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint mozhost_db_9502891e-7c21-4607-977b-4067e339627d (ae880de15d14c43ccd6fc1de85eec390f41e59d021d24e45df67c493aad0267e): Bind for 0.0.0.0:5100 failed: port is already allocated
+1|seevidor  |     at DockerDatabaseManager.createDatabase (/root/mozhost-mz/backend/utils/docker-database-manager.js:140:13)
+1|seevidor  |     at async /root/mozhost-mz/backend/routes/databases.js:71:20
+1|seevidor  | [Auth] User authenticated: Habibo (ID: 6)
+1|seevidor  | ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄

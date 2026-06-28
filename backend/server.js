@@ -279,7 +279,7 @@ app.use('*', async (req, res, next) => {
     return next();
   }
 
-  if (!host || !host.endsWith('.mozhost.topaziocoin.online') || host === 'api.mozhost.shop' || host.startsWith('api.')) {
+  if (!host || !host.endsWith('.mozhost.shop') || host === 'api.mozhost.shop' || host.startsWith('api.')) {
     return next();
   }
 

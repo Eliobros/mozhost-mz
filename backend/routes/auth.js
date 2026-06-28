@@ -996,7 +996,7 @@ router.post('/forgot', [body('email').isEmail()], async (req, res) => {
     const expiresAt = new Date(Date.now() + (Number(process.env.RESET_TTL_MIN) || 15) * 60 * 1000);
     await database.query('UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?', [token, expiresAt, users[0].id]);
     if (process.env.BREVO_API_KEY) {
-      const link = `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/#reset?token=${token}`;
+      const link = `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/#reset?token=${token}`;
       await sendEmail({
         toEmail: email,
         toName: users[0].username,

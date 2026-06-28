@@ -144,7 +144,7 @@ class DNSMonitor {
         -d ${domain} \
         --non-interactive \
         --agree-tos \
-        --email admin@mozhost.topaziocoin.online \
+        --email admin@mozhost.shop \
         --redirect \
         --expand`;
 

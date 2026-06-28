@@ -14,7 +14,7 @@ class DockerDatabaseManager {
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
     this.userDataPath = process.env.USER_DATA_PATH || '/root/mozhost/user-data';
     this.databasesPath = path.join(this.userDataPath, 'databases');
-    this.publicHost = process.env.PUBLIC_HOST || 'mozhost.topaziocoin.online';
+    this.publicHost = process.env.PUBLIC_HOST || 'mozhost.shop';
 
     this.portRange = { min: 5100, max: 5500 };
 
@@ -31,6 +31,9 @@ class DockerDatabaseManager {
     const databaseId = uuidv4();
 
     try {
+      // Limpar recursos órfãos de tentativas anteriores (best-effort, não falha se der erro)
+      await this.cleanupOrphanMozhostResources();
+
       // Validar se database_name já existe para este usuário
       if (database_name) {
         const existing = await database.query(
@@ -291,9 +294,20 @@ USE ${credentials.database};
 
   /**
    * Encontrar porta disponível
+   * Agora consulta TAMBÉM as portas realmente em uso pelo Docker
+   * (containers órfãos podem bloquear portas mesmo sem registro no DB).
    */
   async findAvailablePort() {
+    // 1. Pegar portas realmente alocadas pelo Docker (inclui containers em qualquer estado)
+    const dockerUsedPorts = await this.getDockerUsedPorts();
+
     for (let port = this.portRange.min; port <= this.portRange.max; port++) {
+      // Se o Docker já tem algo nessa porta, pula
+      if (dockerUsedPorts.has(port)) {
+        continue;
+      }
+
+      // 2. Verificar reserva no banco de dados principal
       const isUsed = await database.query(
         'SELECT id FROM `databases` WHERE port = ?',
         [port]
@@ -303,6 +317,103 @@ USE ${credentials.database};
       }
     }
     throw new Error('No available ports for databases');
+  }
+
+  /**
+   * Retorna um Set com todas as portas públicas em uso por containers Docker.
+   * Best-effort: se o socket falhar, retorna Set vazio (fallback para checagem só no DB).
+   */
+  async getDockerUsedPorts() {
+    const usedPorts = new Set();
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+      for (const container of containers) {
+        if (container.Ports && Array.isArray(container.Ports)) {
+          for (const portInfo of container.Ports) {
+            if (portInfo && portInfo.PublicPort) {
+              usedPorts.add(portInfo.PublicPort);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Falha ao consultar portas do Docker, usando só checagem no DB:', err.message);
+    }
+    return usedPorts;
+  }
+
+  /**
+   * Limpa containers e networks órfãos do mozhost deixados por tentativas falhas.
+   * REGRA DE SEGURANÇA: só remove containers `mozhost_db_*` que estão parados
+   * (created/exited/dead) E que NÃO têm linha válida em `databases` (status
+   * 'running' ou 'stopped'). Containers com dados de usuário nunca são tocados.
+   */
+  async cleanupOrphanMozhostResources() {
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+
+      // Candidatos: container mozhost_db_* que NÃO está rodando
+      const orphanCandidates = containers.filter((c) => {
+        if (!c.Names || !c.Names.length) return false;
+        const name = c.Names[0].replace(/^\//, '');
+        const isMozhostDb = name.startsWith('mozhost_db_');
+        const isNotRunning = c.State !== 'running';
+        return isMozhostDb && isNotRunning;
+      });
+
+      if (orphanCandidates.length > 0) {
+        // Pegar nomes de containers que ainda têm DB válido (rodando ou parado para restart)
+        const dbRows = await database.query(
+          "SELECT docker_container_id FROM `databases` WHERE status IN ('running', 'stopped')"
+        );
+        const validNames = new Set(
+          (dbRows || []).map((r) => r.docker_container_id).filter(Boolean)
+        );
+
+        for (const c of orphanCandidates) {
+          const name = c.Names[0].replace(/^\//, '');
+          if (validNames.has(name)) {
+            // Tem linha válida no DB - NÃO mexer (pode ter dados de usuário parados)
+            continue;
+          }
+
+          // É um órfão de verdade - remover para liberar porta e disk
+          try {
+            const instance = this.docker.getContainer(c.Id);
+            await instance.remove({ force: true, v: true });
+            console.log(`🧹 Container órfão removido: ${name} (estado: ${c.State})`);
+          } catch (removeErr) {
+            console.warn(`⚠️ Não consegui remover órfão ${name}: ${removeErr.message}`);
+          }
+        }
+      }
+
+      // Podar SOMENTE networks órfãos do docker-compose mozhost
+      // (ex: {uuid}_default sem containers). Evita afetar networks de
+      // outros apps que possam rodar no mesmo host.
+      try {
+        const { stdout } = await execAsync(
+          "docker network ls --filter driver=bridge --format '{{.Name}}'"
+        );
+        const names = (stdout || '').split('\n').map((s) => s.trim()).filter(Boolean);
+        // Networks criados pelo docker-compose do mozhost seguem padrão UUID_default
+        const mozhostComposeNet = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_default$/;
+        const orphans = names.filter((n) => mozhostComposeNet.test(n));
+        for (const net of orphans) {
+          try {
+            await execAsync(`docker network rm ${net}`);
+            console.log(`🧹 Network órfã removida: ${net}`);
+          } catch (rmErr) {
+            // Ainda tem container conectado - não é órfã de verdade, ignorar
+            console.warn(`⚠️ Network ${net} não pôde ser removida (provavelmente com containers): ${rmErr.message}`);
+          }
+        }
+      } catch (netErr) {
+        // best-effort: falha aqui não impede criação do database
+      }
+    } catch (err) {
+      console.error('⚠️ Limpeza de órfãos falhou (não crítico):', err.message);
+    }
   }
 
   /**

@@ -113,7 +113,7 @@ router.get('/callback', async (req, res) => {
 
     console.log(`✅ GitHub conectado: user ${userId} → @${githubUser.login}`);
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
     res.redirect(`${frontendUrl}/connections?github=success`);
 
   } catch (error) {

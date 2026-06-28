@@ -285,7 +285,7 @@ server {
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
 
-      const domain = `${subdomain}.mozhost.topaziocoin.online`;
+      const domain = `${subdomain}.mozhost.shop`;
 
       // PHP com MySQL
       if (type === 'php') {
@@ -299,7 +299,7 @@ server {
         // Criar script de inicialização do MySQL
         await this.createMySQLInitScript(containerPath, dbInfo.dbUser, dbInfo.dbPassword, dbInfo.dbName);
         
-        const pmaDomain = `pma-${subdomain}.mozhost.topaziocoin.online`;
+        const pmaDomain = `pma-${subdomain}.mozhost.shop`;
 
         // Criar arquivos PHP
         await this.createInitialFiles(path.join(containerPath, 'php'), type);
