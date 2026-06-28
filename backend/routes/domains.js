@@ -4,8 +4,7 @@ const router = express.Router();
 const db = require('../models/database');
 const dnsMonitor = require('../services/dnsMonitor');
 const auth = require('../middleware/auth');
-
-const SERVER_IP = process.env.SERVER_IP || '45.76.123.45';
+const { SERVER_IP } = require('../config/constants');
 
 // Função auxiliar de validação
 function isValidDomain(domain) {

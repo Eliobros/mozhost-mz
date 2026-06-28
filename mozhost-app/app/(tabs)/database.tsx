@@ -45,6 +45,9 @@ export default function DatabaseScreen() {
     password: '',
   });
 
+  // Custo em coins — bate com backend/config/constants.js DATABASE_COST_COINS
+  const DB_COST_COINS = 5;
+
   const loadDatabases = useCallback(async () => {
     try {
       const data = await api.get('/databases');
@@ -169,11 +172,33 @@ export default function DatabaseScreen() {
                   <Ionicons name="trash" size={20} color={Colors.error} />
                 </TouchableOpacity>
               </View>
+              {(db.containers && db.containers.length > 0) && (
+                <View style={styles.linkedRow}>
+                  <Ionicons name="link" size={12} color={Colors.textMuted} />
+                  <Text style={styles.linkedLabel}>Vinculado a:</Text>
+                  {db.containers.map((c, i) => (
+                    <View key={i} style={styles.linkedTag}>
+                      <Text style={styles.linkedTagText}>{typeof c === 'string' ? c : c.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
               <InfoRow label="Host" value={db.host} field={`${db.id}-host`} />
               <InfoRow label="Porta" value={String(db.port)} field={`${db.id}-port`} />
               <InfoRow label="Database" value={db.database_name} field={`${db.id}-dbname`} />
               <InfoRow label="Usuário" value={db.username} field={`${db.id}-user`} />
               <InfoRow label="Senha" value={db.password} field={`${db.id}-pass`} isPassword />
+              {db.connection_string && (
+                <View style={styles.connRow}>
+                  <View style={styles.connHeader}>
+                    <Text style={styles.connLabel}>Connection string</Text>
+                    <TouchableOpacity onPress={() => copyToClipboard(db.connection_string, `${db.id}-conn`)}>
+                      <Ionicons name={copiedField === `${db.id}-conn` ? 'checkmark' : 'copy'} size={14} color={copiedField === `${db.id}-conn` ? Colors.success : Colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.connValue} numberOfLines={2}>{db.connection_string}</Text>
+                </View>
+              )}
             </View>
           ))
         )}
@@ -232,6 +257,12 @@ export default function DatabaseScreen() {
                 </View>
               </View>
 
+              {/* Cost preview */}
+              <View style={styles.costBox}>
+                <Text style={styles.costText}>Custo: {DB_COST_COINS} coins</Text>
+                <Text style={styles.costHint}>Será descontado do seu saldo</Text>
+              </View>
+
               <TouchableOpacity style={[styles.createBtn, creating && { opacity: 0.5 }]} onPress={handleCreate} disabled={creating}>
                 {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Criar Database</Text>}
               </TouchableOpacity>
@@ -250,9 +281,19 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
   typeSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 typeBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceVariant },
-typeBtnActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
-typeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-typeBtnTextActive: { color: '#fff' },
+typeBtnActive: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },  typeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  typeBtnTextActive: { color: '#fff' },
+  costBox: { backgroundColor: Colors.surfaceVariant, padding: 12, borderRadius: 10, marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  costText: { fontSize: 14, fontWeight: '700', color: Colors.text },
+  costHint: { fontSize: 12, color: Colors.textMuted },
+  linkedRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  linkedLabel: { fontSize: 12, color: Colors.textMuted, marginRight: 4 },
+  linkedTag: { backgroundColor: Colors.surfaceVariant, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  linkedTagText: { fontSize: 12, color: Colors.text, fontWeight: '500' },
+  connRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  connHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  connLabel: { fontSize: 11, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  connValue: { fontSize: 12, fontFamily: 'monospace', color: Colors.text, backgroundColor: Colors.surfaceVariant, padding: 8, borderRadius: 6 },
   addBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.secondary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, gap: 4 },
   addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   emptyState: { alignItems: 'center', paddingTop: 80 },

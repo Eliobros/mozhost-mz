@@ -98,43 +98,30 @@ router.post('/:containerId/cli-upload', [
   }
 });
 
+// Upload aceitando apenas ZIP (rota /upload-zip)
 const upload = multer({
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB para ZIP
+    fileSize: 50 * 1024 * 1024, // 50MB por arquivo ZIP
     files: 10
   },
   fileFilter: (req, file, cb) => {
-    // Permitir ZIP para rota específica
-    if (req.path.includes('/upload-zip')) {
-      if (file.mimetype === 'application/zip' ||
-          file.mimetype === 'application/x-zip-compressed' ||
-          file.originalname.endsWith('.zip')) {
-        return cb(null, true);
-      } else {
-        return cb(new Error('Only ZIP files allowed for this endpoint'), false);
-      }
-    }
-
-    // Filtros normais para outras rotas
-    const allowedMimes = [
-      'text/plain',
-      'text/javascript',
-      'application/javascript',
-      'text/x-python',
-      'application/json',
-      'text/html',
-      'text/css',
-      'text/markdown',
-      'application/x-yaml',
-      'text/yaml'
-    ];
-
-    if (allowedMimes.includes(file.mimetype) || file.originalname.match(/\.(js|py|json|html|css|md|txt|yml|yaml|env)$/)) {
-      cb(null, true);
+    if (file.mimetype === 'application/zip' ||
+        file.mimetype === 'application/x-zip-compressed' ||
+        file.originalname.endsWith('.zip')) {
+      return cb(null, true);
     } else {
-      cb(new Error('File type not allowed'), false);
+      return cb(new Error('Only ZIP files allowed for this endpoint'), false);
     }
   }
+});
+
+// Upload genérico para arquivos e pastas individuais (qualquer tipo)
+const genericUpload = multer({
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB por arquivo
+    files: 50 // até 50 arquivos por upload
+  }
+  // Sem fileFilter — cota de armazenamento + path traversal já protegem o sistema
 });
 
 /*
@@ -639,8 +626,8 @@ router.post('/:containerId/upload-zip',
     }
 });
 
-// Upload de arquivos
-router.post('/:containerId/upload', upload.array('files', 10), async (req, res) => {
+// Upload de arquivos individuais (qualquer tipo)
+router.post('/:containerId/upload', genericUpload.array('files', 50), async (req, res) => {
   try {
     const { containerId } = req.params;
     const { path: targetPath = '' } = req.body;
@@ -713,18 +700,105 @@ router.post('/:containerId/upload', upload.array('files', 10), async (req, res) 
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({
         error: 'File too large',
-        message: 'Maximum file size is 10MB'
+        message: 'Maximum file size is 100MB'
       });
     }
 
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(413).json({
         error: 'Too many files',
-        message: 'Maximum 10 files per upload'
+        message: 'Maximum 50 files per upload'
       });
     }
 
     res.status(500).json({ error: 'Failed to upload files' });
+  }
+});
+
+// Upload de pasta inteira preservando estrutura (relativePath enviado no body de cada arquivo)
+router.post('/:containerId/upload-folder', genericUpload.array('files', 50), async (req, res) => {
+  try {
+    const { containerId } = req.params;
+    const { path: targetPath = '' } = req.body;
+
+    if (!await verifyContainerOwnership(containerId, req.user.userId)) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const containerPath = getContainerPath(containerId);
+    const deployFolder = await getDeployFolder(containerId);
+    const baseUploadPath = deployFolder
+      ? path.join(containerPath, deployFolder, targetPath)
+      : path.join(containerPath, targetPath);
+
+    // Verificar segurança do caminho base
+    if (!baseUploadPath.startsWith(containerPath)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await fs.ensureDir(baseUploadPath);
+
+    // Checar cota total antes de gravar
+    const totalIncoming = req.files.reduce((sum, f) => sum + (f.size || 0), 0);
+    await ensureStorageAllowance(containerId, req.user.userId, totalIncoming);
+
+    const uploadedFiles = [];
+    const skippedFiles = [];
+
+    for (const file of req.files) {
+      // relativePath vem em file.fieldname ou multipart text part "paths";
+      // multer entrega o campo de texto no req.body[nameDoCampo] somente se for arquivo,
+      // então aqui usamos file.originalname como caminho relativo confiável fornecido pelo cliente.
+      // O frontend envia o caminho relativo no `originalname` (ex: "src/index.js").
+      const relativePath = file.originalname.replace(/\\/g, '/').replace(/^\/+/, '');
+      const filePath = path.join(baseUploadPath, relativePath);
+
+      // Path traversal protection
+      if (!filePath.startsWith(baseUploadPath)) {
+        skippedFiles.push({ name: relativePath, reason: 'Invalid path' });
+        continue;
+      }
+
+      await fs.ensureDir(path.dirname(filePath));
+      // Sobrescreve silenciosamente (equivale a arrastar para o gerenciador)
+      await writeFileWithPermissions(filePath, file.buffer);
+
+      uploadedFiles.push({
+        path: relativePath,
+        size: file.size
+      });
+    }
+
+    res.json({
+      message: 'Folder uploaded successfully',
+      uploaded: uploadedFiles.length,
+      skipped: skippedFiles.length,
+      files: uploadedFiles,
+      skippedFiles
+    });
+
+  } catch (error) {
+    console.error('Error uploading folder:', error);
+
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: 'File too large',
+        message: 'Maximum file size is 100MB'
+      });
+    }
+
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(413).json({
+        error: 'Too many files',
+        message: 'Maximum 50 files per upload'
+      });
+    }
+
+    res.status(500).json({ error: 'Failed to upload folder' });
   }
 });
 

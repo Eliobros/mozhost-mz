@@ -94,18 +94,18 @@ class DockerComposeManager {
   }
 
   async startCompose(containerPath) {
-    await execAsync(`cd ${containerPath} && docker-compose up -d`);
+    await execAsync(`cd ${containerPath} && docker compose up -d`);
     console.log(`🐳 Docker-compose iniciado em ${containerPath}`);
   }
 
   async stopCompose(containerPath) {
-    await execAsync(`cd ${containerPath} && docker-compose stop`);
+    await execAsync(`cd ${containerPath} && docker compose stop`);
     console.log(`🛑 Docker-compose parado em ${containerPath}`);
   }
 
   async removeCompose(containerPath) {
     try {
-      await execAsync(`cd ${containerPath} && docker-compose down -v`);
+      await execAsync(`cd ${containerPath} && docker compose down -v`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       console.log(`🗑️  Docker-compose removido de ${containerPath}`);
     } catch (error) {
@@ -114,7 +114,7 @@ class DockerComposeManager {
   }
 
   async getComposeLogs(containerPath, tail = 100) {
-    const { stdout } = await execAsync(`cd ${containerPath} && docker-compose logs --tail=${tail}`);
+    const { stdout } = await execAsync(`cd ${containerPath} && docker compose logs --tail=${tail}`);
     return stdout;
   }
 

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  Folder, 
-  FileText, 
-  FolderOpen, 
-  RefreshCw, 
+import {
+  Folder,
+  FileText,
+  FolderOpen,
+  RefreshCw,
   Trash2,
   X,
   Edit3,
@@ -31,6 +31,31 @@ const FileExplorer = ({
 }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectionMode, setSelectionMode] = useState(false);
+
+  // Modal genérico de input (substitui window.prompt)
+  const [inputModal, setInputModal] = useState({
+    open: false,
+    title: '',
+    placeholder: '',
+    defaultValue: '',
+    submitLabel: 'Confirmar',
+    onSubmit: (_v) => {}
+  });
+  const [inputValue, setInputValue] = useState('');
+
+  const openInputModal = ({ title, placeholder, defaultValue, submitLabel, onSubmit }) => {
+    setInputValue(defaultValue || '');
+    setInputModal({ open: true, title, placeholder, defaultValue, submitLabel, onSubmit });
+  };
+
+  const closeInputModal = () => setInputModal((prev) => ({ ...prev, open: false }));
+
+  const handleInputSubmit = () => {
+    const value = inputValue.trim();
+    const callback = inputModal.onSubmit;
+    closeInputModal();
+    if (value && callback) callback(value);
+  };
 
   const goBack = () => {
     const pathParts = currentPath.split('/').filter(p => p);
@@ -92,14 +117,21 @@ const FileExplorer = ({
       return;
     }
     const file = selectedFiles[0];
-    const newName = prompt('Novo nome:', file.name);
-    if (!newName || newName === file.name) return;
-    
-    const newPath = currentPath ? `${currentPath}/${newName}` : newName;
-    if (onRename) {
-      onRename(file, newPath);
-    }
-    clearSelection();
+    openInputModal({
+      title: 'Renomear',
+      placeholder: 'novo-nome',
+      defaultValue: file.name,
+      submitLabel: 'Renomear',
+      onSubmit: (newName) => {
+        if (newName === file.name) {
+          clearSelection();
+          return;
+        }
+        const newPath = currentPath ? `${currentPath}/${newName}` : newName;
+        if (onRename) onRename(file, newPath);
+        clearSelection();
+      }
+    });
   };
 
   const handleMove = () => {
@@ -108,13 +140,20 @@ const FileExplorer = ({
       return;
     }
     const file = selectedFiles[0];
-    const newPath = prompt('Novo caminho (ex: pasta/arquivo.js):', file.path);
-    if (!newPath || newPath === file.path) return;
-    
-    if (onMove) {
-      onMove(file, newPath);
-    }
-    clearSelection();
+    openInputModal({
+      title: 'Mover para',
+      placeholder: 'pasta/arquivo.js',
+      defaultValue: file.path,
+      submitLabel: 'Mover',
+      onSubmit: (newPath) => {
+        if (newPath === file.path) {
+          clearSelection();
+          return;
+        }
+        if (onMove) onMove(file, newPath);
+        clearSelection();
+      }
+    });
   };
 
   const handleDuplicate = () => {
@@ -346,6 +385,60 @@ const FileExplorer = ({
           </div>
         )}
       </div>
+
+      {/* Modal de input para renomear/mover */}
+      {inputModal.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closeInputModal(); }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b bg-gray-50">
+              <h3 className="text-base font-semibold text-gray-900">{inputModal.title}</h3>
+              <button
+                onClick={closeInputModal}
+                className="p-1 hover:bg-gray-200 rounded text-gray-500"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <input
+                autoFocus
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleInputSubmit();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeInputModal();
+                  }
+                }}
+                placeholder={inputModal.placeholder}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+              <button
+                onClick={closeInputModal}
+                className="px-3 py-1.5 text-sm rounded-md text-gray-700 hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleInputSubmit}
+                disabled={!inputValue.trim()}
+                className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {inputModal.submitLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

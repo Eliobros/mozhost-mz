@@ -7,7 +7,9 @@ const execPromise = util.promisify(exec);
 const fs = require('fs').promises;
 const path = require('path');
 
-const SERVER_IP = process.env.SERVER_IP || '208.110.72.191';
+// SERVER_IP vem de backend/config/constants.js (mesmo valor usado em routes/domains.js)
+// Apenas fallback se tudo falhar — em produção isso vem do env.
+const SERVER_IP = require('../config/constants').SERVER_IP;
 
 class DNSMonitor {
   constructor() {

@@ -564,6 +564,62 @@ router.post('/webhook/:method', async (req, res) => {
 
 // ===== TRANSFERÊNCIAS =====
 
+// POST /api/registrar/transfer/check
+// Verifica disponibilidade e preço de transferência para o app mobile.
+// Usado pelo mozhost-app TransferModal (step 1 → step 2).
+router.post('/transfer/check', auth, async (req, res) => {
+  try {
+    const { domain } = req.body;
+    if (!domain) return res.status(400).json({ error: 'domain é obrigatório' });
+
+    const data = await dynadotRequest('search', {
+      domain0: domain,
+      show_price: '1',
+      currency: 'USD'
+    });
+
+    const result = data.SearchResults?.[0];
+    if (!result) {
+      return res.status(404).json({ error: 'Domínio não retornou resultado da Dynadot' });
+    }
+
+    const available = result?.Available === 'yes';
+
+    let registrationPrice = null;
+    let transferPrice = null;
+    if (result?.Price) {
+      const regMatch = result.Price.match(/Registration Price:\s*([\d.]+)/);
+      if (regMatch) registrationPrice = parseFloat(regMatch[1]);
+      const trfMatch = result.Price.match(/Transfer Price:\s*([\d.]+)/);
+      if (trfMatch) transferPrice = parseFloat(trfMatch[1]);
+    }
+
+    // Se nem preço de transferência nem de registro vierem da Dynadot,
+    // NÃO adivinhar — retornar erro para a UI explicar (não repetir o bug do cost=10).
+    if (transferPrice == null && registrationPrice == null) {
+      return res.status(404).json({
+        success: false,
+        error: `Não foi possível obter o preço para ${domain}. Tente novamente ou verifique o domínio.`,
+        domain,
+        available
+      });
+    }
+
+    res.json({
+      success: true,
+      domain,
+      available,
+      // Só é transferível se não estiver disponível para registro novo
+      can_transfer: !available,
+      transfer_price: transferPrice || registrationPrice,
+      registration_price: registrationPrice
+    });
+  } catch (error) {
+    console.error('Erro transfer check:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/registrar/transfer/out/:domain
 // Gera EPP/auth code e desbloqueia o domínio para transferência saída (gratuito)
 router.post('/transfer/out/:domain', auth, async (req, res) => {

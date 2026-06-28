@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, Plus, Loader2, CheckCircle2, XCircle, Clock, Lock, AlertCircle,
   Copy, Trash2, RefreshCw, Search, ShoppingCart, Server, Edit3, Save,
@@ -186,6 +186,16 @@ export default function DomainsPage() {
   const [payResult, setPayResult] = useState(null);
   const [payPollingId, setPayPollingId] = useState(null);
 
+// Ref para o polling de status de transferência (ciclo de vida fora do React).
+// Inicializado como null e zerado no cleanup do effect principal + stopTransferPolling().
+const transferPollRef = useRef(null);
+const stopTransferPolling = () => {
+  if (transferPollRef.current) {
+    clearInterval(transferPollRef.current);
+    transferPollRef.current = null;
+  }
+};
+
 // Dados do registrante
 const [registrantForm, setRegistrantForm] = useState({
   first_name: '', last_name: '', email_contact: '',
@@ -225,7 +235,11 @@ const [transferProcessing, setTransferProcessing] = useState(false);
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
+    // Cleanup: limpa polling de transferência ao desmontar a página / trocar de aba.
+    return () => {
+      clearInterval(interval);
+      stopTransferPolling();
+    };
   }, [loadData]);
 
   // ===== DOMAIN ACTIONS =====
@@ -415,7 +429,15 @@ const [transferProcessing, setTransferProcessing] = useState(false);
 
   const renewDomain = () => {
     if (!showRenewModal) return;
-    submitDomainPayment('renew', showRenewModal.domain, showRenewModal.renewal_price || showRenewModal.price || 10, renewYears);
+    // Renovation NÃO exige dados do registrante (já estão no banco),
+    // então passamos um objeto vazio.
+    submitDomainPaymentWithRegistrant(
+      'renew',
+      showRenewModal.domain,
+      (showRenewModal.renewal_price || showRenewModal.price || 10),
+      renewYears,
+      {}
+    );
   };
 
   // ===== DNS =====
@@ -520,15 +542,27 @@ const submitTransferIn = async () => {
   }
   setTransferProcessing(true);
   try {
+    // 1) Busca preço real da Dynadot (substitui o cost=10 hardcoded)
+    const checkRes = await fetch(`${API}/api/registrar/transfer/check`, {
+      method: 'POST', headers: hdrs(), body: JSON.stringify({ domain: transferForm.domain })
+    });
+    const checkData = await checkRes.json();
+    // Se nem transfer_price nem registration_price vieram do backend, abortar (não inventar preço).
+    if (checkRes.status === 404 || (!checkData.transfer_price && !checkData.registration_price)) {
+      showToast(checkData.error || `Não foi possível obter o preço de transferência para ${transferForm.domain}`, 'error');
+      setTransferProcessing(false);
+      return;
+    }
+    const realCost = checkData.transfer_price || checkData.registration_price;
+
     let transactionId = null;
-    const cost = 10; // preço estimado transferência
     if (payMethod === 'mpesa' || payMethod === 'emola') {
       const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
       const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
         method: 'POST',
         headers: { 'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          valor: Math.ceil(cost * exchangeRate).toString(),
+          valor: Math.ceil(realCost * exchangeRate).toString(),
           numero_celular: payPhone,
           usuario_id: (JSON.parse(localStorage.getItem('mozhost_user') || '{}').id || 'guest').toString()
         })
@@ -537,7 +571,7 @@ const submitTransferIn = async () => {
       transactionId = ad?.data?.payment?.transaction_id || ad?.transaction_id;
     }
     const body = {
-      ...transferForm, cost, method: payMethod, years: 1, ...registrantForm,
+      ...transferForm, cost: realCost, method: payMethod, years: 1, ...registrantForm,
       ...(payMethod !== 'mercadopago' ? { phone: payPhone } : {}),
       ...(transactionId ? { transaction_id: transactionId } : {})
     };
@@ -547,11 +581,56 @@ const submitTransferIn = async () => {
       setTransferResult(data);
       if (data.payment_url) window.open(data.payment_url, '_blank');
       showToast('Transferência iniciada! Confirme o email WHOIS.', 'success');
+
+      // 2) Inicia polling com backoff adaptativo:
+      //    Fase 1: 15s × 8 = ~2 min (pega pagamentos instantâneos).
+      //    Fase 2: 60s × 13 = +13 min (pega aprovações manuais WHOIS).
+      //    Total: ~15 min com apenas ~21 requests ao invés de 60.
+      stopTransferPolling();
+      let attempt = 0;
+      let intervalMs = 15000;
+      const phase1Attempts = 8;
+      const totalAttempts = 21;
+      // Função nomeada permite recriar o setInterval com novo período (substituindo `arguments.callee`, proibido em strict mode).
+      const pollTransferStatus = async () => {
+        attempt++;
+        try {
+          const sRes = await fetch(`${API}/api/registrar/transfer/status/${transferForm.domain}`, { headers: hdrs() });
+          if (sRes.ok) {
+            const s = await sRes.json();
+            if (s.status === 'completed') {
+              stopTransferPolling();
+              showToast(`🎉 Domínio ${transferForm.domain} transferido com sucesso!`, 'success');
+              loadData();
+              closeTransferModal();
+              return;
+            }
+            if (s.status === 'failed') {
+              stopTransferPolling();
+              showToast(`❌ Transferência falhou: ${s.error_message || 'verifique o email WHOIS'}`, 'error');
+              return;
+            }
+          }
+        } catch { /* silent */ }
+        if (attempt >= totalAttempts) {
+          stopTransferPolling();
+          showToast('⏱️ Polling encerrado. Verifique o status manualmente.', 'warning');
+          return;
+        }
+        // Após fase 1, troca para 60s sem perder `attempt`.
+        if (attempt === phase1Attempts) intervalMs = 60000;
+        transferPollRef.current = setTimeout(pollTransferStatus, intervalMs);
+      };
+      transferPollRef.current = setTimeout(pollTransferStatus, intervalMs);
     } else {
       showToast(data.error || 'Erro ao iniciar transferência', 'error');
     }
-  } catch { showToast('Erro de conexão', 'error'); }
-  finally { setTransferProcessing(false); }
+  } catch (err) {
+    console.error('Erro transfer in:', err);
+    showToast('Erro de conexão', 'error');
+  } finally {
+    setTransferProcessing(false);
+  }
 };
 
 const submitTransferOut = async () => {

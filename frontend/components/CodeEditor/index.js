@@ -4,15 +4,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';
 import dynamic from 'next/dynamic'; // IMPORTANTE: Importar dynamic
-import { 
-  Save, 
-  Plus, 
+import {
+  Save,
+  Plus,
   Menu,
   Upload,
   Server,
   FileText,
   Folder,
-  Terminal as TerminalIcon
+  FolderPlus,
+  Terminal as TerminalIcon,
+  X,
+  FileUp
 } from 'lucide-react';
 import LogsPage from './LogsPage';
 import FileExplorer from './FileExplorer';
@@ -61,11 +64,24 @@ const CodeEditor = () => {
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
 const [logsVisible, setLogsVisible] = useState(false);
-const [logsMaximized, setLogsMaximized] = useState(false);
-const [uploading, setUploading] = useState(false);
+const [logsMaximized, setLogsMaximized] = useState(false);  const [uploading, setUploading] = useState(false);
 const fileInputRef = useRef(null);
+const filesInputRef = useRef(null);
+const folderInputRef = useRef(null);
 
-  const editorRef = useRef(null);
+// Modal genérico de input (substitui window.prompt)
+const [inputModal, setInputModal] = useState({
+  open: false,
+  title: '',
+  placeholder: '',
+  defaultValue: '',
+  submitLabel: 'Confirmar',
+  loading: false,
+  onSubmit: (_value) => {}
+});
+const [inputModalValue, setInputModalValue] = useState('');
+
+const editorRef = useRef(null);
 
   // ==================== EFFECTS ====================
 
@@ -211,63 +227,111 @@ const fileInputRef = useRef(null);
     }
   };
 
-  const createNewFile = async () => {
-    if (!selectedContainer) return;
+  // Helper de modal genérico de input (estilo APK)
+  const openInputModal = ({ title, placeholder = '', defaultValue = '', submitLabel = 'Confirmar', onSubmit }) => {
+    setInputModalValue(defaultValue || '');
+    setInputModal({
+      open: true,
+      title,
+      placeholder,
+      defaultValue,
+      submitLabel,
+      loading: false,
+      onSubmit
+    });
+  };
 
-    const fileName = prompt('Nome do arquivo (ex: bot.js, main.py):');
-    if (!fileName) return;
+  const closeInputModal = () => {
+    setInputModal((prev) => ({ ...prev, open: false, loading: false }));
+  };
 
+  const handleInputModalSubmit = async () => {
+    const value = inputModalValue.trim();
+    if (!value || !inputModal.onSubmit) {
+      closeInputModal();
+      return;
+    }
+    setInputModal((prev) => ({ ...prev, loading: true }));
     try {
-      const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-
-      const response = await fetch(
-        `${API_BASE_URL}/files/${selectedContainer.id}`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            path: filePath,
-            type: 'file',
-            content: getFileTemplate(fileName)
-          })
-        }
-      );
-
-      if (response.ok) {
-        loadFiles(currentPath);
-      }
-    } catch (error) {
-      console.error('Erro ao criar arquivo:', error);
+      await inputModal.onSubmit(value);
+    } finally {
+      closeInputModal();
     }
   };
 
-  const createNewFolder = async () => {
+  const createNewFile = () => {
     if (!selectedContainer) return;
+    openInputModal({
+      title: 'Novo Arquivo',
+      placeholder: 'ex: bot.js, index.html',
+      defaultValue: '',
+      submitLabel: 'Criar',
+      onSubmit: async (fileName) => {
+        try {
+          const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
 
-    const folderName = prompt('Nome da pasta:');
-    if (!folderName) return;
+          const response = await fetch(
+            `${API_BASE_URL}/files/${selectedContainer.id}`,
+            {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({
+                path: filePath,
+                type: 'file',
+                content: getFileTemplate(fileName)
+              })
+            }
+          );
 
-    try {
-      const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-
-      const response = await fetch(
-        `${API_BASE_URL}/files/${selectedContainer.id}`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            path: folderPath,
-            type: 'directory'
-          })
+          if (response.ok) {
+            loadFiles(currentPath);
+          } else {
+            const err = await response.json().catch(() => ({}));
+            alert(err.error || 'Erro ao criar arquivo');
+          }
+        } catch (error) {
+          console.error('Erro ao criar arquivo:', error);
+          alert('Erro ao criar arquivo');
         }
-      );
-
-      if (response.ok) {
-        loadFiles(currentPath);
       }
-    } catch (error) {
-      console.error('Erro ao criar pasta:', error);
-    }
+    });
+  };
+
+  const createNewFolder = () => {
+    if (!selectedContainer) return;
+    openInputModal({
+      title: 'Nova Pasta',
+      placeholder: 'nome-da-pasta',
+      defaultValue: '',
+      submitLabel: 'Criar',
+      onSubmit: async (folderName) => {
+        try {
+          const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+
+          const response = await fetch(
+            `${API_BASE_URL}/files/${selectedContainer.id}`,
+            {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({
+                path: folderPath,
+                type: 'directory'
+              })
+            }
+          );
+
+          if (response.ok) {
+            loadFiles(currentPath);
+          } else {
+            const err = await response.json().catch(() => ({}));
+            alert(err.error || 'Erro ao criar pasta');
+          }
+        } catch (error) {
+          console.error('Erro ao criar pasta:', error);
+          alert('Erro ao criar pasta');
+        }
+      }
+    });
   };
 
   const uploadZip = async (e) => {
@@ -276,6 +340,7 @@ const fileInputRef = useRef(null);
 
     if (!file.name.endsWith('.zip')) {
       alert('Por favor, selecione um arquivo .zip');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -309,6 +374,107 @@ const fileInputRef = useRef(null);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Upload de arquivos individuais (qualquer tipo)
+  const uploadFiles = async (e) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0 || !selectedContainer) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      for (const file of fileList) {
+        formData.append('files', file);
+      }
+      formData.append('path', currentPath);
+
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/upload`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+          body: formData
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const renamed = data.files?.filter(f => f.saved !== f.original).length || 0;
+        let msg = `${data.count} arquivo(s) enviado(s) ✅`;
+        if (renamed > 0) {
+          msg += `\n${renamed} foram renomeados (nome já existia).`;
+        }
+        alert(msg);
+        loadFiles(currentPath);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || err.message || 'Erro ao enviar arquivos');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar arquivos:', error);
+      alert('Erro ao enviar arquivos');
+    } finally {
+      setUploading(false);
+      if (filesInputRef.current) filesInputRef.current.value = '';
+    }
+  };
+
+  // Upload de pasta preservando estrutura via webkitRelativePath
+  const uploadFolder = async (e) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0 || !selectedContainer) return;
+
+    // Sanity check: confirma que o navegador expõe webkitRelativePath
+    const sample = fileList[0];
+    if (!sample.webkitRelativePath) {
+      alert('Seu navegador não suporta upload de pastas. Use Chrome, Edge ou Firefox.');
+      if (folderInputRef.current) folderInputRef.current.value = '';
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Renomeia cada arquivo usando seu caminho relativo antes do upload,
+      // para o backend receber o caminho em req.file.originalname.
+      const filesForUpload = Array.from(fileList).map((file) => {
+        const renamed = new File([file], file.webkitRelativePath.replace(/\\/g, '/'), {
+          type: file.type,
+          lastModified: file.lastModified
+        });
+        return renamed;
+      });
+
+      const formData = new FormData();
+      for (const file of filesForUpload) {
+        formData.append('files', file);
+      }
+      formData.append('path', currentPath);
+
+      const response = await fetch(
+        `${API_BASE_URL}/files/${selectedContainer.id}/upload-folder`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+          body: formData
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Pasta '${sample.webkitRelativePath.split('/')[0]}' enviada! ${data.uploaded} arquivo(s). ✅`);
+        loadFiles(currentPath);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || err.message || 'Erro ao enviar pasta');
+      }
+    } catch (error) {
+      console.error('Erro ao enviar pasta:', error);
+      alert('Erro ao enviar pasta');
+    } finally {
+      setUploading(false);
+      if (folderInputRef.current) folderInputRef.current.value = '';
     }
   };
 
@@ -528,15 +694,51 @@ const fileInputRef = useRef(null);
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
                   className="flex items-center justify-center px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 flex-1 sm:flex-none disabled:opacity-50"
+                  title="Enviar arquivo ZIP e extrair"
                 >
                   <Upload className="w-4 h-4 mr-1" />
                   {uploading ? 'Enviando...' : 'ZIP'}
+                </button>
+                <button
+                  onClick={() => filesInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center justify-center px-3 py-1 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 flex-1 sm:flex-none disabled:opacity-50"
+                  title="Enviar um ou mais arquivos individuais"
+                >
+                  <FileUp className="w-4 h-4 mr-1" />
+                  Arquivos
+                </button>
+                <button
+                  onClick={() => folderInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center justify-center px-3 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700 flex-1 sm:flex-none disabled:opacity-50"
+                  title="Enviar uma pasta inteira (preserva estrutura)"
+                >
+                  <FolderPlus className="w-4 h-4 mr-1" />
+                  Pasta
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".zip"
                   onChange={uploadZip}
+                  className="hidden"
+                />
+                <input
+                  ref={filesInputRef}
+                  type="file"
+                  multiple
+                  onChange={uploadFiles}
+                  className="hidden"
+                />
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  // @ts-ignore — atributo não-padrão suportado por Chromium/Firefox
+                  webkitdirectory=""
+                  directory=""
+                  multiple
+                  onChange={uploadFolder}
                   className="hidden"
                 />
               </div>
@@ -722,8 +924,60 @@ const fileInputRef = useRef(null);
             </div>
           </div>
         )}
+
+        {/* Modal genérico de input (substitui window.prompt) */}
+        {inputModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b bg-gray-50">
+                <h3 className="text-base font-semibold text-gray-900">{inputModal.title}</h3>
+                <button
+                  onClick={closeInputModal}
+                  className="p-1 hover:bg-gray-200 rounded text-gray-500"
+                  aria-label="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                <input
+                  autoFocus
+                  value={inputModalValue}
+                  onChange={(e) => setInputModalValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleInputModalSubmit();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      closeInputModal();
+                    }
+                  }}
+                  placeholder={inputModal.placeholder}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+                <button
+                  onClick={closeInputModal}
+                  disabled={inputModal.loading}
+                  className="px-3 py-1.5 text-sm rounded-md text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleInputModalSubmit}
+                  disabled={inputModal.loading || !inputModalValue.trim()}
+                  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {inputModal.loading ? 'Salvando...' : inputModal.submitLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    
+
   );
 };
 

@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { handleTerminalWebSocket, executeCommand } = require('../controllers/terminal');
 const authMiddleware = require('../middleware/auth');
+const authenticateWs = require('../middleware/auth-ws');
 const database = require('../models/database');
 
 /**
@@ -37,19 +38,9 @@ async function resolveContainer(identifier, userId) {
  *
  * Aceita tanto ID quanto NOME do container
  */
-router.ws('/:containerId', (ws, req, next) => {
-  // Aplicar auth manualmente para ter melhor controle
-  authMiddleware(req, null, async (err) => {
-    if (err || !req.user) {
-      console.error('[Terminal Route] Erro de autenticação:', err?.message || 'Sem usuário');
-      ws.send(JSON.stringify({
-        type: 'error',
-        message: '❌ Não autenticado'
-      }));
-      ws.close();
-      return;
-    }
-
+router.ws('/:containerId', (ws, req) => {
+  // ✅ Usar middleware de auth específico para WebSocket (lê token da query string)
+  authenticateWs(ws, req, async () => {
     const identifier = req.params.containerId;
     const userId = req.user.id || req.user.userId;
 

@@ -2,14 +2,23 @@
 
 // components/DatabasePage.js
 import React, { useState, useEffect } from 'react';
-import { Database, Copy, ExternalLink, Trash2, Check, AlertCircle, Eye, EyeOff, Plus, RefreshCw } from 'lucide-react';
+import { Database, Copy, ExternalLink, Trash2, Check, AlertCircle, Eye, EyeOff, Plus, RefreshCw, Coins, Link2, Terminal } from 'lucide-react';
 
 const DatabasePage = () => {
   const [databases, setDatabases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [containers, setContainers] = useState([]);
+  const [selectedContainer, setSelectedContainer] = useState('');
+  const [userCoins, setUserCoins] = useState(null);
+
+  // Custo em coins — deve bater com backend/config/constants.js DATABASE_COST_COINS
+  const DB_COST_COINS = 5;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -17,12 +26,40 @@ const DatabasePage = () => {
     name: '',
     database_name: '',
     username: '',
-    password: ''
+    password: '',
+    container: ''
   });
 
   useEffect(() => {
     loadDatabases();
+    loadAuxData();
   }, []);
+
+  const handleDeleteDatabase = async (id, name) => {
+    setDeletingId(id);
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const res = await fetch(`https://api.mozhost.shop/api/databases/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSuccessMsg(`Database "${name}" removido`);
+        setTimeout(() => setSuccessMsg(null), 3000);
+        await loadDatabases();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Erro ao deletar database');
+      }
+    } catch (e) {
+      setError('Erro de conexão ao deletar');
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
+  };
+
+  const insufficientCoins = userCoins !== null && userCoins < DB_COST_COINS;
 
   const loadDatabases = async () => {
     try {
@@ -56,6 +93,33 @@ const DatabasePage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Carrega containers do usuário para o select de vínculo.
+  // O saldo de coins será exibido automaticamente se o backend expuser /api/auth/me;
+  // caso contrário o card mostra só o custo (sem mentir sobre o saldo).
+  const loadAuxData = async () => {
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      if (!token) return;
+      const cRes = await fetch('https://api.mozhost.shop/api/containers', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(() => null);
+
+      if (cRes && cRes.ok) {
+        const cData = await cRes.json();
+        setContainers(cData.containers || cData || []);
+      }
+
+      // Tenta buscar saldo sem bloquear a UI se falhar
+      const uRes = await fetch('https://api.mozhost.shop/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(() => null);
+      if (uRes && uRes.ok) {
+        const uData = await uRes.json();
+        setUserCoins(uData.coins ?? uData.user?.coins ?? null);
+      }
+    } catch (_) { /* silencioso - é apenas preview */ }
   };
 
   const generatePassword = () => {
@@ -143,6 +207,13 @@ const DatabasePage = () => {
         </div>
       )}
 
+      {successMsg && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center gap-2">
+          <Check className="w-5 h-5" />
+          {successMsg}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -162,7 +233,7 @@ const DatabasePage = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h2 className="text-xl font-bold mb-6">🆕 Criar Novo Database</h2>
           
-          <form onsubmit={handleCreateDatabase} className="space-y-6">
+          <form onSubmit={handleCreateDatabase} className="space-y-6">
             {/* Tipo de Database */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -245,6 +316,29 @@ const DatabasePage = () => {
                 placeholder="ex: meu_usuario"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Dica: pode ser apenas uma referência; as credenciais finais são geradas pelo backend.
+              </p>
+            </div>
+
+            {/* Container (opcional) */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Vincular a um container <span className="text-xs font-normal text-gray-500">(opcional)</span>
+              </label>
+              <select
+                value={formData.container}
+                onChange={(e) => setFormData(prev => ({ ...prev, container: e.target.value }))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Não vincular agora</option>
+                {containers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Permite que o container acesse este DB via variáveis de ambiente.
+              </p>
             </div>
 
             {/* Password */}
@@ -274,14 +368,30 @@ const DatabasePage = () => {
               </p>
             </div>
 
+            {/* Cost preview */}
+            <div className={`rounded-lg p-3 flex items-center justify-between border ${
+              insufficientCoins ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Coins className={`w-4 h-4 ${insufficientCoins ? 'text-red-600' : 'text-amber-600'}`} />
+                <span className={`text-sm font-medium ${insufficientCoins ? 'text-red-700' : 'text-amber-700'}`}>
+                  Custo: {DB_COST_COINS} coins
+                </span>
+              </div>
+              <span className={`text-xs ${insufficientCoins ? 'text-red-600' : 'text-amber-600'}`}>
+                Saldo: {userCoins !== null ? `${userCoins} coins` : '…'}
+                {insufficientCoins && ' (insuficiente)'}
+              </span>
+            </div>
+
             {/* Botões */}
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={creating}
+                disabled={creating || insufficientCoins}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
               >
-                {creating ? 'Criando...' : '✨ Criar Database'}
+                {creating ? 'Criando...' : insufficientCoins ? 'Saldo insuficiente' : '✨ Criar Database'}
               </button>
               <button
                 type="button"
@@ -309,8 +419,51 @@ const DatabasePage = () => {
       ) : (
         <div className="grid gap-4">
           {databases.map(db => (
-            <DatabaseCard key={db.id} database={db} onRefresh={loadDatabases} />
+            <DatabaseCard
+              key={db.id}
+              database={db}
+              onDelete={() => setConfirmDelete(db)}
+            />
           ))}
+        </div>
+      )}
+
+      {/* Modal de confirmação de delete */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Deletar Database</h3>
+                <p className="text-sm text-gray-500">Esta ação não pode ser desfeita.</p>
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-5">
+              <p className="text-sm text-red-800">
+                Você está prestes a deletar <strong>{confirmDelete.name}</strong> ({String(confirmDelete.type).toUpperCase()}).
+                Todos os dados e credenciais serão removidos permanentemente.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingId === confirmDelete.id}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteDatabase(confirmDelete.id, confirmDelete.name)}
+                disabled={deletingId === confirmDelete.id}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {deletingId === confirmDelete.id ? 'Deletando...' : '🗑️ Deletar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -318,7 +471,7 @@ const DatabasePage = () => {
 };
 
 // Component para exibir cada database
-const DatabaseCard = ({ database, onRefresh }) => {
+const DatabaseCard = ({ database, onDelete }) => {
   const [copied, setCopied] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -336,38 +489,90 @@ const DatabaseCard = ({ database, onRefresh }) => {
     mariadb: '🦭'
   };
 
+  // containers vem como array de strings (lista) OU array de objetos (single)
+  const linkedContainers = Array.isArray(database.containers)
+    ? database.containers.map(c => typeof c === 'string' ? c : c.name).filter(Boolean)
+    : [];
+
   return (
     <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
       <div className="flex justify-between items-start mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{dbIcons[database.type]}</span>
-          <div>
-            <h3 className="text-lg font-bold">{database.name}</h3>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <span className="text-3xl flex-shrink-0">{dbIcons[database.type] || '💾'}</span>
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold truncate">{database.name}</h3>
             <span className="text-sm text-gray-500 uppercase">{database.type}</span>
           </div>
         </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-          database.status === 'running' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-        }`}>
-          {database.status === 'running' ? '🟢 Rodando' : '⚫ Parado'}
-        </span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            database.status === 'running' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {database.status === 'running' ? '🟢 Rodando' : '⚫ Parado'}
+          </span>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Deletar database"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Linked containers */}
+      {linkedContainers.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500 flex items-center gap-1">
+            <Link2 className="w-3 h-3" />
+            Vinculado a:
+          </span>
+          {linkedContainers.map((cname, i) => (
+            <span key={i} className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-md">
+              {cname}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-3">
         <CredRow label="Host" value={database.host} onCopy={() => copyToClipboard(database.host, `host-${database.id}`)} copied={copied === `host-${database.id}`} />
         <CredRow label="Porta" value={database.port} onCopy={() => copyToClipboard(database.port.toString(), `port-${database.id}`)} copied={copied === `port-${database.id}`} />
         <CredRow label="Database" value={database.database_name} onCopy={() => copyToClipboard(database.database_name, `db-${database.id}`)} copied={copied === `db-${database.id}`} />
         <CredRow label="Username" value={database.username} onCopy={() => copyToClipboard(database.username, `user-${database.id}`)} copied={copied === `user-${database.id}`} />
-        <CredRow 
-          label="Password" 
-          value={database.password} 
-          onCopy={() => copyToClipboard(database.password, `pass-${database.id}`)} 
+        <CredRow
+          label="Password"
+          value={database.password}
+          onCopy={() => copyToClipboard(database.password, `pass-${database.id}`)}
           copied={copied === `pass-${database.id}`}
           isPassword
           showPassword={showPassword}
           onToggleShow={() => setShowPassword(!showPassword)}
         />
       </div>
+
+      {/* Connection string */}
+      {database.connection_string && (
+        <div className="mt-4 pt-4 border-t">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+              <Terminal className="w-3 h-3" />
+              Connection string
+            </span>
+            <button
+              onClick={() => copyToClipboard(database.connection_string, `conn-${database.id}`)}
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+            >
+              {copied === `conn-${database.id}` ? <><Check className="w-3 h-3" /> Copiado!</> : <><Copy className="w-3 h-3" /> Copiar</>}
+            </button>
+          </div>
+          <code className="block bg-gray-50 px-3 py-2 rounded text-xs font-mono text-gray-700 break-all">
+            {database.connection_string}
+          </code>
+        </div>
+      )}
     </div>
   );
 };
