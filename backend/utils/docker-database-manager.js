@@ -15,6 +15,11 @@ class DockerDatabaseManager {
     this.userDataPath = process.env.USER_DATA_PATH || '/root/mozhost/user-data';
     this.databasesPath = path.join(this.userDataPath, 'databases');
     this.publicHost = process.env.PUBLIC_HOST || 'mozhost.shop';
+    // IP público da VPS, usado como host real de conexão para databases.
+    // Necessário porque o Cloudflare proxy (subdomínios *.mozhost.shop) só
+    // encaminha tráfego HTTP/HTTPS — conexões MySQL/Postgres/Mongo/Redis
+    // (TCP bruto em portas arbitrárias) são bloqueadas pelo proxy.
+    this.publicIp = process.env.PUBLIC_IP || '109.199.126.125';
 
     this.portRange = { min: 5100, max: 5500 };
 
@@ -27,7 +32,7 @@ class DockerDatabaseManager {
    */
   async createDatabase(userId, databaseData) {
    const { name, type, linkToContainer, database_name, username, password } = databaseData;  // ← adicionar password aqui
-  
+
     const databaseId = uuidv4();
 
     try {
@@ -40,7 +45,7 @@ class DockerDatabaseManager {
           'SELECT id FROM `databases` WHERE user_id = ? AND database_name = ?',
           [userId, database_name]
         );
-        
+
         if (existing.length > 0) {
           throw new Error('Você já possui um database com esse nome. Escolha outro nome.');
         }
@@ -59,15 +64,19 @@ class DockerDatabaseManager {
       const credentials = this.generateCredentials(type, {
         database_name,
         username,
-	password
+        password
       });
 
-      // Gerar subdomínio: nome-tipo.dominio.com
+      // Subdomínio gerado só para referência/display (ex: futuros painéis,
+      // logs, etc.) — NÃO é usado como host de conexão real, pois bancos
+      // de dados não passam pelo proxy do Cloudflare.
       const subdomain = `${this.sanitizeName(name)}-${type}.${this.publicHost}`;
+      // Host real de conexão: IP direto da VPS.
+      const connectionHost = this.publicIp;
 
       // Criar docker compose
       await this.createDockerCompose(dbPath, databaseId, type, port, credentials);
-      
+
       const exists = await fs.pathExists(path.join(dbPath, 'docker-compose.yml'));
 console.log('📄 docker-compose.yml existe?', exists);
 console.log('📁 dbPath:', dbPath);
@@ -84,12 +93,12 @@ console.log('📁 dbPath:', dbPath);
       // Aguardar database inicializar
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      // Connection string (mantida como extra)
+      // Connection string (mantida como extra) — usa o IP, não o subdomínio
       const connectionString = this.buildConnectionString(
-        type, credentials, port, subdomain
+        type, credentials, port, connectionHost
       );
 
-      // Salvar no banco
+      // Salvar no banco — host = IP real de conexão
       await database.query(
         'INSERT INTO `databases` (id, user_id, name, type, status, host, port, database_name, username, password, docker_container_id, docker_compose_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
@@ -98,7 +107,7 @@ console.log('📁 dbPath:', dbPath);
           name,
           type,
           'running',
-          subdomain,
+          connectionHost,
           port,
           credentials.database,
           credentials.username,
@@ -119,17 +128,17 @@ console.log('📁 dbPath:', dbPath);
         name,
         type,
         status: 'running',
-        
-        // Dados de conexão separados
-        host: subdomain,
+
+        // Dados de conexão separados — host é o IP real da VPS
+        host: connectionHost,
         port: port,
         database_name: credentials.database,
         username: credentials.username,
         password: credentials.password,
-        
+
         // Connection string como bônus
         connection_string: connectionString,
-        
+
         cost: 5 // coins/dia
       };
 
@@ -279,7 +288,7 @@ USE ${credentials.database};
    */
   buildConnectionString(type, credentials, port, host = null) {
     const { username, password, database } = credentials;
-    const dbHost = host || this.publicHost;
+    const dbHost = host || this.publicIp;
 
     const strings = {
       mysql: `mysql://${username}:${password}@${dbHost}:${port}/${database}`,

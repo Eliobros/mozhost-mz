@@ -375,6 +375,58 @@ console.log('✅ Email tables initialized successfully');
         )
       `);
 
+      // Tabela de tickets de suporte humano (criada aqui como safety net
+      // para fresh installs. Em bases com tabela já existente, as colunas
+      // novas são adicionadas pelas migrations).
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS support_tickets (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          status ENUM('waiting','active','closed','cancelled') DEFAULT 'waiting',
+          summary VARCHAR(500),
+          last_message TEXT,
+          conversation_history TEXT,
+          agent_phone VARCHAR(20),
+          agent_name VARCHAR(100),
+          rating TINYINT NULL,
+          feedback_text TEXT NULL,
+          feedback_summary VARCHAR(500) NULL,
+          feedback_sentiment ENUM('muito_positivo','positivo','neutro','negativo','muito_negativo') NULL,
+          feedback_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          claimed_at TIMESTAMP NULL,
+          closed_at TIMESTAMP NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_support_user (user_id),
+          INDEX idx_support_status (status)
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS support_messages (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          ticket_id INT NOT NULL,
+          sender ENUM('user','agent','system') NOT NULL,
+          agent_name VARCHAR(100),
+          message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE,
+          INDEX idx_ticket_messages (ticket_id, created_at)
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS support_agents (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          phone VARCHAR(20) NOT NULL,
+          agent_name VARCHAR(100) NOT NULL,
+          active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_support_agent_phone (phone)
+        )
+      `);
+
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing database:', error);

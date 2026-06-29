@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, RotateCcw, Bot, User, Loader2, Headphones, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { MessageCircle, X, Send, RotateCcw, Bot, User, Loader2, Headphones, Clock, CheckCircle, AlertCircle, Star } from 'lucide-react';
 
 // Mock socket.io-client for demo — replace with: import { io } from 'socket.io-client';
 const io = (url) => {
@@ -30,6 +30,14 @@ const MozhostChat = () => {
   const [ticketId, setTicketId] = useState(null);
   const [agentName, setAgentName] = useState(null);
   const [waitTime, setWaitTime] = useState(0);
+
+  // Rating states (após ticket encerrado)
+  const [rating, setRating] = useState(0);               // 0-5
+  const [hoverRating, setHoverRating] = useState(0);     // hover pré-clique
+  const [feedbackText, setFeedbackText] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false); // true ⇒ não mostra mais card
+  const [ratingError, setRatingError] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -85,7 +93,11 @@ const MozhostChat = () => {
     socket.on('ticket_encerrado', () => {
       setTicketStatus('closed');
       setAgentName(null);
-      addSystemMessage('✅ Conversa encerrada pelo agente. Obrigado pelo contacto!');
+      addSystemMessage('✅ Conversa encerrada pelo agente.');
+      // Mostrar avaliação (caso ainda não tenha sido submetida)
+      if (!ratingSubmitted) {
+        addSystemMessage('⭐ Que tal avaliar este atendimento? Diga-nos o que achou!');
+      }
     });
 
     return () => socket.disconnect();
@@ -253,6 +265,246 @@ const MozhostChat = () => {
     setTicketId(null);
     setTicketStatus(null);
     setAgentName(null);
+    // Reset rating state
+    setRating(0);
+    setHoverRating(0);
+    setFeedbackText('');
+    setSubmittingRating(false);
+    setRatingSubmitted(false);
+    setRatingError(null);
+  };
+
+  // Buscar ticket rating ao montar (caso o utilizador já tenha avaliado)
+  useEffect(() => {
+    const checkExistingRating = async () => {
+      if (!ticketId) return;
+      try {
+        const token = localStorage.getItem('mozhost_token');
+        const res = await fetch(`${API_BASE}/api/support/ticket/${ticketId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.ticket?.rating) {
+          setRating(data.ticket.rating);
+          setRatingSubmitted(true);
+        }
+      } catch {}
+    };
+    checkExistingRating();
+  }, [ticketId]);
+
+  const submitRating = async () => {
+    if (!ticketId || rating < 1 || submittingRating) return;
+    setSubmittingRating(true);
+    setRatingError(null);
+    try {
+      const token = localStorage.getItem('mozhost_token');
+      const res = await fetch(`${API_BASE}/api/support/ticket/${ticketId}/rate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ rating, message: feedbackText.trim() || null })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRatingSubmitted(true);
+        addSystemMessage('✅ Obrigado pelo seu feedback! A sua avaliação ajuda-nos a melhorar.');
+      } else {
+        setRatingError(data.error || 'Erro ao enviar avaliação');
+      }
+    } catch (e) {
+      setRatingError('Erro de conexão. Tente novamente.');
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  const renderRatingCard = () => {
+    if (ticketStatus !== 'closed') return null;
+    if (ratingSubmitted) {
+      // Mostra confirmação bonita com a nota
+      return (
+        <div style={{
+          margin: '8px 12px',
+          padding: '12px 14px',
+          background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+          border: '1px solid #86efac',
+          borderRadius: '14px',
+          animation: 'fadeInUp 0.3s ease-out'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <CheckCircle size={14} style={{ color: '#16a34a' }} />
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>
+              Avaliação enviada — obrigado!
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Star
+                key={n}
+                size={14}
+                fill={n <= rating ? '#facc15' : 'transparent'}
+                color={n <= rating ? '#facc15' : '#cbd5e1'}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div style={{
+        margin: '8px 12px',
+        padding: '14px',
+        background: 'linear-gradient(135deg, #fefce8, #fef3c7)',
+        border: '1px solid #fde68a',
+        borderRadius: '14px',
+        animation: 'fadeInUp 0.3s ease-out',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px'
+        }}>
+          <Star size={14} fill="#f59e0b" color="#f59e0b" />
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#92400e' }}>
+            Como avalia este atendimento?
+          </span>
+        </div>
+
+        {/* Estrelas */}
+        <div style={{
+          display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '12px'
+        }}>
+          {[1, 2, 3, 4, 5].map((n) => {
+            const isActive = n <= (hoverRating || rating);
+            return (
+              <button
+                key={n}
+                type="button"
+                aria-label={`${n} estrela${n > 1 ? 's' : ''}`}
+                onClick={() => setRating(n)}
+                onMouseEnter={() => setHoverRating(n)}
+                onMouseLeave={() => setHoverRating(0)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'transform 0.15s ease, background 0.15s ease'
+                }}
+                onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'}
+                onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <Star
+                  size={28}
+                  fill={isActive ? '#facc15' : 'transparent'}
+                  color={isActive ? '#facc15' : '#cbd5e1'}
+                  strokeWidth={isActive ? 1.5 : 2}
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Textarea opcional */}
+        <textarea
+          value={feedbackText}
+          onChange={(e) => setFeedbackText(e.target.value.slice(0, 4000))}
+          placeholder="(Opcional) Conte-nos o que achou do atendimento…"
+          rows={2}
+          style={{
+            width: '100%',
+            resize: 'none',
+            border: '1.5px solid #fde68a',
+            borderRadius: '10px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            outline: 'none',
+            fontFamily: 'inherit',
+            background: 'white',
+            color: '#1e293b',
+            marginBottom: '10px'
+          }}
+          onFocus={(e) => e.target.style.borderColor = '#f59e0b'}
+          onBlur={(e) => e.target.style.borderColor = '#fde68a'}
+        />
+
+        {ratingError && (
+          <div style={{
+            fontSize: '11px',
+            color: '#dc2626',
+            marginBottom: '8px',
+            padding: '6px 10px',
+            background: '#fef2f2',
+            borderRadius: '8px',
+            border: '1px solid #fecaca'
+          }}>
+            ❌ {ratingError}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={submitRating}
+            disabled={rating < 1 || submittingRating}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: (rating < 1 || submittingRating)
+                ? '#e5e7eb'
+                : 'linear-gradient(135deg, #f59e0b, #d97706)',
+              color: (rating < 1 || submittingRating) ? '#9ca3af' : 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: (rating < 1 || submittingRating) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px'
+            }}
+          >
+            {submittingRating ? (
+              <>
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                A enviar…
+              </>
+            ) : (
+              <>⭐ Enviar avaliação</>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              // Submete "saltar" → ainda deixa o agente saber que não avaliou, mas com rating=0
+              setRatingSubmitted(true);
+              addSystemMessage('👍 Tudo bem, pode iniciar uma nova conversa quando quiser.');
+            }}
+            disabled={submittingRating}
+            style={{
+              padding: '10px 14px',
+              background: 'transparent',
+              color: '#92400e',
+              border: '1px solid #fde68a',
+              borderRadius: '10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: submittingRating ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Saltar
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const handleKeyDown = (e) => {
@@ -623,6 +875,7 @@ const MozhostChat = () => {
                 </div>
               </div>
             )}
+            {renderRatingCard()}
             <div ref={messagesEndRef} />
           </div>
 

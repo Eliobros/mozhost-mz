@@ -104,7 +104,8 @@ router.get('/ticket/:id', authMiddleware, async (req, res) => {
     const userId = req.user.id;
 
     const tickets = await database.query(
-      `SELECT id, status, agent_name, summary, created_at, claimed_at, closed_at
+      `SELECT id, status, agent_name, summary, created_at, claimed_at, closed_at,
+              rating, feedback_at, feedback_sentiment
        FROM support_tickets WHERE id = ? AND user_id = ?`,
       [ticketId, userId]
     );
@@ -149,6 +150,47 @@ router.get('/ticket/:id/messages', authMiddleware, async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── POST /api/support/ticket/:id/rate ──────────────────────────────────────
+// Avaliação do utilizador após o ticket ser encerrado.
+//   Body: { rating: 1-5, message?: string }
+//   Persiste rating + feedback_text, resume via IA e envia resumo ao agente.
+
+router.post('/ticket/:id/rate', authMiddleware, async (req, res) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const userId = req.user.id;
+    const { rating, message } = req.body || {};
+
+    if (!Number.isInteger(parseInt(rating, 10)) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: 'rating deve ser inteiro 1-5' });
+    }
+    if (message && typeof message === 'string' && message.length > 4000) {
+      return res.status(400).json({ success: false, error: 'Mensagem de feedback muito longa (máx 4000)' });
+    }
+
+    const result = await bridge.submitFeedback({
+      ticketId,
+      userId,
+      rating,
+      feedbackText: message || null,
+    });
+
+    res.json({
+      success: true,
+      rating: result.rating,
+      summary: result.summary,
+      sentiment: result.sentiment,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro ao submeter feedback:', err.message);
+    const status = err.message.includes('Acesso') ? 403
+                 : err.message.includes('avaliado') || err.message.includes('elegível') ? 409
+                 : 500;
+    res.status(status).json({ success: false, error: err.message });
   }
 });
 
