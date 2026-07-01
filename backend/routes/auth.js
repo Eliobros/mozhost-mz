@@ -1299,6 +1299,131 @@ adminRouter.get('/containers', async (req, res) => {
   }
 });
 
+// GET /api/admin/support/agents/reports
+// Devolve relatórios por agente de suporte: totais de tickets por estado,
+// classificação média e últimas avaliações. Usado pela aba "Support Agents"
+// em /admin. Autenticação via ?password= ou header x-admin-password.
+
+adminRouter.get('/support/agents/reports', async (req, res) => {
+  try {
+    const { password } = req.query;
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    // 1. Stats agregados por agente (com base no suporte_tickets.agent_phone).
+    const stats = await database.query(
+      `SELECT
+         agent_phone,
+         COUNT(*) AS tickets_total,
+         SUM(CASE WHEN status = 'waiting'   THEN 1 ELSE 0 END) AS tickets_waiting,
+         SUM(CASE WHEN status = 'active'    THEN 1 ELSE 0 END) AS tickets_active,
+         SUM(CASE WHEN status = 'closed'    THEN 1 ELSE 0 END) AS tickets_closed,
+         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS tickets_cancelled,
+         ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating END), 2) AS avg_rating,
+         SUM(CASE WHEN rating IS NOT NULL THEN 1 ELSE 0 END) AS rating_count
+       FROM support_tickets
+       WHERE agent_phone IS NOT NULL AND agent_phone <> ''
+       GROUP BY agent_phone`
+    );
+
+    // 2. Nomes dos agentes configurados em support_agents.
+    const dbAgents = await database.query(
+      `SELECT phone, agent_name FROM support_agents WHERE active = 1`
+    );
+
+    // 3. Últimas 5 avaliações por agente (top-N). Usa N+1 queries em vez
+    // de `ROW_NUMBER() OVER (PARTITION BY ...)` para não exigir MySQL 8.0+.
+    // Para 3 agentes isto são 3 queries — aceitável.
+    const phoneList = stats.map(s => s.agent_phone);
+    const feedbackByPhone = {};
+    for (const phone of phoneList) {
+      const rows = await database.query(
+        `SELECT id AS ticket_id, agent_phone, user_id, rating,
+                feedback_summary, feedback_sentiment, feedback_text, feedback_at
+         FROM support_tickets
+         WHERE rating IS NOT NULL AND agent_phone = ?
+         ORDER BY feedback_at DESC
+         LIMIT 5`,
+        [phone]
+      );
+      feedbackByPhone[phone] = rows.map(f => ({
+        ticket_id: f.ticket_id,
+        user_id: f.user_id,
+        rating: f.rating,
+        sentiment: f.feedback_sentiment,
+        summary: f.feedback_summary,
+        text: f.feedback_text,
+        at: f.feedback_at,
+      }));
+    }
+
+    // 4. Merge: stats + nomes de support_agents + nºs do env ainda sem atividade.
+    const envNumbers = (process.env.SUPPORT_AGENT_NUMBERS || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const normalize = (p) => (p || '').replace(/\D/g, '');
+
+    const reports = stats.map(s => {
+      const normalized = normalize(s.agent_phone);
+      const dbMatch = dbAgents.find(a => normalize(a.phone) === normalized);
+      return {
+        agent_phone: s.agent_phone,
+        agent_name: dbMatch?.agent_name || `Agente (${(s.agent_phone || '').slice(-4) || '????'})`,
+        tickets_total: Number(s.tickets_total) || 0,
+        tickets_waiting: Number(s.tickets_waiting) || 0,
+        tickets_active: Number(s.tickets_active) || 0,
+        tickets_closed: Number(s.tickets_closed) || 0,
+        tickets_cancelled: Number(s.tickets_cancelled) || 0,
+        avg_rating: s.avg_rating != null ? Number(s.avg_rating) : null,
+        rating_count: Number(s.rating_count) || 0,
+        recent_feedback: feedbackByPhone[s.agent_phone] || [],
+      };
+    });
+
+    const seenNorm = new Set(reports.map(r => normalize(r.agent_phone)));
+    const addFrom = (phone, name) => {
+      const n = normalize(phone);
+      if (!n || seenNorm.has(n)) return;
+      seenNorm.add(n);
+      reports.push({
+        agent_phone: phone,
+        agent_name: name || `Agente (${n.slice(-4)})`,
+        tickets_total: 0,
+        tickets_waiting: 0,
+        tickets_active: 0,
+        tickets_closed: 0,
+        tickets_cancelled: 0,
+        avg_rating: null,
+        rating_count: 0,
+        recent_feedback: [],
+      });
+    };
+    for (const a of dbAgents) addFrom(a.phone, a.agent_name);
+    for (const p of envNumbers) addFrom(p);
+
+    // 5. Tickets em fila sem agente (queue stats).
+    const unclaimed = await database.query(
+      `SELECT COUNT(*) AS total FROM support_tickets
+         WHERE status = 'waiting' AND (agent_phone IS NULL OR agent_phone = '')`
+    );
+    const unclaimedCount = Number(unclaimed[0]?.total) || 0;
+
+    const summary = {
+      total_agents: reports.length,
+      tickets_waiting_total: reports.reduce((a, b) => a + b.tickets_waiting, 0) + unclaimedCount,
+      tickets_active_total: reports.reduce((a, b) => a + b.tickets_active, 0),
+      tickets_closed_total: reports.reduce((a, b) => a + b.tickets_closed, 0),
+      tickets_cancelled_total: reports.reduce((a, b) => a + b.tickets_cancelled, 0),
+      tickets_in_queue: unclaimedCount,
+    };
+
+    res.json({ agents: reports, summary });
+  } catch (error) {
+    console.error('Admin support agents reports error:', error);
+    res.status(500).json({ error: 'Falha ao buscar relatórios de suporte' });
+  }
+});
+
 // PATCH /api/admin/users/:id/plan - Atualizar plano do usuário
 adminRouter.patch('/users/:id/plan', async (req, res) => {
   try {

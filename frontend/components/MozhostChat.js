@@ -35,6 +35,8 @@ const MozhostChat = () => {
   const waitTimerRef = useRef(null);
   // Guarda para não disparar 2× a mensagem "Agente entrou" (socket + polling).
   const agentArrivedFiredRef = useRef(false);
+  // Cursor do último id de mensagem já conhecida (socket + polling compartilham).
+  const lastSeenMessageIdRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,9 +61,11 @@ const MozhostChat = () => {
     return () => clearInterval(waitTimerRef.current);
   }, [ticketStatus]);
 
-  // Resetar a guarda de "agente entrou" sempre que muda o ticket.
+  // Resetar a guarda de "agente entrou" e o cursor de mensagens sempre
+  // que muda o ticket (novo ticket ⇒ histórico novo).
   useEffect(() => {
     agentArrivedFiredRef.current = false;
+    lastSeenMessageIdRef.current = 0;
   }, [ticketId]);
 
   // Hidratar ticketId do localStorage para sobreviver a F5 / reload da aba.
@@ -85,55 +89,176 @@ const MozhostChat = () => {
     } catch {}
   }, [ticketId]);
 
-  // Sincronizar estado do ticket com o backend (sync inicial após [ticketId]
-  // mudar + polling de 8s enquanto está em 'waiting'). É o fallback quando o
+  // Sincronizar estado do ticket com o backend. É o fallback quando o
   // socket.io falha em entregar 'agente_entrou' (ex: o socket caiu durante
-  // uma queda de internet e o evento foi perdido).
+  // uma queda de internet). Implementado com setTimeout recursivo para que
+  // cada ciclo receba jitter fresco (±15%) e faça backoff exponencial em
+  // erros consecutivos (cap a 30s). Limpa o localStorage se o ticket for
+  // 404/403 (stale ticket de sessão anterior).
   useEffect(() => {
     if (!ticketId) return undefined;
+    // Pára o loop depois do ticket estar encerrado/cancelado — já não há
+    // estado novo a detetar via polling neste effect.
+    if (ticketStatus === 'closed' || ticketStatus === 'cancelled') return undefined;
 
     let cancelled = false;
-    let intervalId = null;
+    let timeoutId = null;
+    let consecutiveFailures = 0;
 
-    const sync = async () => {
+    const clearStaleTicket = () => {
+      try { localStorage.removeItem('mozhost_chat_ticket_id'); } catch {}
+      setTicketId(null);
+      setTicketStatus(null);
+      setAgentName(null);
+      addSystemMessage('ℹ️ Esta sessão de suporte já não está disponível.');
+    };
+
+    const BASE = 8000;
+    const MAX_DELAY = 30000;
+    const jitter = (base) => Math.max(2000, Math.round(base * (0.85 + Math.random() * 0.30)));
+    const nextDelay = () => jitter(Math.min(MAX_DELAY, BASE * Math.pow(2, consecutiveFailures))); // 8s → 16s → 30s cap
+
+    const tick = async () => {
+      if (cancelled) return;
       try {
         const token = localStorage.getItem('mozhost_token');
-        if (!token) return;
+        if (!token) {
+          timeoutId = setTimeout(tick, nextDelay());
+          return;
+        }
         const res = await fetch(`${API_BASE}/api/support/ticket/${ticketId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
-        if (cancelled || !data.success || !data.ticket) return;
-        const t = data.ticket;
+        if (cancelled) return;
 
-        if (t.status === 'active') {
-          if (!agentArrivedFiredRef.current) {
-            agentArrivedFiredRef.current = true;
-            const finalName = t.agent_name || 'Agente';
-            setAgentName(finalName);
-            setTicketStatus('active');
-            addSystemMessage(`✅ Agente **${finalName}** entrou na conversa!`);
+        // Stale cleanup: o ticket já não existe ou não é nosso.
+        if (res.status === 404 || res.status === 403) {
+          if (!cancelled) clearStaleTicket();
+          return; // Não voltar a agendar — estado limpo.
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        consecutiveFailures = 0;
+
+        if (data.success && data.ticket) {
+          const t = data.ticket;
+          if (t.status === 'active') {
+            if (!agentArrivedFiredRef.current) {
+              agentArrivedFiredRef.current = true;
+              const finalName = t.agent_name || 'Agente';
+              setAgentName(finalName);
+              setTicketStatus('active');
+              addSystemMessage(`✅ Agente **${finalName}** entrou na conversa!`);
+            }
+          } else if (t.status === 'closed' || t.status === 'cancelled') {
+            setTicketStatus((cur) => (cur === 'closed' ? cur : 'closed'));
+            setAgentName(null);
           }
-        } else if (t.status === 'closed' || t.status === 'cancelled') {
-          setTicketStatus((cur) => (cur === 'closed' ? cur : 'closed'));
-          setAgentName(null);
         }
       } catch {
-        // Falha pontual → próxima iteração do polling tenta de novo.
+        consecutiveFailures++;
       }
+      if (!cancelled) timeoutId = setTimeout(tick, nextDelay());
     };
 
     // Sync imediato cobre F5 / reload / ticket restaurado do localStorage.
-    sync();
-
-    // Polling só faz sentido enquanto ainda está em 'waiting'.
-    if (ticketStatus === 'waiting') {
-      intervalId = setInterval(sync, 8000);
-    }
+    tick();
 
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [ticketId, ticketStatus]);
+
+  // Polling de mensagens do agente enquanto o ticket está `active` —
+  // garante que toda mensagem chega mesmo se o socket.io falhar em
+  // entregar `nova_mensagem`. setTimeout recursivo com jitter ±15% e
+  // backoff exponencial (cap 30s) em erros consecutivos. O cursor
+  // `lastSeenMessageIdRef` é compartilhado com o socket handler para
+  // dedup. Se o polling apanhar 404/403 → limpa o estado também.
+  useEffect(() => {
+    if (!ticketId || ticketStatus !== 'active') return undefined;
+
+    let cancelled = false;
+    let timeoutId = null;
+    let consecutiveFailures = 0;
+
+    const clearStaleTicket = () => {
+      try { localStorage.removeItem('mozhost_chat_ticket_id'); } catch {}
+      setTicketId(null);
+      setTicketStatus(null);
+      setAgentName(null);
+    };
+
+    const BASE = 5000;
+    const MAX_DELAY = 30000;
+    const jitter = (base) => Math.max(2000, Math.round(base * (0.85 + Math.random() * 0.30)));
+    const nextDelay = () => jitter(Math.min(MAX_DELAY, BASE * Math.pow(2, consecutiveFailures))); // 5s → 10s → 20s → 30s cap
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const token = localStorage.getItem('mozhost_token');
+        if (!token) {
+          timeoutId = setTimeout(tick, nextDelay());
+          return;
+        }
+        const res = await fetch(
+          `${API_BASE}/api/support/ticket/${ticketId}/messages?after=${lastSeenMessageIdRef.current}&sender=agent`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (cancelled) return;
+
+        if (res.status === 404 || res.status === 403) {
+          if (!cancelled) clearStaleTicket();
+          return;
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        consecutiveFailures = 0;
+
+        if (data.success) {
+          const incoming = data.messages || [];
+          if (incoming.length > 0) {
+            const newMsgs = [];
+            let maxId = lastSeenMessageIdRef.current;
+            for (const m of incoming) {
+              if (m.id > maxId) maxId = m.id;
+              newMsgs.push({
+                id: m.id,
+                role: 'agent',
+                content: m.message,
+                agentName: m.agent_name || undefined,
+              });
+            }
+            lastSeenMessageIdRef.current = maxId;
+
+            setMessages((prev) => {
+              // Dedup contra o que o socket.io já entregou (mesmo id).
+              const existing = new Set(prev.filter((p) => p.id != null).map((p) => p.id));
+              const unique = newMsgs.filter((m) => !existing.has(m.id));
+              if (unique.length === 0) return prev;
+              return [...prev, ...unique];
+            });
+          }
+        }
+      } catch {
+        consecutiveFailures++;
+      }
+      if (!cancelled) timeoutId = setTimeout(tick, nextDelay());
+    };
+
+    // Fetch imediato cobre mensagens que o socket possa ter falhado em
+    // entregar logo após o agente entrar.
+    tick();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [ticketId, ticketStatus]);
 
@@ -172,12 +297,22 @@ const MozhostChat = () => {
       addSystemMessage(`✅ Agente **${finalName}** entrou na conversa!`);
     });
 
-    socket.on('nova_mensagem', ({ message, agentName: name }) => {
-      setMessages(prev => [...prev, {
-        role: 'agent',
-        content: message,
-        agentName: name
-      }]);
+    socket.on('nova_mensagem', ({ id, message, agentName: name }) => {
+      // Mantém o cursor sincronizado para o polling não buscar de novo a mesma msg.
+      if (typeof id === 'number' && id > lastSeenMessageIdRef.current) {
+        lastSeenMessageIdRef.current = id;
+      }
+      setMessages(prev => {
+        // Dedup: quando o socket E o polling entregam a mesma mensagem,
+        // fica uma só entrada (chave = id).
+        if (id != null && prev.some(p => p.id === id)) return prev;
+        return [...prev, {
+          id,
+          role: 'agent',
+          content: message,
+          agentName: name,
+        }];
+      });
     });
 
     socket.on('ticket_encerrado', () => {

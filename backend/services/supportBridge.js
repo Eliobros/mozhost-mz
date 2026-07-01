@@ -335,12 +335,22 @@ async function agentToUser({ ticketId, agentPhone, agentName, message }) {
     return;
   }
 
-  await saveChatMessage({ ticketId, from: 'agent', agentName, message });
+  // INSERT direto (em vez de saveChatMessage) para capturar o insertId e
+  // enviá-lo no socket event — o frontend usa este id como cursor do
+  // polling incremental de fallback (GET /messages?after=<id>).
+  const result = await database.query(
+    `INSERT INTO support_messages (ticket_id, sender, agent_name, message, created_at)
+     VALUES (?, 'agent', ?, ?, NOW())`,
+    [ticketId, agentName || null, message]
+  );
+  const messageId = result.insertId;
 
   _io.to(`ticket_${ticketId}`).emit('nova_mensagem', {
+    id: messageId,
     message,
     agentName,
-    ticketId
+    ticketId,
+    createdAt: new Date().toISOString(),
   });
 }
 

@@ -122,12 +122,21 @@ router.get('/ticket/:id', authMiddleware, async (req, res) => {
 });
 
 // ─── GET /api/support/ticket/:id/messages ────────────────────────────────────
-// Histórico de mensagens do ticket (para recarregar após reconnect)
+// Histórico de mensagens do ticket OU polling incremental via cursor:
+//   - Sem query → devolve TODO o histórico (compatibilidade).
+//   - `?after=<id>` → devolve SÓ mensagens com id > after (incremental).
+//   - `?sender=agent|user` → restringe o filtro ao remetente.
+// Usado pelo frontend em /api/support/ticket/:id/messages?after=<id>&sender=agent
+//   a cada ~5s enquanto o ticket está `active`, como fallback robusto do socket.
 
 router.get('/ticket/:id/messages', authMiddleware, async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
     const userId = req.user.id;
+    const after = parseInt(req.query.after, 10) || 0;
+    const sender = req.query.sender && ['agent', 'user'].includes(req.query.sender)
+      ? req.query.sender
+      : null;
 
     // Verificar que o ticket pertence ao utilizador
     const tickets = await database.query(
@@ -139,15 +148,24 @@ router.get('/ticket/:id/messages', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Acesso negado' });
     }
 
-    const messages = await database.query(
-      `SELECT sender, agent_name, message, created_at
-       FROM support_messages WHERE ticket_id = ?
-       ORDER BY created_at ASC`,
-      [ticketId]
+    const conditions = ['ticket_id = ?', 'id > ?'];
+    const params = [ticketId, after];
+    if (sender) {
+      conditions.push('sender = ?');
+      params.push(sender);
+    }
+
+    const rows = await database.query(
+      `SELECT id, sender, agent_name, message, created_at
+       FROM support_messages
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY id ASC
+       LIMIT 200`,
+      params
     );
 
-    res.json({ success: true, messages });
-
+    const lastId = rows.length > 0 ? rows[rows.length - 1].id : after;
+    res.json({ success: true, messages: rows, lastId });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
