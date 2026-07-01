@@ -1,16 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageCircle, X, Send, RotateCcw, Bot, User, Loader2, Headphones, Clock, CheckCircle, AlertCircle, Star } from 'lucide-react';
-
-// Mock socket.io-client for demo — replace with: import { io } from 'socket.io-client';
-const io = (url) => {
-  const handlers = {};
-  return {
-    emit: () => {},
-    on: (event, cb) => { handlers[event] = cb; },
-    disconnect: () => {},
-    _trigger: (event, data) => handlers[event]?.(data)
-  };
-};
+import { io } from 'socket.io-client';
 
 const API_BASE = 'https://api.mozhost.shop';
 
@@ -43,6 +33,8 @@ const MozhostChat = () => {
   const inputRef = useRef(null);
   const socketRef = useRef(null);
   const waitTimerRef = useRef(null);
+  // Guarda para não disparar 2× a mensagem "Agente entrou" (socket + polling).
+  const agentArrivedFiredRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,19 +59,117 @@ const MozhostChat = () => {
     return () => clearInterval(waitTimerRef.current);
   }, [ticketStatus]);
 
+  // Resetar a guarda de "agente entrou" sempre que muda o ticket.
+  useEffect(() => {
+    agentArrivedFiredRef.current = false;
+  }, [ticketId]);
+
+  // Hidratar ticketId do localStorage para sobreviver a F5 / reload da aba.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const v = localStorage.getItem('mozhost_chat_ticket_id');
+      if (v) {
+        const id = parseInt(v, 10);
+        if (Number.isInteger(id) && id > 0) setTicketId(id);
+      }
+    } catch {}
+  }, []);
+
+  // Persistir ticketId sempre que mudar (cancelar/reset remove).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (ticketId) localStorage.setItem('mozhost_chat_ticket_id', String(ticketId));
+      else localStorage.removeItem('mozhost_chat_ticket_id');
+    } catch {}
+  }, [ticketId]);
+
+  // Sincronizar estado do ticket com o backend (sync inicial após [ticketId]
+  // mudar + polling de 8s enquanto está em 'waiting'). É o fallback quando o
+  // socket.io falha em entregar 'agente_entrou' (ex: o socket caiu durante
+  // uma queda de internet e o evento foi perdido).
+  useEffect(() => {
+    if (!ticketId) return undefined;
+
+    let cancelled = false;
+    let intervalId = null;
+
+    const sync = async () => {
+      try {
+        const token = localStorage.getItem('mozhost_token');
+        if (!token) return;
+        const res = await fetch(`${API_BASE}/api/support/ticket/${ticketId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (cancelled || !data.success || !data.ticket) return;
+        const t = data.ticket;
+
+        if (t.status === 'active') {
+          if (!agentArrivedFiredRef.current) {
+            agentArrivedFiredRef.current = true;
+            const finalName = t.agent_name || 'Agente';
+            setAgentName(finalName);
+            setTicketStatus('active');
+            addSystemMessage(`✅ Agente **${finalName}** entrou na conversa!`);
+          }
+        } else if (t.status === 'closed' || t.status === 'cancelled') {
+          setTicketStatus((cur) => (cur === 'closed' ? cur : 'closed'));
+          setAgentName(null);
+        }
+      } catch {
+        // Falha pontual → próxima iteração do polling tenta de novo.
+      }
+    };
+
+    // Sync imediato cobre F5 / reload / ticket restaurado do localStorage.
+    sync();
+
+    // Polling só faz sentido enquanto ainda está em 'waiting'.
+    if (ticketStatus === 'waiting') {
+      intervalId = setInterval(sync, 8000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [ticketId, ticketStatus]);
+
   // Socket.IO connection when ticket is created
   useEffect(() => {
     if (!ticketId) return;
 
-    const socket = io(API_BASE);
+    // 🔧 FIX: o mock antigo apenas guardava handlers mas nunca ligava ao
+    // backend (emit fazia no-op). Agora ligamos ao socket.io real e
+    // passamos o JWT em `auth` — o backend aceita `socket.handshake.auth.token`
+    // ou `socket.handshake.query.token` (ver server.js).
+    const token = (typeof window !== 'undefined' && localStorage.getItem('mozhost_token')) || null;
+    const socket = io(API_BASE, {
+      auth: { token },
+      query: token ? { token } : undefined,
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
     socketRef.current = socket;
+
+    socket.on('connect_error', (err) => {
+      // Token expirado/inválido ou CORS/proxy mal configurado
+      console.error('[Socket] erro de ligação:', err.message);
+    });
 
     socket.emit('join_ticket', { ticketId });
 
     socket.on('agente_entrou', ({ agentName: name }) => {
-      setAgentName(name);
+      // Garante idempotência com o polling de fallback: só a primeira
+      // fonte a detectar a chegada do agente dispara a mensagem de sistema.
+      if (agentArrivedFiredRef.current) return;
+      agentArrivedFiredRef.current = true;
+      const finalName = name || 'Agente';
+      setAgentName(finalName);
       setTicketStatus('active');
-      addSystemMessage(`✅ Agente **${name}** entrou na conversa!`);
+      addSystemMessage(`✅ Agente **${finalName}** entrou na conversa!`);
     });
 
     socket.on('nova_mensagem', ({ message, agentName: name }) => {

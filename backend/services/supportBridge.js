@@ -3,6 +3,7 @@
 
 const database = require('../models/database');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { jidDecode } = require('baileys');
 
 // ─── Referências injetadas no init() ────────────────────────────────────────
 let _io = null;
@@ -24,6 +25,54 @@ function normalizePhone(raw) {
   if (raw === null || raw === undefined) return '';
   const before = String(raw).trim().split(/[:@]/)[0];
   return before.replace(/[^\d]/g, '');
+}
+
+/**
+ * Extrai o número de telefone real do autor de uma mensagem do Baileys,
+ * ignorando JIDs LID-only (cujo `user` é um identificador e NÃO o telefone).
+ *
+ * Ordem de prioridade:
+ *   1. msg.key.participantPn  → PN real do participante (se disponível)
+ *   2. msg.key.participant    → JID do participante (PN ou LID)
+ *   3. msg.key.remoteJid      → JID do chat 1-1
+ *
+ * Só considera candidatos cujo `server` é `s.whatsapp.net` ou `c.us`
+ * (que indicam JID baseado em número de telefone). Candidatos LID
+ * (`server === 'lid'`) são ignorados nesta etapa, porque o `user`
+ * nesses JIDs é o LID em si, não o telefone — compará-lo com
+ * SUPPORT_AGENT_NUMBERS produziria falsos negativos.
+ *
+ * Se nenhum candidato tiver o PN, faz fallback para normalizePhone,
+ * preservando o comportamento anterior.
+ */
+function extractAgentPhone(msg) {
+  const candidates = [
+    msg?.key?.remoteJidAlt,    // ← PV com @lid: número real aqui
+    msg?.key?.participantPn,   // ← grupos: PN real do participante
+    msg?.key?.participant,     // ← grupos: JID do participante
+    msg?.key?.remoteJid,       // ← fallback geral
+  ];
+
+  for (const c of candidates) {
+    if (!c) continue;
+    try {
+      const decoded = typeof jidDecode === 'function' ? jidDecode(c) : null;
+      if (!decoded) continue;
+      if (decoded.server !== 's.whatsapp.net' && decoded.server !== 'c.us') continue;
+      const digits = String(decoded.user || '').replace(/[^\d]/g, '');
+      if (digits.length >= 8) return digits;
+    } catch {
+      // candidato mal-formado — ignora e tenta o próximo
+    }
+  }
+
+  // Fallback: comportamento antigo (usado se nenhum candidato tiver PN).
+  for (const c of candidates) {
+    if (!c) continue;
+    const d = normalizePhone(c);
+    if (d) return d;
+  }
+  return '';
 }
 
 /**
@@ -62,6 +111,7 @@ function sameAgent(a, b) {
 function isAgentMessage(phone) {
   if (AGENT_NUMBERS.length === 0) {
     console.warn('⚠️  SUPPORT_AGENT_NUMBERS vazio — nenhum número será reconhecido como agente.');
+//    console.log("Mensagem completa:", JSON.stringify(msg, null, 2));
     return false;
   }
   return AGENT_NUMBERS.some(a => sameAgent(a, phone));
@@ -570,10 +620,17 @@ async function handleIncomingWhatsApp({ messages, type }) {
 
     const jid = msg.key.remoteJid;
     const senderJid = msg.key.participantPn || msg.key.participant || jid;
-    const phone = normalizePhone(senderJid);
+    // prioritiza o phone real (PN) e ignora JIDs LID-only
+    const phone = extractAgentPhone(msg);
 
     if (AGENT_NUMBERS.length > 0) {
-      console.log('📞 Msg de:', senderJid, '→ phone normalizado:', phone);
+      console.log(
+        '📞 Msg de:', senderJid,
+        '| participantPn:', msg.key.participantPn || '(vazio)',
+        '| participant:  ', msg.key.participant || '(vazio)',
+        '| phone extraído:', msg.key.remoteJidAlt || '[ vazio]'
+      );
+//      console.log("Mensagem completa:", JSON.stringify(msg, null, 2));
     }
 
     if (!isAgentMessage(phone)) continue;
@@ -699,6 +756,7 @@ module.exports = {
   handleIncomingWhatsApp,
   // utils exported for tests:
   normalizePhone,
+  extractAgentPhone,
   sameAgent,
   isAgentMessage,
 };
