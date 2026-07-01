@@ -87,13 +87,23 @@ async function initializeWhatsApp() {
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
    console.log('📨 type:', type, '| de:', messages[0]?.key?.remoteJid);
   console.log('📨 fromMe:', messages[0]?.key?.fromMe);
-  // resto do código...
+
+  // Só processar mensagens recebidas em tempo real (ignorar sync de histórico / append).
+  if (type !== 'notify') return;
+
   const supportBridge = require('../services/supportBridge');
   const handled = await supportBridge.handleIncomingWhatsApp({ messages, type });
   if (handled) return;
 
   const msg = messages[0];
   if (!msg?.message) return;
+
+  // 👈 FIX: O Bot de Usuário Final só trata 1-1. Em grupos/broadcasts é o
+  // supportBridge que deve cuidar — nunca delegamos para o bot genérico
+  // senão ele responde "Comando não reconhecido" para mensagens que não
+  // deveriam passar por aqui.
+  const remoteJid = msg.key.remoteJid || '';
+  if (remoteJid.endsWith('@g.us') || remoteJid.endsWith('@broadcast')) return;
 
   const whatsappBotService = require('../services/whatsappBotService');
   await whatsappBotService.handleMessage(sock, msg);

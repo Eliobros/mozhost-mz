@@ -25,6 +25,26 @@ class WhatsAppBotService {
 
     console.log(`📩 Comando WhatsApp de ${phoneNumber}: ${command}`);
 
+    // 👈 FIX: comandos de agente (!aceitar / !recusar / !encerrar) são
+    // responsabilidade do SupportBridge, não deste bot genérico.
+    // Se esta mensagem chegou até aqui, o supportBridge não reconheceu o
+    // sender como agente (tipicamente SUPPORT_AGENT_NUMBERS não inclui o
+    // número). Em vez de responder com o genérico "Comando não
+    // reconhecido", avisamos o utilizador com instruções úteis.
+    const isAgentCmd = /^\!?(aceitar|recusar|encerrar)\b/i.test(command);
+    if (isAgentCmd) {
+      await sock.sendMessage(from, {
+        text:
+          `❌ *Comando de agente de suporte.*\n\n` +
+          `Este número (*${phoneNumber}*) não está configurado como agente.\n\n` +
+          `Peça ao administrador para adicionar este número ao *.env* do backend:\n` +
+          `\`SUPPORT_AGENT_NUMBERS=${phoneNumber}\`\n\n` +
+          `Ou, se preferir, use um grupo WhatsApp de suporte:\n` +
+          `\`SUPPORT_AGENT_GROUP_JID=…@g.us\``
+      });
+      return;
+    }
+
     try {
       // Comando !ia aceita texto livre depois (ex: !ia quantos usuários temos?)
       if (command.startsWith('!ia ') || command === '!ia') {
