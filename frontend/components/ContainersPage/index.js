@@ -401,7 +401,7 @@ const ContainersPage = () => {
             onSuccess={(coinsAdded) => {
               setShowPaymentModal(false);
               loadContainers();
-              alert(`✅ ${coinsAdded} coins adicionadas com sucesso!`);
+              
             }}
           />
         )}
