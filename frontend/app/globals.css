@@ -12,15 +12,46 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/*
+ * BUGFIX — inputs invisíveis no desktop:
+ *
+ * O Tailwind v4 prefet faz `input, textarea, select, button { color: inherit }`.
+ * Antes existia aqui um `@media (prefers-color-scheme: dark)` que forçava o body
+ * a usar texto claro (#ededed), e essa cor era herdada pelos inputs dos modais
+ * com `bg-white` (PaymentModal, ContainerSettingsModal, SettingsPage, etc),
+ * tornando o texto praticamente invisível em desktops com SO em dark mode.
+ *
+ * A app não foi desenhada com utilitários `dark:*` — usa cores fixas
+ * (bg-white na dashboard, gradientes escuros no LoginPage com `text-white`
+ * explícito nos inputs). Removemos o override global e adicionamos uma rede
+ * de segurança para garantir que campos de formulário/buttons sejam sempre
+ * legíveis. As classes utilitárias explícitas (ex: `text-white` no LoginPage)
+ * continuam a ganhar graças à maior especificidade de classe.
+ */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select {
+  color: #111827; /* equivale a text-gray-900 */
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280; /* equivale a text-gray-500 */
+  opacity: 1;
+}
+
+/* Chrome autofill pinta o input de amarelo; neutraliza para branco
+   quando o utilizador usa o auto-preenchimento do browser. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #111827;
 }

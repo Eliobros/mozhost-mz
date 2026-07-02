@@ -2,6 +2,14 @@ import React from 'react';
 
 export default function ComprarCoinsPage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Comprar Coins', path: '/docs/comprar-coins' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">

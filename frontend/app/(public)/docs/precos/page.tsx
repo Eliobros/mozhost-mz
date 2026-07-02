@@ -1,8 +1,55 @@
-import Link from 'next/link'
+import type { Metadata } from 'next';
+import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Preços e Planos',
+  description:
+    'Preços da MozHost: sistema de coins (1 MT = 10 coins, R$ 1 = 100 coins), planos para containers (500 coins), databases (5 coins/dia) e Email Service (grátis até 500 emails/mês).',
+  alternates: { canonical: '/docs/precos' },
+  keywords: [
+    'preços mozhost',
+    'moçambique hospedagem',
+    'custo container',
+    'coins mpesa',
+    'hospedagem barata bots',
+  ],
+  openGraph: {
+    title: 'Preços MozHost — Coins, Containers e Databases',
+    description:
+      'Sistema transparente de coins pré-pagos. Sem surpresas: só paga pelo que usar.',
+    url: '/docs/precos',
+    type: 'website',
+  },
+};
+
+/**
+ * OfferCatalog schema — rich snippet de catálogo de planos na SERP do Google.
+ *
+ * O schema estava aplicado de forma GLOBAL no `app/layout.tsx` (junto com
+ * FAQPage), o que é semanticamente errado: a homepage não é um catálogo
+ * de ofertas. Corrigimos movendo para a página correta.
+ */
+const OFFER_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'OfferCatalog',
+  name: 'Planos de Hospedagem MozHost',
+  url: 'https://mozhost.shop/docs/precos',
+  itemListElement: [
+    { '@type': 'Offer', name: 'Starter', price: '120', priceCurrency: 'MZN', description: 'Hospedagem básica para Bots.', availability: 'https://schema.org/InStock' },
+    { '@type': 'Offer', name: 'Pro', price: '290', priceCurrency: 'MZN', description: 'Hospedagem avançada para Bots e APIs.', availability: 'https://schema.org/InStock' },
+    { '@type': 'Offer', name: 'Gold', price: '550', priceCurrency: 'MZN', description: 'Alta performance para Bots 24/7.', availability: 'https://schema.org/InStock' },
+    { '@type': 'Offer', name: 'Cloud Premium', price: '890', priceCurrency: 'MZN', description: 'Hospedagem de alto desempenho em nuvem.', availability: 'https://schema.org/InStock' },
+  ],
+};
 
 export default function PrecosPage() {
   return (
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
+      {/* JSON-LD OfferCatalog schema (rich snippets de planos no Google) */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(OFFER_SCHEMA) }}
+      />
       {/* Header */}
       <div className="mb-8">
         <Link href="/docs" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">

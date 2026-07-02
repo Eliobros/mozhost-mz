@@ -20,7 +20,7 @@ Allow: /docs
 Allow: /about
 
 # Sitemap
-Sitemap: https://mozhost.topazioverse.com.br/sitemap.xml
+Sitemap: https://mozhost.shop/sitemap.xml
 
 # Crawl delay (opcional, para não sobrecarregar)
 Crawl-delay: 1

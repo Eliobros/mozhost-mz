@@ -1,8 +1,17 @@
 // app/docs/email-service/page.tsx
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 
 export default function EmailServicePage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Email Service', path: '/docs/email-service' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8">
       <div className="mb-8">
         <Link href="/docs" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">

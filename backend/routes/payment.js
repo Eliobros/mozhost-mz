@@ -72,242 +72,157 @@ router.get('/packages', (req, res) => {
 // ============================================
 router.post('/create', async (req, res) => {
   try {
-    const { userId, packageId, method, coins, amount, whatsappNumber, email } = req.body;
+    const { userId, method, coins, amount, whatsappNumber, email, returnUrl } = req.body;
 
-    // Validações
     if (!userId && !whatsappNumber) {
       return res.status(400).json({ error: 'userId ou whatsappNumber é obrigatório' });
     }
-
-    if (!packageId || !method || !coins || !amount) {
+    if (!method || !coins || !amount) {
       return res.status(400).json({ error: 'Dados incompletos' });
     }
-
-    if (!['mpesa', 'emola', 'mercadopago'].includes(method)) {
+    if (!['mpesa', 'emola', 'mercadopago', 'visa_mastercard'].includes(method)) {
       return res.status(400).json({ error: 'Método de pagamento inválido' });
     }
 
     let finalUserId = userId;
 
-    // Se vier whatsappNumber, buscar userId
     if (whatsappNumber && !userId) {
       const links = await database.query(
         'SELECT user_id FROM whatsapp_links WHERE whatsapp_number = ? AND status = "active"',
         [whatsappNumber]
       );
-
       if (links.length === 0) {
         return res.status(404).json({ error: 'WhatsApp não vinculado' });
       }
-
       finalUserId = links[0].user_id;
     }
 
-    // Buscar dados do usuário
-    const users = await database.query(
-      'SELECT id, email FROM users WHERE id = ?',
-      [finalUserId]
-    );
-
+    const users = await database.query('SELECT id, email, username FROM users WHERE id = ?', [finalUserId]);
     if (users.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
-
     const userEmail = email || users[0].email;
 
-    // Gerar código de referência único
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
-    const referenceCode = `MZ${timestamp}${random}`;
+    if (method === 'visa_mastercard' && !userEmail) {
+      return res.status(400).json({ error: 'Email é obrigatório para pagamento com cartão' });
+    }
 
-    // Inserir pagamento no banco como pending
     const result = await database.query(
-      `INSERT INTO payments (user_id, package_id, method, coins, amount, reference_code, status, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())`,
-      [finalUserId, packageId, method, coins, amount, referenceCode]
+      `INSERT INTO payments (user_id, amount, payment_method, phone_number, coins, status, currency, created_at) 
+       VALUES (?, ?, ?, ?, ?, 'pending', 'MZN', NOW())`,
+      [finalUserId, amount, method, whatsappNumber || null, coins]
     );
-
     const paymentId = result.insertId;
 
-    // ===== INTEGRAÇÃO COM ALAUDA API =====
-    let alaudaResponse;
     let paymentDetails = {};
     let paymentUrl = null;
 
     try {
-      if (method === 'mpesa') {
-        // Chamar endpoint M-Pesa da Alauda
-        const mpesaData = {
+      if (method === 'mpesa' || method === 'emola') {
+        const mobileData = {
           valor: amount.toString(),
           numero_celular: whatsappNumber ? whatsappNumber.replace('258', '') : '840000000',
           usuario_id: finalUserId.toString()
         };
 
-        console.log(`📤 Enviando para Alauda M-Pesa:`, mpesaData);
-
-        alaudaResponse = await axios.post(
-          `${ALAUDA_API_URL}/mpesa`,
-          mpesaData,
-          {
-            headers: {
-              'X-API-key': `${ALAUDA_API_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          }
+        const alaudaResponse = await axios.post(
+          `${ALAUDA_API_URL}/${method}`,
+          mobileData,
+          { headers: { 'X-API-Key': ALAUDA_API_KEY, 'Content-Type': 'application/json' } }
         );
-
-        console.log(`📥 Resposta Alauda M-Pesa:`, alaudaResponse.data);
 
         const alaudaData = alaudaResponse.data.data || alaudaResponse.data;
 
         paymentDetails = {
-          provider: 'M-Pesa (Vodacom)',
-          phoneNumber: alaudaData.payment?.numero_celular || mpesaData.numero_celular,
-          reference: referenceCode,
-          transaction_id: alaudaData.payment?.transaction_id,
+          provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+          phoneNumber: alaudaData.payment?.numero_celular || mobileData.numero_celular,
           instructions: [
             'Aguarde a notificação no seu celular',
-            'Digite seu PIN M-Pesa para confirmar',
-            `Valor: ${amount} MT`,
-            `Referência: ${referenceCode}`
+            'Digite seu PIN para confirmar',
+            `Valor: ${amount} MT`
           ]
         };
 
-        // Salvar transaction_id no banco
-        if (alaudaData.payment?.transaction_id) {
+        if (alaudaData.payment?.payment_id) {
           await database.query(
-            'UPDATE payments SET transaction_id = ?, status = "processing" WHERE id = ?',
-            [alaudaData.payment.transaction_id, paymentId]
+            'UPDATE payments SET external_payment_id = ?, provider = ? WHERE id = ?',
+            [alaudaData.payment.payment_id, method, paymentId]
           );
         }
 
-      } else if (method === 'emola') {
-        // Chamar endpoint E-Mola da Alauda
-        const emolaData = {
+      } else if (method === 'visa_mastercard') {
+        const cardData = {
           valor: amount.toString(),
-          numero_celular: whatsappNumber ? whatsappNumber.replace('258', '') : '860000000',
-          usuario_id: finalUserId.toString()
+          customer_email: userEmail,
+          customer_name: users[0].username || userEmail,
+          usuario_id: finalUserId.toString(),
+          return_url: returnUrl || `${process.env.FRONTEND_URL}/containers?payment=result`
         };
 
-        console.log(`📤 Enviando para Alauda E-Mola:`, emolaData);
-
-        alaudaResponse = await axios.post(
-          `${ALAUDA_API_URL}/emola`,
-          emolaData,
-          {
-            headers: {
-              'X-API-Key': `${ALAUDA_API_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          }
+        const alaudaResponse = await axios.post(
+          `${ALAUDA_API_URL}/visa_mastercard`,
+          cardData,
+          { headers: { 'X-API-Key': ALAUDA_API_KEY, 'Content-Type': 'application/json' } }
         );
 
-        console.log(`📥 Resposta Alauda E-Mola:`, alaudaResponse.data);
-
         const alaudaData = alaudaResponse.data.data || alaudaResponse.data;
+        paymentUrl = alaudaData.payment?.checkout_url;
 
-        paymentDetails = {
-          provider: 'E-Mola (Movitel)',
-          phoneNumber: alaudaData.payment?.numero_celular || emolaData.numero_celular,
-          reference: referenceCode,
-          transaction_id: alaudaData.payment?.transaction_id,
-          instructions: [
-            'Aguarde a notificação no seu celular',
-            'Digite seu PIN E-Mola para confirmar',
-            `Valor: ${amount} MT`,
-            `Referência: ${referenceCode}`
-          ]
-        };
+        if (!paymentUrl) {
+          throw new Error('Débito Pay não retornou checkout_url');
+        }
 
-        // Salvar transaction_id no banco
-        if (alaudaData.payment?.transaction_id) {
+        paymentDetails = { provider: 'Visa/Mastercard', url: paymentUrl };
+
+        if (alaudaData.payment?.payment_id) {
           await database.query(
-            'UPDATE payments SET transaction_id = ?, status = "processing" WHERE id = ?',
-            [alaudaData.payment.transaction_id, paymentId]
+            'UPDATE payments SET external_payment_id = ?, provider = ? WHERE id = ?',
+            [alaudaData.payment.payment_id, 'visa_mastercard', paymentId]
           );
         }
 
       } else if (method === 'mercadopago') {
-        // Chamar endpoint MercadoPago da Alauda
         const mpData = {
           email: userEmail,
           amount: parseFloat(amount),
           description: `MozHost - ${coins} coins`,
           usuario_id: finalUserId.toString(),
           back_urls: {
-            success: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/success`,
-            failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/failure`,
-            pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/pending`
+            success: `${process.env.FRONTEND_URL}/payment/success`,
+            failure: `${process.env.FRONTEND_URL}/payment/failure`,
+            pending: `${process.env.FRONTEND_URL}/payment/pending`
           },
-          notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/payment/webhook/mercadopago`
+          notification_url: `${process.env.BACKEND_URL}/api/payment/webhook/mercadopago`
         };
 
-        console.log(`📤 Enviando para Alauda MercadoPago:`, mpData);
-
-        alaudaResponse = await axios.post(
+        const alaudaResponse = await axios.post(
           `${ALAUDA_API_URL}/mercadopago`,
           mpData,
-          {
-            headers: {
-              'X-API-Key': `${ALAUDA_API_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          }
+          { headers: { 'X-API-Key': ALAUDA_API_KEY, 'Content-Type': 'application/json' } }
         );
 
-        console.log(`📥 Resposta Alauda MercadoPago:`, alaudaResponse.data);
-
         const alaudaData = alaudaResponse.data.data || alaudaResponse.data;
-
         paymentUrl = alaudaData.payment?.init_point || alaudaData.payment?.sandbox_init_point;
+        paymentDetails = { provider: 'Mercado Pago', url: paymentUrl };
 
-        paymentDetails = {
-          provider: 'Mercado Pago',
-          url: paymentUrl,
-          preference_id: alaudaData.payment?.id
-        };
-
-        // Salvar preference_id no banco
         if (alaudaData.payment?.id) {
           await database.query(
-            'UPDATE payments SET transaction_id = ? WHERE id = ?',
-            [alaudaData.payment.id, paymentId]
+            'UPDATE payments SET external_payment_id = ?, provider = ? WHERE id = ?',
+            [alaudaData.payment.id, 'mercadopago', paymentId]
           );
         }
       }
-
     } catch (alaudaError) {
       console.error('❌ Erro na Alauda API:', alaudaError.response?.data || alaudaError.message);
-      
-      // Mesmo com erro, retornar instruções manuais
-      if (method === 'mpesa' || method === 'emola') {
-        const phoneNumber = process.env[`${method.toUpperCase()}_PHONE`] || '258840000000';
-        paymentDetails = {
-          provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
-          phoneNumber: phoneNumber,
-          reference: referenceCode,
-          manual: true,
-          instructions: [
-            `Abra o app ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'}`,
-            'Escolha "Enviar Dinheiro"',
-            `Para o número: ${phoneNumber}`,
-            `Valor: ${amount} MT`,
-            `Referência: ${referenceCode}`
-          ]
-        };
-      }
+      return res.status(502).json({ error: 'Erro ao iniciar pagamento no provedor. Tenta novamente.' });
     }
-
-    console.log(`💳 Pagamento criado: ID ${paymentId} | ${coins} coins | ${amount} MT | ${method}`);
 
     res.json({
       success: true,
       id: paymentId,
-      referenceCode,
       paymentDetails,
       paymentUrl,
-      status: 'pending',
-      expiresIn: 600 // 10 minutos
+      status: 'pending'
     });
 
   } catch (error) {
@@ -575,7 +490,7 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     // Busca dados do pagamento no banco
-    const [payment] = await db.query(
+    const [payment] = await database.query(
       `SELECT p.*, u.username, u.email, c.name as container_name
        FROM payments p
        LEFT JOIN users u ON p.user_id = u.id
@@ -637,16 +552,16 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
     const lineHeight = 25;
 
     const info = [
-      { label: 'ID da Transação:', value: `#${payment.id}` },
-      { label: 'Nome:', value: payment.username },
-      { label: 'Email:', value: payment.email },
-      { label: 'Valor Pago:', value: `${payment.currency === 'MZN' ? 'MT' : 'R$'} ${parseFloat(payment.amount).toFixed(2)}` },
-      { label: 'Coins Creditados:', value: `${payment.coins} coins` },
-      { label: 'Método:', value: payment.payment_method.toUpperCase() },
-      { label: 'Container:', value: payment.container_name || 'N/A' },
-      { label: 'Data:', value: new Date(payment.created_at).toLocaleString('pt-BR') },
-      { label: 'Status:', value: 'Confirmado' }
-    ];
+  { label: 'ID da Transação:', value: `#${payment.id}` },
+  { label: 'Referência Externa:', value: payment.external_payment_id || 'N/A' },
+  { label: 'Nome:', value: payment.username },
+  { label: 'Email:', value: payment.email },
+  { label: 'Valor Pago:', value: `${payment.currency === 'MZN' ? 'MT' : 'R$'} ${parseFloat(payment.amount).toFixed(2)}` },
+  { label: 'Coins Creditados:', value: `${payment.coins} coins` },
+  { label: 'Método:', value: payment.payment_method.toUpperCase() },
+  { label: 'Data:', value: new Date(payment.created_at).toLocaleString('pt-BR') },
+  { label: 'Status:', value: 'Confirmado' }
+];
 
     info.forEach((item, index) => {
       const y = startY + (index * lineHeight);

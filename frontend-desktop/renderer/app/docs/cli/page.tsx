@@ -57,7 +57,7 @@ export default function CLIPage() {
               Acesse o site da MozHost e crie sua conta gratuitamente em menos de 1 minuto.
             </p>
             <a
-              href="https://mozhost.topazioverse.com.br"
+              href="https://mozhost.shop"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"

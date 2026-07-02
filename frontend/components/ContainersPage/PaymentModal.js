@@ -45,14 +45,14 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       symbol: 'MT',
       name: 'Metical Moçambicano',
       coinsPerUnit: 10,
-      minDeposit: 5,
+      minDeposit: 10,
       flag: '🇲🇿'
     },
     BRL: {
       symbol: 'R$',
       name: 'Real Brasileiro',
       coinsPerUnit: 100,
-      minDeposit: 5,
+      minDeposit: 10,
       flag: '🇧🇷'
     }
   };
@@ -78,6 +78,17 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       requiresPhone: true,
       currency: 'MZN'
     },
+    {
+    id: 'visa_mastercard',
+    name: 'Visa/Mastercard',
+    icon: '💳',
+    color: 'indigo',
+    prefix: [],
+    description: 'Cartão internacional (3D Secure)',
+    requiresPhone: false,
+    requiresEmail: true,
+    currency: 'MZN'
+  },
     {
       id: 'mercadopago',
       name: 'MercadoPago',
@@ -108,10 +119,10 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const packages = useMemo(() => {
     if (currentCurrency === 'BRL') {
       return [
-        { amount: 5, coins: 500, popular: false },
-        { amount: 10, coins: 1100, popular: true, bonus: '+100 bonus' },
-        { amount: 20, coins: 2300, popular: false, bonus: '+300 bonus' },
-        { amount: 50, coins: 6000, popular: false, bonus: '+1000 bonus' }
+        { amount: 10, coins: 500, popular: false },
+        { amount: 20, coins: 1100, popular: true, bonus: '+100 bonus' },
+        { amount: 30, coins: 2300, popular: false, bonus: '+300 bonus' },
+        { amount: 60, coins: 6000, popular: false, bonus: '+1000 bonus' }
       ];
     } else {
       return [
@@ -219,7 +230,9 @@ const PaymentModal = ({ onClose, onSuccess }) => {
 
       if (paymentMethod === 'mercadopago') {
         await handleMercadoPagoPayment(token, userId);
-      } else {
+      } else if (paymentMethod === 'visa_mastercard') {
+  await handleCardPayment(token, userData);
+} else {
         await handleMobilePayment(token, userData);
       }
 
@@ -244,9 +257,9 @@ const handleMercadoPagoPayment = async (token, userId) => {
         description: `Compra de ${getCoinsFromAmount(amount)} coins - MozHost`,
         usuario_id: userId?.toString() || 'guest',
         back_urls: {
-          success: `${window.location.origin}/#containers?payment=success`,
-          failure: `${window.location.origin}/#containers?payment=failed`,
-          pending: `${window.location.origin}/#containers?payment=pending`
+          success: `${window.location.origin}/containers?payment=success`,
+          failure: `${window.location.origin}/containers?payment=failed`,
+          pending: `${window.location.origin}/containers?payment=pending`
         }
       })
     });
@@ -280,6 +293,39 @@ const handleMercadoPagoPayment = async (token, userId) => {
     setStep('mercadopago');
     setLoading(false);
   };
+  
+  const handleCardPayment = async (token, userData) => {
+  const response = await fetch(`${API_URL}/api/payment/create`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      userId: userData.id,
+      method: 'visa_mastercard',
+      coins: getCoinsFromAmount(amount),
+      amount: parseFloat(amount),
+      email: email,
+      returnUrl: `${window.location.origin}/containers?payment=result`
+    })
+  });
+
+  const data = await response.json();
+
+  if (!data.success) {
+    throw new Error(data.error || 'Erro ao criar pagamento');
+  }
+
+  if (!data.paymentUrl) {
+    throw new Error('URL de pagamento não recebida');
+  }
+
+  setPaymentId(data.id);
+  setMercadoPagoUrl(data.paymentUrl); // reaproveitando o mesmo state do MP, é só a URL de redirect
+  setStep('mercadopago'); // reaproveita a mesma tela de "clique pra pagar"
+  setLoading(false);
+};
 
 
   const handleMobilePayment = async (token, userData) => {

@@ -1,10 +1,39 @@
 // app/docs/primeiro-container/page.tsx
 import Link from 'next/link'
 import Image from 'next/image'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
+
+/**
+ * HowTo schema — passos para criar o primeiro container na MozHost.
+ */
+const HOWTO_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como criar o teu primeiro container na MozHost',
+  description: 'Aprende a criar e configurar um container Docker na MozHost em três passos simples.',
+  totalTime: 'PT5M',
+  tool: [{ '@type': 'HowToTool', name: 'Conta MozHost com +500 coins' }],
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Acede à página de Containers', text: 'Vai a mozhost.shop/containers e clica em "+ Criar Container" (ou "Criar Primeiro Container" se acabaste de criar a conta).' },
+    { '@type': 'HowToStep', position: 2, name: 'Escolhe o nome e a tecnologia', text: 'Dá um nome descritivo (ex: bot-whatsapp-vendas), escolhe o tipo (Node.js para bots, Python para Flask/FastAPI, PHP para sites com MySQL integrado) e clica "Criar".' },
+    { '@type': 'HowToStep', position: 3, name: 'Recebe o URL e credenciais', text: 'Após a criação, o teu container recebe um subdomínio gratuito (ex: bot-vendas.mozhost.shop) e — no caso de PHP — credenciais MySQL e URL do phpMyAdmin.' },
+  ],
+}
 
 export default function PrimeiroContainerPage() {
   return (
     <div className="bg-white rounded-lg shadow-sm p-8">
+      {/* SEO: BreadcrumbList + HowTo schemas */}
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Primeiro Container', path: '/docs/primeiro-container' },
+        ]}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOWTO_SCHEMA) }}
+      />
       <div className="mb-8">
         <Link href="/docs/criar-conta" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
           ← Criar Conta
@@ -57,7 +86,7 @@ export default function PrimeiroContainerPage() {
             </p>
             <div className="bg-white p-2 rounded border border-gray-200">
               <code className="text-xs break-all text-gray-700">
-                mozhost.topazioverse.com.br/#containers
+                mozhost.shop/#containers
               </code>
             </div>
           </div>
@@ -70,7 +99,7 @@ export default function PrimeiroContainerPage() {
             </p>
             <div className="bg-white p-2 rounded border border-gray-200">
               <code className="text-xs break-all text-gray-700">
-                mozhost.topazioverse.com.br/#dashboard
+                mozhost.shop/#dashboard
               </code>
             </div>
           </div>

@@ -1,9 +1,42 @@
 // app/docs/bots/page.tsx
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
+
+/**
+ * HowTo schema — passos para fazer deploy de um bot (WhatsApp com Baileys).
+ */
+const HOWTO_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como hospedar um bot WhatsApp na MozHost',
+  description: 'Guia completo para fazer deploy de bots WhatsApp (Baileys), Telegram (Telegraf) e Discord (discord.js) na MozHost.',
+  totalTime: 'PT10M',
+  tool: [
+    { '@type': 'HowToTool', name: 'Container Node.js na MozHost' },
+    { '@type': 'HowToTool', name: 'Biblioteca Baileys / Telegraf / discord.js' },
+  ],
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Cria um container Node.js', text: 'Vai a /docs/primeiro-container ou directamente ao painel e cria um container do tipo Node.js com nome descritivo (ex: bot-whatsapp-vendas).' },
+    { '@type': 'HowToStep', position: 2, name: 'Faz upload do código', text: 'Envia um .zip com o teu projeto (inclui package.json e index.js, mas NÃO envie node_modules) ou conecta o repositório GitHub. As dependências são instaladas automaticamente.' },
+    { '@type': 'HowToStep', position: 3, name: 'Configura variáveis de ambiente', text: 'No painel do container adiciona variáveis como BOT_TOKEN, WHATSAPP_SESSION, DATABASE_URL — nunca coloquem tokens directamente no código.' },
+    { '@type': 'HowToStep', position: 4, name: 'Inicia o bot', text: 'Clica em "Iniciar" no painel. Para bots WhatsApp com Baileys verás um QR Code nos logs — escaneia com o teu WhatsApp para autenticar. Sessões seguintes são automáticas.' },
+  ],
+}
 
 export default function BotsPage() {
   return (
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
+      {/* SEO: BreadcrumbList + HowTo schemas */}
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Hospedar Bots', path: '/docs/bots' },
+        ]}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOWTO_SCHEMA) }}
+      />
       <div className="mb-8">
         <Link href="/docs" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
           ← Voltar à introdução

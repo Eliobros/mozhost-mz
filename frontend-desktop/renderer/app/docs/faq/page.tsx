@@ -151,7 +151,7 @@ export default function FAQPage() {
         },
         {
           q: 'Vocês têm documentação?',
-          a: 'Sim! Toda nossa documentação está disponível em mozhost.topazioverse.com.br/docs com tutoriais, guias e exemplos práticos.'
+          a: 'Sim! Toda nossa documentação está disponível em mozhost.shop/docs com tutoriais, guias e exemplos práticos.'
         },
         {
           q: 'Vocês têm vídeos tutoriais?',

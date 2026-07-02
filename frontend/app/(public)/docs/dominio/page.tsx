@@ -1,8 +1,17 @@
 // app/docs/dominio/page.tsx
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 
 export default function DominioPage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Configurar Domínio', path: '/docs/dominio' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">

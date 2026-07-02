@@ -1,9 +1,18 @@
 // app/docs/criar-database/page.tsx - PARTE 1
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 import Image from 'next/image'
 
 export default function CriarDatabasePage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Criar Database', path: '/docs/criar-database' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8">
       <div className="mb-8">
         <Link href="/docs/primeiro-container" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
@@ -47,19 +56,19 @@ export default function CriarDatabasePage() {
         </p>
         <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-4">
           <a 
-            href="https://mozhost.topazioverse.com.br/#database" 
+            href="https://mozhost.shop/#database" 
             className="text-blue-600 hover:text-blue-800 font-mono text-lg break-all"
             target="_blank"
             rel="noopener noreferrer"
           >
-            mozhost.topazioverse.com.br/#database
+            mozhost.shop/#database
           </a>
         </div>
 
         <p className="text-gray-700 mb-4">
           Ou você pode criar o banco de dados pela{' '}
           <a 
-            href="https://mozhost.topazioverse.com.br/#database" 
+            href="https://mozhost.shop/#database" 
             className="text-blue-600 hover:underline font-medium"
             target="_blank"
             rel="noopener noreferrer"

@@ -57,7 +57,7 @@ export default function PrimeiroContainerPage() {
             </p>
             <div className="bg-white p-2 rounded border border-gray-200">
               <code className="text-xs break-all text-gray-700">
-                mozhost.topazioverse.com.br/#containers
+                mozhost.shop/#containers
               </code>
             </div>
           </div>
@@ -70,7 +70,7 @@ export default function PrimeiroContainerPage() {
             </p>
             <div className="bg-white p-2 rounded border border-gray-200">
               <code className="text-xs break-all text-gray-700">
-                mozhost.topazioverse.com.br/#dashboard
+                mozhost.shop/#dashboard
               </code>
             </div>
           </div>

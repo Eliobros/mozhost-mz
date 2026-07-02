@@ -1,10 +1,42 @@
 // app/docs/criar-conta/page.tsx
 import Link from 'next/link'
 import Image from 'next/image'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
+
+/**
+ * HowTo schema — rich snippet do Google para tutoriais passo-a-passo.
+ * Cada passo indica nome + texto + (opcional) url onde o passo é executado.
+ */
+const HOWTO_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Como criar uma conta na MozHost',
+  description: 'Tutorial passo-a-passo para criar conta grátis na MozHost, receber 600 coins iniciais e entrar no dashboard.',
+  totalTime: 'PT3M',
+  tool: [{ '@type': 'HowToTool', name: 'Navegador web (Chrome/Firefox/Safari)' }],
+  step: [
+    { '@type': 'HowToStep', position: 1, name: 'Acede à página de registo', text: 'Visita a página de registo em mozhost.shop/registar e verás o formulário de criação de conta.' },
+    { '@type': 'HowToStep', position: 2, name: 'Preenche os dados', text: 'Insere um nome de utilizador único, email válido, número de telefone (se escolheres verificação por SMS/WhatsApp) e uma senha com pelo menos 6 caracteres.' },
+    { '@type': 'HowToStep', position: 3, name: 'Escolhe o método de verificação', text: 'Seleciona Email, SMS ou WhatsApp como método de verificação e aceita os Termos e Condições.' },
+    { '@type': 'HowToStep', position: 4, name: 'Insere o código de verificação', text: 'Receberás um código de 6 dígitos pelo método escolhido. Insere-o na página seguinte para confirmar a sua conta.' },
+    { '@type': 'HowToStep', position: 5, name: 'Entrar no dashboard', text: 'Após verificar o código, a tua conta é criada com 600 coins grátis e serás redirecionado automaticamente para o dashboard MozHost.' },
+  ],
+}
 
 export default function CriarContaPage() {
   return (
     <div className="bg-white rounded-lg shadow-sm p-8">
+      {/* SEO: BreadcrumbList + HowTo schemas (rich snippets do Google) */}
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Como Criar uma Conta', path: '/docs/criar-conta' },
+        ]}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOWTO_SCHEMA) }}
+      />
       <div className="mb-8">
         <Link href="/docs" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">
           ← Voltar à introdução
@@ -49,7 +81,7 @@ export default function CriarContaPage() {
             <div className="flex-1">
               <h3 className="text-xl font-semibold mb-3">Acesse a Página de Registo</h3>
               <p className="text-gray-700 mb-4">
-                Visite <a href="https://mozhost.topazioverse.com.br/registar" className="text-blue-600 hover:underline font-mono">mozhost.topazioverse.com.br/registar</a> e você verá o formulário de criação de conta.
+                Visite <a href="https://mozhost.shop/registar" className="text-blue-600 hover:underline font-mono">mozhost.shop/registar</a> e você verá o formulário de criação de conta.
               </p>
               
               {/* Espaço para screenshot */}

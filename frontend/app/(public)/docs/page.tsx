@@ -1,5 +1,26 @@
 // app/docs/page.tsx
-import Link from 'next/link'
+import type { Metadata } from 'next';
+import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Documentação',
+  description:
+    'Documentação oficial da MozHost: como criar conta, fazer deploy de bots WhatsApp/Telegram/Discord e APIs, configurar databases e domínios personalizados.',
+  alternates: { canonical: '/docs' },
+  keywords: [
+    'documentação mozhost',
+    'tutorial bots whatsapp',
+    'guia deploy api',
+    'hospedagem bots portugal',
+  ],
+  openGraph: {
+    title: 'Documentação MozHost — Bots, APIs e Databases',
+    description:
+      'Guias completos para criar conta, fazer deploy de bots WhatsApp/Telegram/Discord, configurar APIs Node.js/Python/PHP e gerir databases.',
+    url: '/docs',
+    type: 'website',
+  },
+};
 
 export default function DocsPage() {
   return (

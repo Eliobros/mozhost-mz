@@ -1,10 +1,22 @@
 import Link from "next/link";
 import styles from "./landing.module.css";
 
+export const metadata = {
+  title: "Hospede Bots & APIs sem complicação",
+  description:
+    "MozHost: plataforma moçambicana para hospedar bots WhatsApp/Telegram/Discord e APIs. Deploy em segundos, paga com M-Pesa, e-Mola ou MercadoPago. Infraestrutura Docker feita para devs.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "MozHost — Hospedagem de Bots e APIs em Moçambique",
+    description:
+      "Plataforma 100% moçambicana para hospedar bots e APIs. Pague com M-Pesa ou e-Mola e tenha seu projeto online em segundos.",
+    url: "/",
+  },
+};
+
 export default function Home() {
   return (
     <div className={styles.root}>
-
       {/* NAV */}
       <nav className={styles.nav}>
         <div className={styles.logoWrap}>
@@ -133,4 +145,3 @@ export default function Home() {
     </div>
   );
 }
-

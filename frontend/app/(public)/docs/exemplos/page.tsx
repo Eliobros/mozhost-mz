@@ -1,7 +1,16 @@
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 
 export default function ExemplosPage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Exemplos', path: '/docs/exemplos' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       <div className="mb-8">
         <Link href="/docs" className="text-blue-600 hover:text-blue-800 mb-4 inline-block">

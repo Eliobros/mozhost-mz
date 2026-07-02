@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
 import {
   Server,
   Plus,
@@ -35,6 +37,9 @@ const ContainersPage = () => {
   const [storageAlerts, setStorageAlerts] = useState([]);
   const REQUIRED_COINS = 500;
   const [statsMap, setStatsMap] = useState({});
+  const searchParams = useSearchParams();
+const router = useRouter();
+const [paymentResultStatus, setPaymentResultStatus] = useState(null);
 
  useEffect(() => {
   loadContainers();
@@ -42,6 +47,23 @@ const ContainersPage = () => {
   const interval = setInterval(loadStats, 30000);
   return () => clearInterval(interval);
 }, []); 
+
+useEffect(() => {
+  const paymentParam = searchParams.get('payment');
+  const status = searchParams.get('status');
+
+  if (paymentParam === 'result' && status) {
+    setPaymentResultStatus(status);
+
+    // Limpa a URL pra não ficar reprocessando se o usuário atualizar a página
+    router.replace('/containers');
+
+    if (status === 'success') {
+      // Recarrega containers/coins pra refletir o saldo atualizado
+      loadContainers();
+    }
+  }
+}, [searchParams]);
 
 
 
@@ -240,6 +262,26 @@ const ContainersPage = () => {
             Novo Container
           </button>
         </div>
+        
+        {paymentResultStatus === 'success' && (
+  <div className="bg-green-50 border border-green-200 text-green-800 rounded-md p-4 flex items-center justify-between">
+    <div className="flex items-center">
+      <CheckCircle className="w-5 h-5 mr-2" />
+      Pagamento confirmado! Suas coins já foram creditadas.
+    </div>
+    <button onClick={() => setPaymentResultStatus(null)} className="text-green-600 hover:text-green-800">✕</button>
+  </div>
+)}
+
+{paymentResultStatus === 'failed' && (
+  <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4 flex items-center justify-between">
+    <div className="flex items-center">
+      <AlertCircle className="w-5 h-5 mr-2" />
+      Pagamento não foi concluído. Tenta novamente.
+    </div>
+    <button onClick={() => setPaymentResultStatus(null)} className="text-red-600 hover:text-red-800">✕</button>
+  </div>
+)}
 
         {/* Storage Alerts */}
         {storageAlerts.length > 0 && (

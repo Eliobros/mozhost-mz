@@ -49,7 +49,7 @@ export default function CriarContaPage() {
             <div className="flex-1">
               <h3 className="text-xl font-semibold mb-3">Acesse a Página de Registo</h3>
               <p className="text-gray-700 mb-4">
-                Visite <a href="https://mozhost.topazioverse.com.br/registar" className="text-blue-600 hover:underline font-mono">mozhost.topazioverse.com.br/registar</a> e você verá o formulário de criação de conta.
+                Visite <a href="https://mozhost.shop/registar" className="text-blue-600 hover:underline font-mono">mozhost.shop/registar</a> e você verá o formulário de criação de conta.
               </p>
               
               {/* Espaço para screenshot */}

@@ -2,6 +2,15 @@ import React from 'react';
 
 export default function CLICreateDatabasePage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'CLI MozHost', path: '/docs/cli' },
+          { name: 'Criar Database', path: '/docs/cli/create-database' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">

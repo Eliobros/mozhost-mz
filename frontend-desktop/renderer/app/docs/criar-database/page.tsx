@@ -47,19 +47,19 @@ export default function CriarDatabasePage() {
         </p>
         <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-4">
           <a 
-            href="https://mozhost.topazioverse.com.br/#database" 
+            href="https://mozhost.shop/#database" 
             className="text-blue-600 hover:text-blue-800 font-mono text-lg break-all"
             target="_blank"
             rel="noopener noreferrer"
           >
-            mozhost.topazioverse.com.br/#database
+            mozhost.shop/#database
           </a>
         </div>
 
         <p className="text-gray-700 mb-4">
           Ou você pode criar o banco de dados pela{' '}
           <a 
-            href="https://mozhost.topazioverse.com.br/#database" 
+            href="https://mozhost.shop/#database" 
             className="text-blue-600 hover:underline font-medium"
             target="_blank"
             rel="noopener noreferrer"

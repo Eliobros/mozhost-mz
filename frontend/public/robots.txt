@@ -11,28 +11,44 @@ Disallow: /admin/
 Disallow: /*.json$
 Disallow: /terminal/
 Disallow: /files/
+Disallow: /containers/
+Disallow: /coins/
+Disallow: /billing/
+Disallow: /monitoring/
+Disallow: /profile/
+Disallow: /settings/
+Disallow: /support/
+Disallow: /whatsapp/
+Disallow: /mysql/
+Disallow: /logs/
+Disallow: /cli-auth/
 
 # Permitir páginas públicas importantes
 Allow: /login
-Allow: /register
-Allow: /pricing
+Allow: /registrar
+Allow: /reset-password
 Allow: /docs
 Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /qrcode
 
-# Sitemap
-Sitemap: https://mozhost.topazioverse.com.br/sitemap.xml
+# Sitemap (corrigido — antes apontava para mozhost.shop)
+Sitemap: https://mozhost.shop/sitemap.xml
 
-# Crawl delay (opcional, para não sobrecarregar)
+# Crawl delay amigável
 Crawl-delay: 1
 
-# Google Bot específico
+# Google Bot
 User-agent: Googlebot
 Allow: /
 Disallow: /dashboard/
 Disallow: /api/
+Disallow: /admin/
 
 # Bing Bot
 User-agent: Bingbot
 Allow: /
 Disallow: /dashboard/
 Disallow: /api/
+Disallow: /admin/

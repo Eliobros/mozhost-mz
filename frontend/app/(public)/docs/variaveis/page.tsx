@@ -1,8 +1,17 @@
 // app/docs/variaveis/page.tsx
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 
 export default function VariaveisPage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Variáveis de Ambiente', path: '/docs/variaveis' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">

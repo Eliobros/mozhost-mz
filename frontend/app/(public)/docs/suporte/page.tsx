@@ -1,7 +1,16 @@
 import Link from 'next/link'
+import BreadcrumbList from '@/components/SEO/BreadcrumbList'
 
 export default function SuportePage() {
   return (
+    <>
+      <BreadcrumbList
+        items={[
+          { name: 'Documentação', path: '/docs' },
+          { name: 'Suporte', path: '/docs/suporte' },
+        ]}
+      />
+      <div>
     <div className="bg-white rounded-lg shadow-sm p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">
