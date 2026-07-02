@@ -150,7 +150,7 @@ router.post('/create', async (req, res) => {
           mpesaData,
           {
             headers: {
-              'X-API-key': ` ${ALAUDA_API_KEY}`,
+              'X-API-key': `${ALAUDA_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
@@ -235,9 +235,9 @@ router.post('/create', async (req, res) => {
           description: `MozHost - ${coins} coins`,
           usuario_id: finalUserId.toString(),
           back_urls: {
-            success: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/success`,
-            failure: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/failure`,
-            pending: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/payment/pending`
+            success: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/success`,
+            failure: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/failure`,
+            pending: `${process.env.FRONTEND_URL || 'https://mozhost.topaziocoin.online'}/payment/pending`
           },
           notification_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/payment/webhook/mercadopago`
         };
@@ -249,7 +249,7 @@ router.post('/create', async (req, res) => {
           mpData,
           {
             headers: {
-              'X-API-Key': ` ${ALAUDA_API_KEY}`,
+              'X-API-Key': `${ALAUDA_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
@@ -392,7 +392,7 @@ router.post('/webhook/:method', async (req, res) => {
                 `${ALAUDA_API_URL}/mercadopago/status/${paymentId}`,
                 {
                   headers: {
-                    'X-API-Key': ` ${ALAUDA_API_KEY}`
+                    'X-API-Key': `${ALAUDA_API_KEY}`
                   }
                 }
               );
@@ -610,7 +610,7 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
       .fillColor('#6b7280')
       .text('Hospedagem de Bots & APIs', { align: 'center' })
       .moveDown(0.5)
-      .text('mozhost.shop', { align: 'center' });
+      .text('mozhost.topaziocoin.online', { align: 'center' });
 
     // Linha divisória
     doc
