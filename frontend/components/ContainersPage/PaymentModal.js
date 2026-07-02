@@ -286,9 +286,9 @@ const handleMercadoPagoPayment = async (token, userId) => {
   const response = await fetch(`${ALAUDA_API_URL}/api/payment/${paymentMethod}`, {
     method: 'POST',
     headers: {
-      'Authorization': `X-API-Key ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
+  'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY,
+  'Content-Type': 'application/json'
+},
     body: JSON.stringify({
       valor: amount,
       numero_celular: phoneNumber,
