@@ -350,12 +350,17 @@ const handleMercadoPagoPayment = async (token, userId) => {
 
   const checkoutUrl = data.data?.payment?.checkout_url;
 
-  if (!checkoutUrl) {
-    throw new Error('URL de pagamento não recebida');
+  if (checkoutUrl) {
+    setMercadoPagoUrl(checkoutUrl);
+    setStep('mercadopago');
+    setLoading(false);
+    return;
   }
 
-  setMercadoPagoUrl(checkoutUrl);
-  setStep('mercadopago');
+  // M-Pesa/Emola: sucesso direto, sem checkout externo.
+  // Coins são creditados via webhook quando a Débito Pay confirmar.
+  setPaymentId(data.data?.payment?.payment_id);
+  setStep('processing');
   setLoading(false);
 };
 
