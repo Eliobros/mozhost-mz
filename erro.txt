@@ -1,13 +1,148 @@
-QR Code gerado!
-1|seevidor  | Error creating database: Error: Failed to create database: Command failed: cd /root/mozhost/user-data/databases/9502891e-7c21-4607-977b-4067e339627d && docker compose up -d
-1|seevidor  | time="2026-06-28T17:07:03+02:00" level=warning msg="/root/mozhost/user-data/databases/9502891e-7c21-4607-977b-4067e339627d/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
-1|seevidor  |  Network 9502891e-7c21-4607-977b-4067e339627d_default Creating
-1|seevidor  |  Network 9502891e-7c21-4607-977b-4067e339627d_default Created
-1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Creating
-1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Created
-1|seevidor  |  Container mozhost_db_9502891e-7c21-4607-977b-4067e339627d Starting
-1|seevidor  | Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint mozhost_db_9502891e-7c21-4607-977b-4067e339627d (ae880de15d14c43ccd6fc1de85eec390f41e59d021d24e45df67c493aad0267e): Bind for 0.0.0.0:5100 failed: port is already allocated
-1|seevidor  |     at DockerDatabaseManager.createDatabase (/root/mozhost-mz/backend/utils/docker-database-manager.js:140:13)
-1|seevidor  |     at async /root/mozhost-mz/backend/routes/databases.js:71:20
-1|seevidor  | [Auth] User authenticated: Habibo (ID: 6)
-1|seevidor  | ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+
+➜  mozhost-mz git:(cursor/adicionar-verifica-o-de-conta-via-whatsapp-ou-email-c97a) vercel --prod
+  Inspect     https://vercel.com/eliobros-tech/mozhost/37SSgyHPW3h8huooNvUj4YpQCYCQ
+▲ Production  https://mozhost-rnk7e0g7m-eliobros-tech.vercel.app
+2026-07-02T21:49:26.312Z  Running build in Washington, D.C., USA (East) – iad1                                                              2026-07-02T21:49:26.314Z  Build machine configuration: 2 cores, 8 GB
+2026-07-02T21:49:26.623Z  Retrieving list of deployment files...
+2026-07-02T21:49:27.544Z  Downloading 3480 deployment files...
+2026-07-02T21:49:37.598Z  Restored build cache from previous deployment (2kKkmkYH9vCezafNbxD7CgV4p7wi)
+2026-07-02T21:49:37.972Z  Running "vercel build"
+2026-07-02T21:49:38.006Z  Vercel CLI 54.18.7
+2026-07-02T21:49:38.531Z  Installing dependencies...
+2026-07-02T21:49:40.543Z
+2026-07-02T21:49:40.543Z  up to date in 2s
+2026-07-02T21:49:40.544Z
+2026-07-02T21:49:40.544Z  177 packages are looking for funding
+2026-07-02T21:49:40.544Z  run `npm fund` for details
+2026-07-02T21:49:40.601Z  Detected Next.js version: 16.0.7
+2026-07-02T21:49:40.610Z  Running "npm run build"
+2026-07-02T21:49:40.774Z
+2026-07-02T21:49:40.775Z  > frontend@0.1.0 build
+2026-07-02T21:49:40.775Z  > next build --webpack
+2026-07-02T21:49:40.775Z
+2026-07-02T21:49:41.202Z  [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+2026-07-02T21:49:43.386Z  ▲ Next.js 16.0.7 (webpack)
+2026-07-02T21:49:43.387Z
+2026-07-02T21:49:43.502Z  Creating an optimized production build ...
+2026-07-02T21:49:43.787Z  > [PWA] Compile server
+2026-07-02T21:49:43.787Z  > [PWA] Compile server
+2026-07-02T21:49:43.788Z  > [PWA] Compile client (static)
+2026-07-02T21:49:43.788Z  > [PWA] Auto register service worker with: /vercel/path0/frontend/node_modules/next-pwa/register.js
+2026-07-02T21:49:43.789Z  > [PWA] Service worker: /vercel/path0/frontend/public/sw.js
+2026-07-02T21:49:43.789Z  > [PWA]   url: /sw.js
+2026-07-02T21:49:43.789Z  > [PWA]   scope: /
+2026-07-02T21:50:04.494Z  Failed to compile.
+2026-07-02T21:50:04.494Z
+2026-07-02T21:50:04.495Z  ./app/(public)/docs/cli/create-database/page.tsx
+2026-07-02T21:50:04.495Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+2026-07-02T21:50:04.496Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/create-database/page.tsx:469:1]
+2026-07-02T21:50:04.496Z  466 |       </section>
+2026-07-02T21:50:04.497Z  467 |     </div>
+2026-07-02T21:50:04.497Z  468 |   );
+2026-07-02T21:50:04.497Z  469 | }
+2026-07-02T21:50:04.498Z  : ^
+2026-07-02T21:50:04.498Z  `----
+2026-07-02T21:50:04.499Z  x Expected '</', got '<eof>'
+2026-07-02T21:50:04.499Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/create-database/page.tsx:469:3]
+2026-07-02T21:50:04.499Z  467 |     </div>
+2026-07-02T21:50:04.500Z  468 |   );
+2026-07-02T21:50:04.500Z  469 | }
+2026-07-02T21:50:04.500Z  `----
+2026-07-02T21:50:04.501Z
+2026-07-02T21:50:04.501Z  Caused by:
+2026-07-02T21:50:04.502Z  Syntax Error
+2026-07-02T21:50:04.502Z
+2026-07-02T21:50:04.503Z  Import trace for requested module:
+2026-07-02T21:50:04.503Z  ./app/(public)/docs/cli/create-database/page.tsx
+2026-07-02T21:50:04.504Z
+2026-07-02T21:50:04.504Z  ./app/(public)/docs/cli/page.tsx
+2026-07-02T21:50:04.504Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+2026-07-02T21:50:04.504Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/page.tsx:503:1]
+2026-07-02T21:50:04.504Z  500 |       </section>
+2026-07-02T21:50:04.505Z  501 |     </div>
+2026-07-02T21:50:04.505Z  502 |   );
+2026-07-02T21:50:04.505Z  503 | }
+2026-07-02T21:50:04.505Z  : ^
+2026-07-02T21:50:04.505Z  `----
+2026-07-02T21:50:04.505Z  x Expected '</', got '<eof>'
+2026-07-02T21:50:04.505Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/page.tsx:503:3]
+2026-07-02T21:50:04.506Z  501 |     </div>
+2026-07-02T21:50:04.506Z  502 |   );
+2026-07-02T21:50:04.506Z  503 | }
+2026-07-02T21:50:04.506Z  `----
+2026-07-02T21:50:04.507Z
+2026-07-02T21:50:04.514Z  Caused by:
+2026-07-02T21:50:04.514Z  Syntax Error
+2026-07-02T21:50:04.514Z
+2026-07-02T21:50:04.515Z  Import trace for requested module:
+2026-07-02T21:50:04.515Z  ./app/(public)/docs/cli/page.tsx
+2026-07-02T21:50:04.515Z
+2026-07-02T21:50:04.516Z  ./app/(public)/docs/comprar-coins/page.tsx
+2026-07-02T21:50:04.518Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+2026-07-02T21:50:04.518Z  ,-[/vercel/path0/frontend/app/(public)/docs/comprar-coins/page.tsx:487:1]
+2026-07-02T21:50:04.519Z  484 |     </div>
+2026-07-02T21:50:04.519Z  485 |
+2026-07-02T21:50:04.519Z  486 |   );
+2026-07-02T21:50:04.520Z  487 | }
+2026-07-02T21:50:04.520Z  : ^
+2026-07-02T21:50:04.520Z  `----
+2026-07-02T21:50:04.520Z  x Expected '</', got '<eof>'
+2026-07-02T21:50:04.520Z  ,-[/vercel/path0/frontend/app/(public)/docs/comprar-coins/page.tsx:487:3]
+2026-07-02T21:50:04.521Z  485 |
+2026-07-02T21:50:04.521Z  486 |   );
+2026-07-02T21:50:04.521Z  487 | }
+2026-07-02T21:50:04.521Z  `----
+2026-07-02T21:50:04.521Z
+2026-07-02T21:50:04.521Z  Caused by:
+2026-07-02T21:50:04.522Z  Syntax Error
+2026-07-02T21:50:04.522Z
+2026-07-02T21:50:04.522Z  Import trace for requested module:
+2026-07-02T21:50:04.522Z  ./app/(public)/docs/comprar-coins/page.tsx
+2026-07-02T21:50:04.522Z
+2026-07-02T21:50:04.522Z  ./app/(public)/docs/criar-database/page.tsx
+2026-07-02T21:50:04.523Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+2026-07-02T21:50:04.523Z  ,-[/vercel/path0/frontend/app/(public)/docs/criar-database/page.tsx:560:1]
+2026-07-02T21:50:04.523Z  557 |       </section>
+2026-07-02T21:50:04.523Z  558 |     </div>
+2026-07-02T21:50:04.523Z  559 |   )
+2026-07-02T21:50:04.523Z  560 | }
+2026-07-02T21:50:04.523Z  : ^
+2026-07-02T21:50:04.523Z  `----
+2026-07-02T21:50:04.524Z  x Expected '</', got '<eof>'
+2026-07-02T21:50:04.524Z  ,-[/vercel/path0/frontend/app/(public)/docs/criar-database/page.tsx:560:3]
+2026-07-02T21:50:04.524Z  558 |     </div>
+2026-07-02T21:50:04.524Z  559 |   )
+2026-07-02T21:50:04.524Z  560 | }
+2026-07-02T21:50:04.524Z  `----
+2026-07-02T21:50:04.524Z
+2026-07-02T21:50:04.524Z  Caused by:
+2026-07-02T21:50:04.524Z  Syntax Error
+2026-07-02T21:50:04.524Z
+2026-07-02T21:50:04.525Z  Import trace for requested module:
+2026-07-02T21:50:04.525Z  ./app/(public)/docs/criar-database/page.tsx
+2026-07-02T21:50:04.525Z
+2026-07-02T21:50:04.525Z  ./app/(public)/docs/dominio/page.tsx
+2026-07-02T21:50:04.525Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+2026-07-02T21:50:04.525Z  ,-[/vercel/path0/frontend/app/(public)/docs/dominio/page.tsx:377:1]
+2026-07-02T21:50:04.525Z  374 |       </section>
+2026-07-02T21:50:04.525Z  375 |     </div>
+2026-07-02T21:50:04.525Z  376 |   )
+2026-07-02T21:50:04.525Z  377 | }
+2026-07-02T21:50:04.526Z  : ^
+2026-07-02T21:50:04.526Z  `----
+2026-07-02T21:50:04.526Z  x Expected '</', got '<eof>'
+2026-07-02T21:50:04.526Z  ,-[/vercel/path0/frontend/app/(public)/docs/dominio/page.tsx:377:3]
+2026-07-02T21:50:04.526Z  375 |     </div>
+2026-07-02T21:50:04.526Z  376 |   )
+2026-07-02T21:50:04.526Z  377 | }
+2026-07-02T21:50:04.526Z  `----
+2026-07-02T21:50:04.526Z
+2026-07-02T21:50:04.527Z  Caused by:
+2026-07-02T21:50:04.527Z  Syntax Error
+2026-07-02T21:50:04.527Z
+2026-07-02T21:50:04.527Z  Import trace for requested module:
+2026-07-02T21:50:04.527Z  ./app/(public)/docs/dominio/page.tsx
+2026-07-02T21:50:04.527Z
+2026-07-02T21:50:04.617Z
+2026-07-02T21:50:04.618Z  > Build failed because of webpack errors
+2026-07-02T21:50:04.794Z  Error: Command "npm run build" exited with 1

@@ -373,5 +373,7 @@ export default function DominioPage() {
         </div>
       </section>
     </div>
+    </div>
+  </>
   )
 }

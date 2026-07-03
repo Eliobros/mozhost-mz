@@ -1,4 +1,5 @@
 import React from 'react';
+import BreadcrumbList from '@/components/SEO/BreadcrumbList';
 
 export default function CLICreateDatabasePage() {
   return (
@@ -465,5 +466,7 @@ export default function CLICreateDatabasePage() {
         </div>
       </section>
     </div>
+    </div>
+  </>
   );
 }

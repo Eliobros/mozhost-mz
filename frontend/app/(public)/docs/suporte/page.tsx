@@ -365,5 +365,7 @@ export default function SuportePage() {
         </div>
       </div>
     </div>
+    </div>
+  </>
   )
 }

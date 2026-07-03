@@ -610,7 +610,6 @@ const MozhostChat = () => {
                 aria-label={`${n} estrela${n > 1 ? 's' : ''}`}
                 onClick={() => setRating(n)}
                 onMouseEnter={() => setHoverRating(n)}
-                onMouseLeave={() => setHoverRating(0)}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -624,7 +623,10 @@ const MozhostChat = () => {
                 }}
                 onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'}
                 onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onMouseLeave={(e) => {
+  setHoverRating(0);
+  e.currentTarget.style.transform = 'scale(1)';
+}}
               >
                 <Star
                   size={28}

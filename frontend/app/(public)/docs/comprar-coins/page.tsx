@@ -1,4 +1,5 @@
 import React from 'react';
+import BreadcrumbList from '@/components/SEO/BreadcrumbList';
 
 export default function ComprarCoinsPage() {
   return (
@@ -482,6 +483,8 @@ export default function ComprarCoinsPage() {
   </div>
 </div>
     </div>
+    </div>
+  </>
 	
   );
 }

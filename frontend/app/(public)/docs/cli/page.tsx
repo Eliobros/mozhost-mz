@@ -1,5 +1,6 @@
 // app/docs/cli/page.tsx
 import React from 'react';
+import BreadcrumbList from '@/components/SEO/BreadcrumbList';
 
 export default function CLIPage() {
   return (
@@ -499,5 +500,7 @@ export default function CLIPage() {
         </div>
       </section>
     </div>
+    </div>
+  </>
   );
 }

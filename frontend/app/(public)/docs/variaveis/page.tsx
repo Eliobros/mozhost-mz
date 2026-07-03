@@ -448,5 +448,7 @@ export default function VariaveisPage() {
         </div>
       </section>
     </div>
+    </div>
+  </>
   )
 }

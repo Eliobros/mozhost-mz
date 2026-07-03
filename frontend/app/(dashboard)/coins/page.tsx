@@ -15,6 +15,23 @@ import {
   History
 } from 'lucide-react';
 
+interface Transaction {
+  id: number;
+  coins: number;
+  amount: number;
+  payment_method: string;
+  status: string;
+  created_at: string;
+}
+
+interface Package {
+  id: number;
+  coins: number;
+  price: number;
+  name: string;
+  popular: boolean;
+}
+
 const CoinsPurchase = () => {
   const [packages, setPackages] = useState([
     { id: 1, coins: 100, price: 50, name: '100 Coins', popular: false },
@@ -24,14 +41,14 @@ const CoinsPurchase = () => {
     { id: 5, coins: 2500, price: 800, name: '2500 Coins', popular: false }
   ]);
 
-  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [phoneError, setPhoneError] = useState('');
 
@@ -66,7 +83,7 @@ const CoinsPurchase = () => {
   };
 
   // Validar número em tempo real
-  const handlePhoneChange = (value) => {
+  const handlePhoneChange = (value: string) => {
     // Remover espaços e caracteres não numéricos
     const cleanNumber = value.replace(/[^0-9]/g, '');
     setPhoneNumber(cleanNumber);
@@ -110,7 +127,7 @@ const CoinsPurchase = () => {
   };
 
   // Detectar método automático baseado no número
-  const detectPaymentMethod = (phone) => {
+  const detectPaymentMethod = (phone: string) => {
     if (phone.length >= 2) {
       const prefix = phone.substring(0, 2);
       if (['84', '85'].includes(prefix)) {
@@ -187,7 +204,7 @@ const CoinsPurchase = () => {
     }
   };
 
-  const openPurchaseModal = (pkg) => {
+  const openPurchaseModal = (pkg: Package) => {
     setSelectedPackage(pkg);
     setShowModal(true);
     setError('');
@@ -196,7 +213,7 @@ const CoinsPurchase = () => {
     setPhoneError('');
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch(status) {
       case 'completed': return 'bg-green-100 text-green-800 border-green-200';
       case 'processing': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
@@ -206,7 +223,7 @@ const CoinsPurchase = () => {
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = (status: string) => {
     switch(status) {
       case 'completed': return 'Completo';
       case 'processing': return 'Processando';
@@ -502,7 +519,7 @@ const CoinsPurchase = () => {
                 {/* Botão de Compra */}
                 <button
                   onClick={handlePurchase}
-                  disabled={loading || phoneNumber.length !== 9 || phoneError}
+                  disabled={loading || phoneNumber.length !== 9 || Boolean(phoneError)}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
                 >
                   {loading ? (

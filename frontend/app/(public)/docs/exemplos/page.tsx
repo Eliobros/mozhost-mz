@@ -419,5 +419,7 @@ client.login(process.env.DISCORD_TOKEN);`}</pre>
         </div>
       </div>
     </div>
+    </div>
+  </>
   )
 }
