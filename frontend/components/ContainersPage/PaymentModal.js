@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { X, Coins, Smartphone, Loader, CheckCircle, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
 
 const getFriendlyError = (message) => {
@@ -35,6 +35,9 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const [error, setError] = useState('');
   const [paymentResult, setPaymentResult] = useState(null);
   const [mercadoPagoUrl, setMercadoPagoUrl] = useState('');
+  const [pollingStatus, setPollingStatus] = useState('');
+  const pollingRef = useRef(null);
+  const timeoutRef = useRef(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
   const ALAUDA_API_URL = 'https://alauda-api.mozhost.shop';
@@ -329,40 +332,88 @@ const handleMercadoPagoPayment = async (token, userId) => {
 
 
   const handleMobilePayment = async (token, userData) => {
-  const response = await fetch(`${ALAUDA_API_URL}/api/payment/${paymentMethod}`, {
-    method: 'POST',
-    headers: {
-  'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY,
-  'Content-Type': 'application/json'
-},
-    body: JSON.stringify({
-      valor: amount,
-      numero_celular: phoneNumber,
-      usuario_id: String(userData.id)
-    })
-  });
+    // Usa o backend da Mozhost (que cria registro local e chama a Alauda)
+    const response = await fetch(`${API_URL}/api/payment/create`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: userData.id,
+        method: paymentMethod,
+        coins: getCoinsFromAmount(amount),
+        amount: parseFloat(amount),
+        whatsappNumber: `258${phoneNumber}`
+      })
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (!data.success) {
-    throw new Error(data.message || data.error || 'Erro ao processar pagamento');
-  }
+    if (!data.success) {
+      throw new Error(data.error || 'Erro ao processar pagamento');
+    }
 
-  const checkoutUrl = data.data?.payment?.checkout_url;
+    // Guarda o ID do pagamento para polling e recibo
+    setPaymentId(data.id);
+    
+    // Inicia polling para verificar quando o pagamento for confirmado
+    startPollingForMobile(data.id);
+  };
 
-  if (checkoutUrl) {
-    setMercadoPagoUrl(checkoutUrl);
-    setStep('mercadopago');
-    setLoading(false);
-    return;
-  }
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
 
-  // M-Pesa/Emola: sucesso direto, sem checkout externo.
-  // Coins são creditados via webhook quando a Débito Pay confirmar.
-  setPaymentId(data.data?.payment?.payment_id);
-  setStep('processing');
-  setLoading(false);
-};
+  // Limpa polling ao fechar o modal
+  React.useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
+  const startPollingForMobile = (pid) => {
+    stopPolling();
+    setPollingStatus('Aguardando confirmação do pagamento...');
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/payment/poll-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId: pid })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+          stopPolling();
+          setPaymentResult(data);
+          setStep('success');
+          if (onSuccess) onSuccess(data.coins);
+        } else if (data.status === 'failed') {
+          stopPolling();
+          setError(data.message || 'Pagamento falhou.');
+          setStep('error');
+        } else {
+          setPollingStatus(data.message || 'Aguardando confirmação...');
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 5000);
+
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      setError('Tempo limite excedido. Se o dinheiro foi debitado, contacte o suporte.');
+      setStep('error');
+    }, 180000);
+  };
 
   const downloadReceipt = async () => {
   try {
@@ -655,7 +706,9 @@ const handleMercadoPagoPayment = async (token, userId) => {
           {step === 'processing' && (
             <div className="text-center py-8">
               <Loader className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Aguarde...</h4>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">
+                {pollingStatus || 'Aguarde...'}
+              </h4>
               <p className="text-sm text-gray-600 mb-4">
                 Processando pagamento via {selectedMethodData?.name}
               </p>
@@ -670,6 +723,9 @@ const handleMercadoPagoPayment = async (token, userId) => {
                   </div>
                 </div>
               )}
+              <p className="text-xs text-blue-600 mt-4 animate-pulse">
+                {pollingStatus && '🔄 '}{pollingStatus || 'A verificar pagamento automaticamente...'}
+              </p>
             </div>
           )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   CreditCard, 
   Coins, 
@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Zap,
   Shield,
-  History
+  History,
+  RefreshCw
 } from 'lucide-react';
 
 interface Transaction {
@@ -51,6 +52,10 @@ const CoinsPurchase = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [phoneError, setPhoneError] = useState('');
+  const [pollingPaymentId, setPollingPaymentId] = useState<number | null>(null);
+  const [pollingStatus, setPollingStatus] = useState('');
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Simular carregamento de dados
@@ -138,6 +143,77 @@ const CoinsPurchase = () => {
     }
   };
 
+  // Limpa o polling ao desmontar
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const startPolling = (paymentId: number) => {
+    // Limpa qualquer polling anterior
+    stopPolling();
+    
+    setPollingPaymentId(paymentId);
+    setPollingStatus('Aguardando confirmação do pagamento...');
+
+    // Poll a cada 5 segundos
+    pollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch('https://api.mozhost.shop/api/payment/poll-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+          // Pagamento confirmado!
+          stopPolling();
+          setPollingPaymentId(null);
+          setSuccess(`✅ Pagamento confirmado! ${data.coins || selectedPackage?.coins} coins adicionados.`);
+          setCurrentBalance(prev => prev + (data.coins || selectedPackage?.coins || 0));
+          
+          // Atualizar localStorage
+          const userData = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
+          userData.coins = (userData.coins || 0) + (data.coins || selectedPackage?.coins || 0);
+          localStorage.setItem('mozhost_user', JSON.stringify(userData));
+          
+          loadTransactions();
+        } else if (data.status === 'failed') {
+          stopPolling();
+          setPollingPaymentId(null);
+          setError(data.message || 'Pagamento falhou. Tente novamente.');
+        } else {
+          setPollingStatus(data.message || 'Aguardando confirmação...');
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        // Continua tentando...
+      }
+    }, 5000);
+
+    // Timeout após 3 minutos
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      setPollingPaymentId(null);
+      setError('Tempo limite excedido. Se o dinheiro foi debitado, contacte o suporte com o código de referência.');
+    }, 180000);
+  };
+
   const handlePurchase = async () => {
     if (!selectedPackage) {
       setError('Selecione um pacote de coins');
@@ -157,10 +233,19 @@ const CoinsPurchase = () => {
     setLoading(true);
     setError('');
     setSuccess('');
+    setPollingPaymentId(null);
 
     try {
-      // Simular chamada ao backend
       const token = localStorage.getItem('mozhost_token');
+      
+      // Buscar userId do localStorage
+      const userData = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
+      
+      if (!userData.id) {
+        setError('Sessão expirada. Faça login novamente.');
+        setLoading(false);
+        return;
+      }
       
       const response = await fetch('https://api.mozhost.shop/api/payment/create', {
         method: 'POST',
@@ -169,31 +254,22 @@ const CoinsPurchase = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          packageId: selectedPackage.id,
-          phone: phoneNumber,
-          method: paymentMethod
+          userId: userData.id,
+          method: paymentMethod,
+          coins: selectedPackage.coins,
+          amount: selectedPackage.price,
+          whatsappNumber: `258${phoneNumber}`,
         })
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setSuccess(`✅ Pagamento aprovado! ${selectedPackage.coins} coins adicionadas.`);
-        setCurrentBalance(data.newBalance || currentBalance + selectedPackage.coins);
+        // Pagamento criado — iniciar polling para verificar conclusão
         setShowModal(false);
-        setSelectedPackage(null);
-        setPhoneNumber('');
-        
-        // Atualizar histórico
-        loadTransactions();
-
-        // Atualizar localStorage
-        const userData = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
-        userData.coins = data.newBalance || currentBalance + selectedPackage.coins;
-        localStorage.setItem('mozhost_user', JSON.stringify(userData));
-
+        startPolling(data.id);
       } else {
-        setError(data.message || data.error || 'Erro ao processar pagamento');
+        setError(data.error || data.message || 'Erro ao processar pagamento');
       }
 
     } catch (err) {
@@ -263,17 +339,41 @@ const CoinsPurchase = () => {
         </div>
 
         {/* Alertas */}
+        {pollingPaymentId && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start animate-pulse">
+            <RefreshCw className="w-5 h-5 text-blue-600 mr-3 flex-shrink-0 mt-0.5 animate-spin" />
+            <div>
+              <p className="text-blue-800 font-semibold">{pollingStatus}</p>
+              <p className="text-blue-600 text-sm mt-1">
+                Você receberá uma notificação no celular. Digite o PIN para confirmar.
+              </p>
+            </div>
+          </div>
+        )}
+
         {success && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-start">
             <CheckCircle className="w-5 h-5 text-green-600 mr-3 flex-shrink-0 mt-0.5" />
-            <p className="text-green-800">{success}</p>
+            <p className="text-green-800 flex-1">{success}</p>
+            <button 
+              onClick={() => setSuccess('')}
+              className="text-green-400 hover:text-green-600 flex-shrink-0 ml-3"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start">
             <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
-            <p className="text-red-800">{error}</p>
+            <p className="text-red-800 flex-1">{error}</p>
+            <button 
+              onClick={() => setError('')}
+              className="text-red-400 hover:text-red-600 flex-shrink-0 ml-3"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 

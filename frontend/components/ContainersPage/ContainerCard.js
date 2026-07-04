@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Server,
   Play,
@@ -18,7 +19,8 @@ import {
   Eye,
   EyeOff,
   QrCode,
-  ExternalLink
+  ExternalLink,
+  Coins
 } from 'lucide-react';
 
 const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, onRenew, isNearLimit, stats }) => {
@@ -333,134 +335,132 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-col gap-3 pt-4 border-t border-gray-200">
-          {/* Primeira linha: Controles do container */}
-          <div className="flex items-center justify-between">
-            <div className="flex space-x-2">
-              {container.status === 'stopped' ? (
-                <div className="relative group">
-                  <button
-                    onClick={() => onAction(container.id, 'start')}
-                    disabled={actionLoading === 'start' || container.subscription?.expired}
-                    className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white disabled:opacity-50 disabled:cursor-not-allowed ${
-                      container.subscription?.expired
-                        ? 'bg-gray-400'
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {actionLoading === 'start' ? (
-                      <Loader className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <Play className="w-3 h-3 mr-1" />
-                    )}
-                    Iniciar
-                  </button>
-                  {container.subscription?.expired && (
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                      Renove a subscription para iniciar
-                    </div>
-                  )}
-                </div>
-              ) : container.status === 'running' ? (
-                <>
-                  <button
-                    onClick={() => onAction(container.id, 'stop')}
-                    disabled={actionLoading === 'stop'}
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
-                  >
-                    {actionLoading === 'stop' ? (
-                      <Loader className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <Square className="w-3 h-3 mr-1" />
-                    )}
-                    Parar
-                  </button>
-                  <button
-                    onClick={() => onAction(container.id, 'restart')}
-                    disabled={actionLoading === 'restart'}
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {actionLoading === 'restart' ? (
-                      <Loader className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <RotateCcw className="w-3 h-3 mr-1" />
-                    )}
-                    Restart
-                  </button>
-                </>
-              ) : (
-                <div className="relative group">
-                  <button
-                    onClick={() => onAction(container.id, 'start')}
-                    disabled={actionLoading === 'start' || container.subscription?.expired}
-                    className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white disabled:opacity-50 disabled:cursor-not-allowed ${
-                      container.subscription?.expired
-                        ? 'bg-gray-400'
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {actionLoading === 'start' ? (
-                      <Loader className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <Play className="w-3 h-3 mr-1" />
-                    )}
-                    Iniciar
-                  </button>
-                  {container.subscription?.expired && (
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                      Renove a subscription para iniciar
-                    </div>
-                  )}
+        {/* Actions - Ícones com tooltips */}
+        <div className="flex items-center gap-1.5 pt-4 border-t border-gray-200 flex-wrap">
+          {/* Controles do container */}
+          {container.status === 'stopped' || container.status === 'error' ? (
+            <div className="relative group">
+              <button
+                onClick={() => onAction(container.id, 'start')}
+                disabled={actionLoading === 'start' || container.subscription?.expired}
+                className={`p-2 rounded-lg border border-transparent text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  container.subscription?.expired
+                    ? 'bg-gray-400'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+                title="Iniciar"
+              >
+                {actionLoading === 'start' ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+              </button>
+              {container.subscription?.expired && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                  Renove a subscription para iniciar
                 </div>
               )}
             </div>
-
-            <div className="flex space-x-2">
+          ) : container.status === 'running' ? (
+            <>
               <button
-                onClick={() => onUpgrade(container.id)}
-                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700"
+                onClick={() => onAction(container.id, 'stop')}
+                disabled={actionLoading === 'stop'}
+                className="p-2 rounded-lg text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                title="Parar"
               >
-                <HardDrive className="w-3 h-3 mr-1" /> Upgrade
-              </button>
-              <button
-                onClick={onDelete}
-                disabled={actionLoading === 'deleting'}
-                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-              >
-                {actionLoading === 'deleting' ? (
-                  <Loader className="w-3 h-3 animate-spin mr-1" />
+                {actionLoading === 'stop' ? (
+                  <Loader className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Trash2 className="w-3 h-3 mr-1" />
+                  <Square className="w-4 h-4" />
                 )}
-                Deletar
               </button>
-            </div>
-          </div>
-
-          {/* Segunda linha: QR Code e Renovar */}
-          <div className="flex items-center justify-between">
-            {/* QR Code button - só para bots */}
-            {(container.type?.toLowerCase() === 'bot-baileys' || container.type?.toLowerCase() === 'bot-wwebjs') && (
-              <a
-                href={`/qrcode/${container.id}`}
-                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                <QrCode className="w-3 h-3 mr-1" />
-                QR Code
-              </a>
-            )}
-
-            {/* Renew button in actions area */}
-            {(container.subscription?.expired || container.subscription?.expiringSoon) && (
               <button
-                onClick={() => onRenew && onRenew(container.id)}
-                className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-md font-medium ml-auto"
+                onClick={() => onAction(container.id, 'restart')}
+                disabled={actionLoading === 'restart'}
+                className="p-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                title="Reiniciar"
               >
-                Renovar (500 coins)
+                {actionLoading === 'restart' ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-4 h-4" />
+                )}
               </button>
+            </>
+          ) : (
+            <button
+              onClick={() => onAction(container.id, 'start')}
+              disabled={actionLoading === 'start' || container.subscription?.expired}
+              className={`p-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                container.subscription?.expired
+                  ? 'bg-gray-400'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+              title="Iniciar"
+            >
+              {actionLoading === 'start' ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+            </button>
+          )}
+
+          {/* Upgrade */}
+          <button
+            onClick={() => onUpgrade(container.id)}
+            className="p-2 rounded-lg text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+            title="Upgrade de armazenamento"
+          >
+            <HardDrive className="w-4 h-4" />
+          </button>
+
+          {/* QR Code - só para bots */}
+          {(container.type?.toLowerCase() === 'bot-baileys' || container.type?.toLowerCase() === 'bot-wwebjs') && (
+            <a
+              href={`/qrcode/${container.id}`}
+              className="p-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+              title="QR Code"
+            >
+              <QrCode className="w-4 h-4" />
+            </a>
+          )}
+
+          {/* Acessar */}
+          <Link
+            href={`/containers/${container.id}/files`}
+            className="p-2 rounded-lg text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all"
+            title="Acessar container"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </Link>
+
+          {/* Renew */}
+          {(container.subscription?.expired || container.subscription?.expiringSoon) && (
+            <button
+              onClick={() => onRenew && onRenew(container.id)}
+              className="p-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition-colors"
+              title="Renovar (500 coins)"
+            >
+              <Coins className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Delete */}
+          <button
+            onClick={onDelete}
+            disabled={actionLoading === 'deleting'}
+            className="p-2 rounded-lg text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors ml-auto"
+            title="Deletar container"
+          >
+            {actionLoading === 'deleting' ? (
+              <Loader className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
             )}
-          </div>
+          </button>
         </div>
       </div>
     </div>
