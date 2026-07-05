@@ -122,8 +122,7 @@ router.post('/create', async (req, res) => {
         const mobileData = {
           valor: amount.toString(),
           numero_celular: whatsappNumber ? whatsappNumber.replace('258', '') : '840000000',
-          usuario_id: finalUserId.toString(),
-          webhook_url: `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/payment/webhook/paymoz`
+          usuario_id: finalUserId.toString()
         };
 
         const alaudaResponse = await axios.post(
@@ -144,12 +143,10 @@ router.post('/create', async (req, res) => {
           ]
         };
 
-        // Guarda o payment_id da Alauda tanto como external_payment_id quanto transaction_id
-        // para garantir que o webhook consiga fazer o match
         if (alaudaData.payment?.payment_id) {
           await database.query(
-            'UPDATE payments SET external_payment_id = ?, transaction_id = ?, provider = ? WHERE id = ?',
-            [alaudaData.payment.payment_id, alaudaData.payment.payment_id, method, paymentId]
+            'UPDATE payments SET external_payment_id = ?, provider = ? WHERE id = ?',
+            [alaudaData.payment.payment_id, method, paymentId]
           );
         }
 
@@ -269,228 +266,120 @@ router.get('/:id/status', async (req, res) => {
     console.error('Error checking payment status:', error);
     res.status(500).json({ error: 'Erro ao verificar status' });
   }
-});    // ============================================
-    // POST /api/payment/webhook/:method - Webhook da Alauda
-    // ============================================
-    router.post('/webhook/:method', async (req, res) => {
-      try {
-        const { method } = req.params;
-        
-        console.log(`📥 Webhook recebido [${method}]:`, JSON.stringify(req.body));
+});
 
-        if (method === 'mercadopago') {
-          // Webhook do MercadoPago via Alauda
-          const { type, data } = req.body;
-          
-          if (type === 'payment') {
-            const paymentId = data?.id;
+// ============================================
+// POST /api/payment/webhook/:method - Webhook da Alauda
+// ============================================
+router.post('/webhook/:method', async (req, res) => {
+  try {
+    const { method } = req.params;
+    
+    console.log(`📥 Webhook recebido [${method}]:`, req.body);
+
+    // A Alauda envia os webhooks do MercadoPago e PayMoz
+    // Vamos processar baseado no corpo da requisição
+    
+    let referenceCode = null;
+    let status = null;
+    let transactionId = null;
+
+    if (method === 'mercadopago') {
+      // Webhook do MercadoPago via Alauda
+      const { type, data } = req.body;
+      
+      if (type === 'payment') {
+        const paymentId = data?.id;
+        
+        if (paymentId) {
+          // Buscar pagamento pelo transaction_id (preference_id do MP)
+          const payments = await database.query(
+            'SELECT id, user_id, coins, reference_code FROM payments WHERE transaction_id = ? AND status IN ("pending", "processing")',
+            [paymentId]
+          );
+
+          if (payments.length > 0) {
+            const payment = payments[0];
             
-            if (paymentId) {
-              // Buscar pagamento pelo external_payment_id (preference_id do MP)
-              const payments = await database.query(
-                'SELECT id, user_id, coins, reference_code FROM payments WHERE external_payment_id = ? AND status IN ("pending", "processing")',
-                [paymentId]
+            // Consultar status na Alauda
+            try {
+              const statusResponse = await axios.get(
+                `${ALAUDA_API_URL}/mercadopago/status/${paymentId}`,
+                {
+                  headers: {
+                    'X-API-Key': `${ALAUDA_API_KEY}`
+                  }
+                }
               );
 
-              if (payments.length > 0) {
-                const payment = payments[0];
-                
-                // Consultar status na Alauda
-                try {
-                  const statusResponse = await axios.get(
-                    `${ALAUDA_API_URL}/mercadopago/status/${paymentId}`,
-                    {
-                      headers: {
-                        'X-API-Key': `${ALAUDA_API_KEY}`
-                      }
-                    }
-                  );
-
-                  const mpStatus = statusResponse.data.data?.payment?.status;
-                  
-                  if (mpStatus === 'approved') {
-                    await processPaymentApproval(payment);
-                  } else if (mpStatus === 'rejected' || mpStatus === 'cancelled') {
-                    await database.query(
-                      'UPDATE payments SET status = "failed" WHERE id = ?',
-                      [payment.id]
-                    );
-                  }
-                } catch (statusError) {
-                  console.error('Erro ao consultar status MP:', statusError.message);
-                }
+              const mpStatus = statusResponse.data.data?.payment?.status;
+              
+              if (mpStatus === 'approved') {
+                await processPaymentApproval(payment);
+              } else if (mpStatus === 'rejected' || mpStatus === 'cancelled') {
+                await database.query(
+                  'UPDATE payments SET status = "failed" WHERE id = ?',
+                  [payment.id]
+                );
               }
+            } catch (statusError) {
+              console.error('Erro ao consultar status MP:', statusError.message);
             }
           }
-          
-        } else if (method === 'paymoz' || method === 'mpesa' || method === 'emola') {
-          // Webhook do PayMoz (M-Pesa/E-Mola) via Alauda
-          // A Alauda pode enviar transaction_id, payment_id, ou reference
-          const { transaction_id, payment_id, status: paymentStatus, reference } = req.body;
-          
-          const matchId = transaction_id || payment_id || reference;
-          
-          if (matchId && paymentStatus === 'completed') {
-            // Buscar pelo external_payment_id OU transaction_id (fallback para ambos)
-            let payments = await database.query(
-              'SELECT id, user_id, coins, reference_code FROM payments WHERE (external_payment_id = ? OR transaction_id = ?) AND status IN ("pending", "processing")',
-              [matchId, matchId]
-            );
-
-            if (payments.length > 0) {
-              await processPaymentApproval(payments[0]);
-            } else {
-              console.log(`⚠️ Webhook recebido mas nenhum pagamento pendente encontrado para ID: ${matchId}`);
-            }
-          } else if (matchId) {
-            console.log(`📥 Webhook recebido com status "${paymentStatus}" para ID: ${matchId} — ignorado (não é "completed")`);
-          }
         }
-
-        // Sempre retorna 200 para a Alauda não reenviar
-        res.json({ success: true, received: true });
-
-      } catch (error) {
-        console.error('Error processing webhook:', error);
-        res.status(500).json({ error: 'Erro ao processar webhook' });
       }
-    });    // ============================================
-    // Função auxiliar para processar aprovação
-    // ============================================
-    async function processPaymentApproval(payment) {
-      try {
-        // Atualizar status do pagamento
-        await database.query(
-          'UPDATE payments SET status = "completed", completed_at = NOW() WHERE id = ? AND status IN ("pending", "processing")',
-          [payment.id]
+      
+    } else if (method === 'paymoz') {
+      // Webhook do PayMoz (M-Pesa/E-Mola) via Alauda
+      const { transaction_id, status: paymentStatus, reference } = req.body;
+      
+      if (transaction_id && paymentStatus === 'completed') {
+        // Buscar pelo transaction_id
+        const payments = await database.query(
+          'SELECT id, user_id, coins, reference_code FROM payments WHERE transaction_id = ? AND status IN ("pending", "processing")',
+          [transaction_id]
         );
 
-        // Adicionar coins ao usuário
-        await database.query(
-          'UPDATE users SET coins = coins + ? WHERE id = ?',
-          [payment.coins, payment.user_id]
-        );
-
-        console.log(`✅ Pagamento ${payment.id} confirmado! ${payment.coins} coins adicionados ao usuário ${payment.user_id}`);
-
-        // Enviar notificação via Socket.IO se o notificationManager estiver disponível
-        try {
-          const notificationManager = require('../utils/notification-manager');
-          if (notificationManager && typeof notificationManager.notifyPaymentSuccess === 'function') {
-            await notificationManager.notifyPaymentSuccess(payment.user_id, payment.amount || 0, payment.coins);
-          }
-        } catch (notifError) {
-          console.error('Erro ao enviar notificação:', notifError.message);
+        if (payments.length > 0) {
+          await processPaymentApproval(payments[0]);
         }
-
-      } catch (error) {
-        console.error('Erro ao processar aprovação:', error);
-        throw error;
       }
     }
 
-// ============================================
-// POST /api/payment/poll-status - Verificar status ativamente (polling)
-// Consulta a Alauda se o pagamento ainda estiver pendente
-// ============================================
-router.post('/poll-status', async (req, res) => {
-  try {
-    const { paymentId, referenceCode } = req.body;
-
-    let payment = null;
-
-    if (paymentId) {
-      const results = await database.query(
-        'SELECT id, user_id, coins, amount, status, external_payment_id, transaction_id, method, reference_code FROM payments WHERE id = ?',
-        [paymentId]
-      );
-      if (results.length > 0) payment = results[0];
-    } else if (referenceCode) {
-      const results = await database.query(
-        'SELECT id, user_id, coins, amount, status, external_payment_id, transaction_id, method, reference_code FROM payments WHERE reference_code = ?',
-        [referenceCode]
-      );
-      if (results.length > 0) payment = results[0];
-    }
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Pagamento não encontrado' });
-    }
-
-    // Se já estiver completed, retorna imediatamente
-    if (payment.status === 'completed') {
-      return res.json({
-        success: true,
-        status: 'completed',
-        coins: payment.coins,
-        message: 'Pagamento já confirmado'
-      });
-    }
-
-    // Se estiver pending/processing e tiver external_payment_id, consulta a Alauda
-    if (['pending', 'processing'].includes(payment.status) && payment.external_payment_id) {
-      try {
-        let statusUrl = '';
-        
-        if (payment.method === 'mpesa' || payment.method === 'emola') {
-          statusUrl = `${ALAUDA_API_URL}/${payment.method}/status/${payment.external_payment_id}`;
-        } else if (payment.method === 'mercadopago') {
-          statusUrl = `${ALAUDA_API_URL}/mercadopago/status/${payment.external_payment_id}`;
-        } else if (payment.method === 'visa_mastercard') {
-          statusUrl = `${ALAUDA_API_URL}/visa_mastercard/status/${payment.external_payment_id}`;
-        }
-
-        if (statusUrl) {
-          console.log(`🔍 Consultando status na Alauda: ${statusUrl}`);
-          const statusResponse = await axios.get(statusUrl, {
-            headers: { 'X-API-Key': ALAUDA_API_KEY },
-            timeout: 10000
-          });
-
-          const statusData = statusResponse.data.data || statusResponse.data;
-          const externalStatus = statusData.payment?.status || statusData.status;
-
-          console.log(`📊 Status Alauda para ${payment.external_payment_id}: ${externalStatus}`);
-
-          if (externalStatus === 'completed' || externalStatus === 'approved' || externalStatus === 'success') {
-            await processPaymentApproval(payment);
-            return res.json({
-              success: true,
-              status: 'completed',
-              coins: payment.coins,
-              message: 'Pagamento confirmado! Coins creditados.'
-            });
-          } else if (externalStatus === 'failed' || externalStatus === 'rejected' || externalStatus === 'cancelled') {
-            await database.query(
-              'UPDATE payments SET status = "failed" WHERE id = ?',
-              [payment.id]
-            );
-            return res.json({
-              success: true,
-              status: 'failed',
-              message: 'Pagamento falhou ou foi cancelado'
-            });
-          }
-        }
-      } catch (apiError) {
-        console.error(`⚠️ Erro ao consultar Alauda para ${payment.external_payment_id}:`, apiError.message);
-        // Não falha — retorna o status atual do banco
-      }
-    }
-
-    // Retorna status atual (pending/processing)
-    res.json({
-      success: true,
-      status: payment.status,
-      coins: payment.coins,
-      message: payment.status === 'processing' ? 'Processando pagamento...' : 'Aguardando confirmação do pagamento'
-    });
+    res.json({ success: true, received: true });
 
   } catch (error) {
-    console.error('Erro no poll-status:', error);
-    res.status(500).json({ error: 'Erro ao verificar status' });
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Erro ao processar webhook' });
   }
 });
+
+// ============================================
+// Função auxiliar para processar aprovação
+// ============================================
+async function processPaymentApproval(payment) {
+  try {
+    // Atualizar status do pagamento
+    await database.query(
+      'UPDATE payments SET status = "completed", completed_at = NOW() WHERE id = ?',
+      [payment.id]
+    );
+
+    // Adicionar coins ao usuário
+    await database.query(
+      'UPDATE users SET coins = coins + ? WHERE id = ?',
+      [payment.coins, payment.user_id]
+    );
+
+    console.log(`✅ Pagamento ${payment.id} confirmado! ${payment.coins} coins adicionados ao usuário ${payment.user_id}`);
+
+    // TODO: Enviar notificação ao usuário via WhatsApp
+
+  } catch (error) {
+    console.error('Erro ao processar aprovação:', error);
+    throw error;
+  }
+}
 
 // ============================================
 // POST /api/payment/manual-confirm - Confirmação manual
@@ -673,6 +562,11 @@ router.get('/receipt/:paymentId', authenticateToken, async (req, res) => {
   { label: 'Data:', value: new Date(payment.created_at).toLocaleString('pt-BR') },
   { label: 'Status:', value: 'Confirmado' }
 ];
+
+// Adiciona container só se existir
+if (payment.container_name) {
+  info.splice(3, 0, { label: 'Container:', value: payment.container_name });
+}
 
     info.forEach((item, index) => {
       const y = startY + (index * lineHeight);

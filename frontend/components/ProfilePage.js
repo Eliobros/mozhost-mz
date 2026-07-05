@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   User,
   Mail,
@@ -34,6 +35,7 @@ import {
 import PaymentModal from './ContainersPage/PaymentModal';
 
 const ProfilePage = () => {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({
     totalContainers: 0,
@@ -610,8 +612,11 @@ const ProfilePage = () => {
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
                   <Shield className="w-4 h-4 mr-2" /> Segurança da Conta
                 </button>
-                <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
-                  <CreditCard className="w-4 h-4 mr-2" /> Gerenciar Cobrança
+                <button
+                  onClick={() => router.push('/profile/payments')}
+                  className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" /> Histórico de Pagamentos
                 </button>
                 <button className="w-full text-left px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-700 rounded-md flex items-center transition-colors">
                   <Bell className="w-4 h-4 mr-2" /> Central de Notificações
@@ -641,4 +646,3 @@ const ProfilePage = () => {
 };
 
 export default ProfilePage;
-
