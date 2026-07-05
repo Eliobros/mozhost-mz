@@ -52,7 +52,7 @@ export default function SuportePage() {
       link: 'https://youtube.com/playlist?list=PLT04Pp33I859F87tPvwKSPupCznNFKsxF&si=ieB-abhwDpG4eV4m'
     },
     {
-      icon: <MessageCircle className="w-6 h-6 text-purple-600" />,
+      icon: <MessageCircle className="w-6 h-6 text-blue-600" />,
       title: 'FAQ',
       description: 'Respostas para as perguntas mais frequentes',
       link: '/docs/faq'
@@ -195,7 +195,7 @@ export default function SuportePage() {
 
       {/* Tips for Better Support */}
       <section className="mb-12">
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">
             💡 Dicas para um Atendimento Mais Rápido
           </h2>

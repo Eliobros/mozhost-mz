@@ -352,7 +352,7 @@ Status: ${connected ? '🟢 Conectado' : '🔴 Desconectado'}
 
             <button
               onClick={downloadLog}
-              className="flex items-center px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+              className="flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
             >
               <Download className="w-4 h-4 mr-1" />
               Download
@@ -360,7 +360,7 @@ Status: ${connected ? '🟢 Conectado' : '🔴 Desconectado'}
 
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700"
+              className="flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
             >
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>

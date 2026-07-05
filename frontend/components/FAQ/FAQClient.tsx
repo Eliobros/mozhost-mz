@@ -136,7 +136,7 @@ export default function FAQClient() {
         </div>
       )}
 
-      <div className="mt-12 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-8 text-center">
+      <div className="mt-12 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-8 text-center">
         <h3 className="text-xl font-bold text-gray-900 mb-3">Não encontrou sua resposta?</h3>
         <p className="text-gray-700 mb-6">Entre em contato conosco! Nossa equipe está pronta para ajudar.</p>
         <div className="flex flex-wrap justify-center gap-4">

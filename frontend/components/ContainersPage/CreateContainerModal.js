@@ -227,7 +227,7 @@ const CreateContainerModal = ({
               className={`px-4 py-2 text-white text-sm font-medium rounded-md flex items-center ${
                 coins < requiredCoins || isCreating
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                  : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
               }`}
             >
               {isCreating ? (

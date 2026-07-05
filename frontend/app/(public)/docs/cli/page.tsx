@@ -76,7 +76,7 @@ export default function CLIPage() {
           </div>
 
           {/* Card: Placeholder para vídeo */}
-          <div className="border-2 border-purple-500 bg-purple-50 rounded-lg p-6">
+          <div className="border-2 border-blue-500 bg-blue-50 rounded-lg p-6">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
               <span className="text-2xl mr-2">🎥</span>
               Tutorial em Vídeo
@@ -86,7 +86,7 @@ export default function CLIPage() {
             </p>
             <a
               href="#video-tutorial"
-              className="inline-block bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-medium"
+              className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
             >
               Ir para o Vídeo ↓
             </a>
@@ -99,7 +99,7 @@ export default function CLIPage() {
             <span className="text-2xl mr-2">🎬</span>
             Tutorial Completo
           </h3>
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-4">
             <p className="text-gray-700 mb-4">
               Assista ao vídeo completo sobre como criar sua conta e fazer seu primeiro deploy:
             </p>
@@ -115,7 +115,7 @@ export default function CLIPage() {
                 className="w-full h-full"
               />
             </div>
-            <div className="mt-4 bg-white border border-purple-200 rounded-lg p-3">
+            <div className="mt-4 bg-white border border-blue-200 rounded-lg p-3">
               <p className="text-sm text-gray-600">
                 <strong>📺 Neste vídeo você aprenderá:</strong>
               </p>
@@ -378,7 +378,7 @@ export default function CLIPage() {
       <section className="mb-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Exemplo Prático: Deploy de um Bot</h2>
 
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">🎯 Objetivo: Fazer deploy de um bot Discord</h3>
           
           <div className="space-y-4">
@@ -458,7 +458,7 @@ export default function CLIPage() {
             </p>
           </div>
 
-          <div className="border-l-4 border-purple-500 bg-purple-50 p-4">
+          <div className="border-l-4 border-blue-500 bg-blue-50 p-4">
             <p className="text-sm text-gray-700">
               <strong>🔄 Atualizar CLI:</strong> Execute <code className="bg-white px-2 py-1 rounded">npm i -g mozhost-cli@latest</code> para obter a versão mais recente
             </p>

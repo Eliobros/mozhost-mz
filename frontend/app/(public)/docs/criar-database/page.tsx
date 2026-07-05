@@ -495,7 +495,7 @@ export default function CriarDatabasePage() {
           <div>
             <h3 className="font-semibold text-gray-900 mb-2">Exemplo PHP:</h3>
             <div className="bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <p className="text-purple-400">&lt;?php</p>
+              <p className="text-blue-400">&lt;?php</p>
               <br/>
               <p className="text-green-400">$host</p> = <span className="text-yellow-300">'teste-final-mysql.mozhost.shop'</span>;
               <br/>
@@ -509,7 +509,7 @@ export default function CriarDatabasePage() {
               <br/><br/>
               <p className="text-green-400">$conn</p> = <span className="text-blue-400">new</span> mysqli(<p className="text-green-400">$host</p>, <p className="text-green-400">$user</p>, <p className="text-green-400">$pass</p>, <p className="text-green-400">$db</p>, <p className="text-green-400">$port</p>);
               <br/>
-              <p className="text-purple-400">?&gt;</p>
+              <p className="text-blue-400">?&gt;</p>
             </div>
           </div>
         </div>

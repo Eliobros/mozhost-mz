@@ -519,7 +519,7 @@ const MetricCard = ({ title, value, unit, icon: Icon, color, trend, trendValue }
   const colorClasses = {
     blue: { bg: 'bg-blue-500', text: 'text-blue-600' },
     green: { bg: 'bg-green-500', text: 'text-green-600' },
-    purple: { bg: 'bg-purple-500', text: 'text-purple-600' },
+    purple: { bg: 'bg-blue-500', text: 'text-blue-600' },
     orange: { bg: 'bg-orange-500', text: 'text-orange-600' }
   };
 

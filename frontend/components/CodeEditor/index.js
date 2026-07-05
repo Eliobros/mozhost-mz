@@ -55,7 +55,7 @@ const CodeEditor = () => {
   const [currentPath, setCurrentPath] = useState('');
   
   // Estados de UI
-  const [editorTheme, setEditorTheme] = useState('vs-dark');
+  const [editorTheme, setEditorTheme] = useState('mozhost-dark');
   const [fontSize, setFontSize] = useState(14);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -693,7 +693,7 @@ const editorRef = useRef(null);
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="flex items-center justify-center px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 flex-1 sm:flex-none disabled:opacity-50"
+                  className="flex items-center justify-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex-1 sm:flex-none disabled:opacity-50"
                   title="Enviar arquivo ZIP e extrair"
                 >
                   <Upload className="w-4 h-4 mr-1" />
@@ -790,6 +790,8 @@ const editorRef = useRef(null);
                 onChange={(e) => setEditorTheme(e.target.value)}
                 className="border border-gray-300 rounded px-2 py-1 text-sm"
               >
+                <option value="mozhost-dark">Escuro Azul</option>
+                <option value="mozhost-light">Claro Azul</option>
                 <option value="vs-dark">Escuro</option>
                 <option value="light">Claro</option>
                 <option value="hc-black">Alto Contraste</option>
@@ -851,6 +853,61 @@ const editorRef = useRef(null);
                         value={fileContent}
                         onChange={(value) => setFileContent(value || '')}
                         theme={editorTheme}
+                        beforeMount={(monaco) => {
+                          // Define custom MozHost Blue themes
+                          monaco.editor.defineTheme('mozhost-dark', {
+                            base: 'vs-dark',
+                            inherit: true,
+                            rules: [
+                              { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+                              { token: 'keyword', foreground: '60A5FA' },
+                              { token: 'string', foreground: 'CE9178' },
+                              { token: 'number', foreground: 'B5CEA8' },
+                              { token: 'type', foreground: '60A5FA' },
+                              { token: 'function', foreground: '93C5FD' },
+                              { token: 'variable', foreground: 'E2E8F0' },
+                              { token: 'constant', foreground: '60A5FA' },
+                            ],
+                            colors: {
+                              'editor.background': '#0f172a',
+                              'editor.foreground': '#e2e8f0',
+                              'editor.lineHighlightBackground': '#1e3a5f55',
+                              'editor.selectionBackground': '#3B82F640',
+                              'editorCursor.foreground': '#3B82F6',
+                              'editorLineNumber.foreground': '#3B82F660',
+                              'editorLineNumber.activeForeground': '#3B82F6',
+                              'editorBracketMatch.background': '#3B82F630',
+                              'editorBracketMatch.border': '#3B82F6',
+                              'editorGutter.background': '#0f172a',
+                              'focusBorder': '#3B82F6',
+                            },
+                          });
+                          monaco.editor.defineTheme('mozhost-light', {
+                            base: 'vs',
+                            inherit: true,
+                            rules: [
+                              { token: 'comment', foreground: '4B8B3B', fontStyle: 'italic' },
+                              { token: 'keyword', foreground: '2563EB' },
+                              { token: 'string', foreground: 'A31515' },
+                              { token: 'number', foreground: '098658' },
+                              { token: 'type', foreground: '2563EB' },
+                              { token: 'function', foreground: '1D4ED8' },
+                            ],
+                            colors: {
+                              'editor.background': '#f8fafc',
+                              'editor.foreground': '#1e293b',
+                              'editor.lineHighlightBackground': '#EFF6FF',
+                              'editor.selectionBackground': '#BFDBFE',
+                              'editorCursor.foreground': '#3B82F6',
+                              'editorLineNumber.foreground': '#3B82F680',
+                              'editorLineNumber.activeForeground': '#2563EB',
+                              'editorBracketMatch.background': '#DBEAFE',
+                              'editorBracketMatch.border': '#3B82F6',
+                              'editorGutter.background': '#f8fafc',
+                              'focusBorder': '#3B82F6',
+                            },
+                          });
+                        }}
                         onMount={(editor) => {
                           editorRef.current = editor;
                           editor.updateOptions({

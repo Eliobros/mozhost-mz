@@ -22,7 +22,7 @@ const PerformanceOverview = ({ stats }) => {
           title="Armazenamento"
           percentage={stats.storageUsage}
           icon={HardDrive}
-          color="purple"
+          color="blue"
         />
       </div>
     </div>
@@ -33,7 +33,7 @@ const ResourceCard = ({ title, percentage, icon: Icon, color }) => {
   const colorClasses = {
     blue: 'text-blue-700 bg-blue-600',
     green: 'text-green-700 bg-green-600',
-    purple: 'text-purple-700 bg-purple-600'
+    purple: 'text-blue-700 bg-blue-600'
   };
 
   return (

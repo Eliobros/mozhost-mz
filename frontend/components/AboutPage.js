@@ -52,7 +52,7 @@ export default function AboutPage() {
       description: 'Cada container é um ambiente independente com Docker — o teu bot nunca interfere com o de outra pessoa.'
     },
     {
-      icon: <Globe className="w-7 h-7 text-purple-600" />,
+      icon: <Globe className="w-7 h-7 text-blue-600" />,
       title: 'Feito em Moçambique',
       description: 'Uma plataforma africana, pensada para a realidade local, com suporte em português e meios de pagamento locais.'
     },
@@ -97,7 +97,7 @@ export default function AboutPage() {
       <section className="mb-12">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, i) => (
-            <div key={i} className="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100 rounded-xl p-5 text-center">
+            <div key={i} className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-100 rounded-xl p-5 text-center">
               <div className="text-2xl font-bold text-blue-700 mb-1">{stat.value}</div>
               <div className="text-sm font-semibold text-gray-800 mb-1">{stat.label}</div>
               <div className="text-xs text-gray-500">{stat.sub}</div>
@@ -134,14 +134,14 @@ export default function AboutPage() {
           </div>
 
           {/* ZapHost Screenshot placeholder */}
-          <div className="rounded-xl overflow-hidden border-2 border-dashed border-purple-300 bg-purple-50">
-            <div className="bg-purple-100 px-4 py-2 flex items-center gap-2 border-b border-purple-200">
+          <div className="rounded-xl overflow-hidden border-2 border-dashed border-blue-300 bg-blue-50">
+            <div className="bg-blue-100 px-4 py-2 flex items-center gap-2 border-b border-blue-200">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-400"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                 <div className="w-3 h-3 rounded-full bg-green-400"></div>
               </div>
-              <span className="text-xs text-purple-700 font-mono">zaphost-mz — dashboard</span>
+              <span className="text-xs text-blue-700 font-mono">zaphost-mz — dashboard</span>
             </div>
             
               
@@ -202,7 +202,7 @@ export default function AboutPage() {
 
       {/* Founder */}
       <section className="mb-12">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 text-white">
           <div className="flex items-start gap-6">
             <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 text-2xl">
               👨‍💻

@@ -31,7 +31,7 @@ const UpgradeBanner = ({ user, containers }) => {
       name: 'Pro',
       price: '5.000 coins',
       features: ['10 containers', '2GB RAM', '5GB Storage', 'Suporte VIP', 'Domínio customizado'],
-      color: 'purple',
+      color: 'blue',
       popular: true,
       value: 'pro'
     }
@@ -84,7 +84,7 @@ const UpgradeBanner = ({ user, containers }) => {
       <div className={`rounded-lg border-2 p-4 sm:p-6 ${
         isNearLimit 
           ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-300' 
-          : 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200'
+          : 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200'
       }`}>
         {!trialExpired && (
           <button
@@ -159,7 +159,7 @@ const UpgradeBanner = ({ user, containers }) => {
             className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-white shadow-md transition-all flex-shrink-0 ${
               isNearLimit
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
-                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
             }`}
           >
             <Rocket className="w-4 h-4" />
@@ -175,18 +175,17 @@ const UpgradeBanner = ({ user, containers }) => {
           {plans.map((plan) => (
             <div 
               key={plan.value}
-              className={`relative bg-white rounded-lg border-2 p-5 shadow-lg transition-all hover:shadow-xl ${
-                plan.popular ? 'border-purple-400' : 'border-gray-200'
+              className={`relative bg-white rounded-lg border-2 p-5 shadow-lg transition-all hover:shadow-xl ${plan.popular ? 'border-blue-400' : 'border-gray-200'
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">
                   ⭐ POPULAR
                 </div>
               )}
 
               <div className="text-center mb-4">
-                <h4 className={`text-xl font-bold ${plan.color === 'purple' ? 'text-purple-700' : 'text-blue-700'}`}>
+                <h4 className={`text-xl font-bold text-blue-700`}>
                   {plan.name}
                 </h4>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{plan.price}</p>
@@ -204,11 +203,7 @@ const UpgradeBanner = ({ user, containers }) => {
 
               <button
                 onClick={() => handleUpgrade(plan.value)}
-                className={`w-full py-2.5 rounded-lg font-semibold text-white transition-all ${
-                  plan.color === 'purple'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
-                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
-                }`}
+                className={`w-full py-2.5 rounded-lg font-semibold text-white transition-all bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800`}
               >
                 Fazer Upgrade
               </button>

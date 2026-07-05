@@ -115,7 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ password }) => {
           title="Containers Rodando"
           value={stats.containers.running}
           icon="🐳"
-          color="border-purple-500"
+          color="border-blue-500"
         />
         <StatsCard
           title="Total Coins"
@@ -166,9 +166,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ password }) => {
             <p className="text-gray-600 font-medium">RAM Total (MB)</p>
             <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600 mt-2">{stats.resources.ram}</p>
           </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
             <p className="text-gray-600 font-medium">Storage (MB)</p>
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-600 mt-2">{stats.resources.storage}</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-600 mt-2">{stats.resources.storage}</p>
           </div>
         </div>
       </div>

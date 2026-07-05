@@ -75,7 +75,7 @@ export default function ContainerEditorPage() {
   const [originalContent, setOriginalContent] = useState("");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [editorTheme, setEditorTheme] = useState<"vs-dark" | "light">("vs-dark");
+  const [editorTheme, setEditorTheme] = useState<"mozhost-dark" | "mozhost-light">("mozhost-dark");
   const [isMobile, setIsMobile] = useState(false);
 
   const editorRef = useRef<any>(null);
@@ -159,6 +159,107 @@ export default function ContainerEditorPage() {
 
   const hasUnsavedChanges = fileContent !== originalContent;
 
+  // Define custom MozHost Blue themes for Monaco
+  // IMPORTANT: this hook must run on every render, so it lives here,
+  // before any conditional early "return" below (Rules of Hooks).
+  const defineCustomThemes = useCallback((monaco: any) => {
+    // Dark theme with MozHost blue accents
+    monaco.editor.defineTheme("mozhost-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "6A9955", fontStyle: "italic" },
+        { token: "keyword", foreground: "60A5FA" },
+        { token: "string", foreground: "CE9178" },
+        { token: "number", foreground: "B5CEA8" },
+        { token: "type", foreground: "60A5FA" },
+        { token: "function", foreground: "93C5FD" },
+        { token: "variable", foreground: "E2E8F0" },
+        { token: "constant", foreground: "60A5FA" },
+        { token: "regexp", foreground: "D16969" },
+        { token: "delimiter", foreground: "94A3B8" },
+        { token: "tag", foreground: "60A5FA" },
+        { token: "attribute.name", foreground: "93C5FD" },
+        { token: "attribute.value", foreground: "CE9178" },
+      ],
+      colors: {
+        "editor.background": "#0f172a",
+        "editor.foreground": "#e2e8f0",
+        "editor.lineHighlightBackground": "#1e3a5f55",
+        "editor.selectionBackground": "#3B82F640",
+        "editor.inactiveSelectionBackground": "#3B82F625",
+        "editorCursor.foreground": "#3B82F6",
+        "editorLineNumber.foreground": "#3B82F660",
+        "editorLineNumber.activeForeground": "#3B82F6",
+        "editor.selectionHighlightBackground": "#3B82F620",
+        "editorBracketMatch.background": "#3B82F630",
+        "editorBracketMatch.border": "#3B82F6",
+        "editor.findMatchBackground": "#3B82F640",
+        "editor.findMatchHighlightBackground": "#3B82F620",
+        "editorGutter.background": "#0f172a",
+        "editorWidget.background": "#1e293b",
+        "editorWidget.border": "#334155",
+        "input.background": "#1e293b",
+        "input.border": "#334155",
+        "focusBorder": "#3B82F6",
+        "list.activeSelectionBackground": "#3B82F630",
+        "list.hoverBackground": "#3B82F615",
+        "list.inactiveSelectionBackground": "#3B82F620",
+        "scrollbarSlider.background": "#3B82F630",
+        "scrollbarSlider.hoverBackground": "#3B82F650",
+        "scrollbarSlider.activeBackground": "#3B82F670",
+      },
+    });
+
+    // Light theme with MozHost blue accents
+    monaco.editor.defineTheme("mozhost-light", {
+      base: "vs",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "4B8B3B", fontStyle: "italic" },
+        { token: "keyword", foreground: "2563EB" },
+        { token: "string", foreground: "A31515" },
+        { token: "number", foreground: "098658" },
+        { token: "type", foreground: "2563EB" },
+        { token: "function", foreground: "1D4ED8" },
+        { token: "variable", foreground: "1E293B" },
+        { token: "constant", foreground: "2563EB" },
+        { token: "regexp", foreground: "811F1F" },
+        { token: "delimiter", foreground: "64748B" },
+        { token: "tag", foreground: "2563EB" },
+        { token: "attribute.name", foreground: "1D4ED8" },
+        { token: "attribute.value", foreground: "A31515" },
+      ],
+      colors: {
+        "editor.background": "#f8fafc",
+        "editor.foreground": "#1e293b",
+        "editor.lineHighlightBackground": "#EFF6FF",
+        "editor.selectionBackground": "#BFDBFE",
+        "editor.inactiveSelectionBackground": "#DBEAFE",
+        "editorCursor.foreground": "#3B82F6",
+        "editorLineNumber.foreground": "#3B82F680",
+        "editorLineNumber.activeForeground": "#2563EB",
+        "editor.selectionHighlightBackground": "#BFDBFE80",
+        "editorBracketMatch.background": "#DBEAFE",
+        "editorBracketMatch.border": "#3B82F6",
+        "editor.findMatchBackground": "#BFDBFE",
+        "editor.findMatchHighlightBackground": "#DBEAFE",
+        "editorGutter.background": "#f8fafc",
+        "editorWidget.background": "#ffffff",
+        "editorWidget.border": "#CBD5E1",
+        "input.background": "#ffffff",
+        "input.border": "#CBD5E1",
+        "focusBorder": "#3B82F6",
+        "list.activeSelectionBackground": "#DBEAFE",
+        "list.hoverBackground": "#EFF6FF",
+        "list.inactiveSelectionBackground": "#EFF6FF",
+        "scrollbarSlider.background": "#3B82F640",
+        "scrollbarSlider.hoverBackground": "#3B82F660",
+        "scrollbarSlider.activeBackground": "#3B82F680",
+      },
+    });
+  }, []);
+
   // Empty state - no file selected
   if (!filePath) {
     return (
@@ -180,7 +281,7 @@ export default function ContainerEditorPage() {
           </p>
           <Link
             href={`/containers/${containerId}/files`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all text-sm font-medium"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all text-sm font-medium"
           >
             <FolderOpen className="w-4 h-4" />
             Abrir Ficheiros
@@ -218,7 +319,7 @@ export default function ContainerEditorPage() {
   const dirPathEncoded = dirPath ? dirPath.split("/").map(encodeURIComponent).join("/") : "";
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "calc(100vh - 14rem)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 14rem)" }}>
       {/* Editor Header */}
       <div className="bg-white rounded-t-xl shadow-sm border border-b-0 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -242,11 +343,11 @@ export default function ContainerEditorPage() {
         <div className="flex items-center gap-2">
           {/* Theme toggle */}
           <button
-            onClick={() => setEditorTheme((t) => (t === "vs-dark" ? "light" : "vs-dark"))}
-            className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+            onClick={() => setEditorTheme((t) => (t === "mozhost-dark" ? "mozhost-light" : "mozhost-dark"))}
+            className="px-2.5 py-1.5 text-xs rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
             title="Alternar tema"
           >
-            {editorTheme === "vs-dark" ? "☀️" : "🌙"}
+            {editorTheme === "mozhost-dark" ? "☀️ Claro" : "🌙 Escuro"}
           </button>
 
           {/* Save */}
@@ -283,7 +384,10 @@ export default function ContainerEditorPage() {
           value={fileContent}
           onChange={(value) => setFileContent(value || "")}
           theme={editorTheme}
-          onMount={(editor) => {
+          beforeMount={(monaco) => {
+            defineCustomThemes(monaco);
+          }}
+          onMount={(editor, monaco) => {
             editorRef.current = editor;
             editor.updateOptions({
               fontSize: isMobile ? 12 : 14,
@@ -301,11 +405,19 @@ export default function ContainerEditorPage() {
             renderWhitespace: "selection",
             bracketPairColorization: { enabled: true },
           }}
+          loading={
+            <div className="flex items-center justify-center h-full bg-[#0f172a]">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-blue-400 text-sm">A carregar editor...</p>
+              </div>
+            </div>
+          }
         />
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-gray-900 text-xs text-gray-400 rounded-b-xl -mt-px border border-t-0">
+      <div className="flex items-center justify-between px-4 py-1.5 bg-[#0f172a] text-xs text-blue-300/70 rounded-b-xl -mt-px border border-t-0 border-slate-700">
         <span>
           {fileName} • {lang.toUpperCase()} • Linhas: {fileContent.split("\n").length}
         </span>

@@ -22,7 +22,7 @@ const QuickActions = () => {
       title: 'Abrir Editor',
       description: 'Editar códigos dos seus bots',
       icon: FileText,
-      color: 'bg-purple-500',
+      color: 'bg-blue-500',
       href: '#files'
     },
     {

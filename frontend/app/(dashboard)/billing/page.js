@@ -39,7 +39,7 @@ function PlanCard({ plan, current, onSelect, isCurrentPlan }) {
   const planIcons = { starter: Zap, basic: Star, pro: Rocket, business: Crown };
   const planColors = {
     starter: { bg: 'from-blue-500 to-cyan-500', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
-    basic: { bg: 'from-purple-500 to-indigo-500', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
+    basic: { bg: 'from-blue-500 to-cyan-500', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
     pro: { bg: 'from-orange-500 to-red-500', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700' },
     business: { bg: 'from-yellow-500 to-amber-500', border: 'border-yellow-200', badge: 'bg-yellow-100 text-yellow-700' }
   };
@@ -51,7 +51,7 @@ function PlanCard({ plan, current, onSelect, isCurrentPlan }) {
       isCurrentPlan ? 'border-green-400 shadow-green-100 shadow-lg' : plan.popular ? `${colors.border} shadow-lg` : 'border-gray-200'
     }`}>
       {plan.popular && !isCurrentPlan && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1">
           <Sparkles className="w-3 h-3" /> POPULAR
         </div>
       )}
@@ -89,7 +89,7 @@ function PlanCard({ plan, current, onSelect, isCurrentPlan }) {
           isCurrentPlan
             ? 'bg-green-50 text-green-600 border border-green-200 cursor-default'
             : plan.popular
-            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-md'
+            ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-md'
             : 'bg-gray-900 text-white hover:bg-gray-800'
         }`}
       >
@@ -320,7 +320,7 @@ function BillingContent() {
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-lg p-5 sm:p-8 mb-6 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg p-5 sm:p-8 mb-6 text-white">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -485,7 +485,7 @@ function BillingContent() {
                 </div>
 
                 {/* Plan summary */}
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-4 mb-5">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4 mb-5">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Plano selecionado</p>
@@ -574,7 +574,7 @@ function BillingContent() {
                 <button
                   onClick={handleSubscribe}
                   disabled={paying || ((paymentMethod === 'mpesa' || paymentMethod === 'emola') && (phone.length !== 9 || !!phoneError))}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold text-base hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl font-bold text-base hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg"
                 >
                   {paying ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Processando...</>

@@ -368,7 +368,7 @@ export default function ContainerFilesPage() {
           </button>
           <button
             onClick={() => zipInputRef.current?.click()}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             disabled={uploading}
           >
             <Upload className="w-3 h-3" /> ZIP
@@ -446,7 +446,7 @@ export default function ContainerFilesPage() {
                 </button>
                 <button
                   onClick={handleDuplicate}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-purple-100 text-purple-700 hover:bg-purple-200"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
                 >
                   <Copy className="w-3 h-3" /> Duplicar
                 </button>

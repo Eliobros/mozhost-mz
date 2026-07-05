@@ -111,7 +111,7 @@ export const Coins: React.FC<CoinsProps> = ({ password, onOpenModal }) => {
                   </td>
                   <td className="p-3">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      user.plan === 'pro' ? 'bg-purple-100 text-purple-800' :
+                      user.plan === 'pro' ? 'bg-blue-100 text-blue-800' :
                       user.plan === 'basic' ? 'bg-blue-100 text-blue-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>

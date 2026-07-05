@@ -231,7 +231,7 @@ const ProfilePage = () => {
     const plans = {
       free: { name: 'Gratuito', icon: Star, color: 'text-gray-600', bg: 'bg-gray-100' },
       basic: { name: 'Básico', icon: Zap, color: 'text-blue-600', bg: 'bg-blue-100' },
-      pro: { name: 'Pro', icon: Crown, color: 'text-purple-600', bg: 'bg-purple-100' }
+      pro: { name: 'Pro', icon: Crown, color: 'text-blue-600', bg: 'bg-blue-100' }
     };
     return plans[plan] || plans.free;
   };
@@ -264,7 +264,7 @@ const ProfilePage = () => {
           </div>
           <button
             onClick={() => setEditing(!editing)}
-            className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-blue-700 hover:to-purple-700"
+            className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-blue-700 hover:to-blue-800"
           >
             <Edit3 className="w-4 h-4 mr-2" />
             {editing ? 'Cancelar' : 'Editar Perfil'}
@@ -453,7 +453,7 @@ const ProfilePage = () => {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50"
                 >
                   {saving ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -493,7 +493,7 @@ const ProfilePage = () => {
                 {/* Resgatar Cupom */}
                 <div className="pt-4 border-t border-gray-200">
                   <div className="flex items-center mb-3">
-                    <Gift className="w-5 h-5 text-purple-600 mr-2" />
+                    <Gift className="w-5 h-5 text-blue-600 mr-2" />
                     <span className="text-sm font-semibold text-gray-700">Resgatar Cupom</span>
                   </div>
 
@@ -519,13 +519,13 @@ const ProfilePage = () => {
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                       onKeyPress={(e) => { if (e.key === 'Enter') handleRedeemCoupon(); }}
                       placeholder="CÓDIGO"
-                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 uppercase"
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
                       disabled={redeemingCoupon}
                     />
                     <button
                       onClick={handleRedeemCoupon}
                       disabled={redeemingCoupon || !couponCode.trim()}
-                      className="inline-flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {redeemingCoupon ? (
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -557,7 +557,7 @@ const ProfilePage = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <Clock className="w-5 h-5 text-purple-600 mr-2" />
+                    <Clock className="w-5 h-5 text-blue-600 mr-2" />
                     <span className="text-sm font-semibold text-gray-700">Uptime Total</span>
                   </div>
                   <span className="text-lg font-bold text-gray-900">{stats.totalUptime}</span>

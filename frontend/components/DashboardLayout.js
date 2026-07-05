@@ -130,7 +130,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                   onClick={() => setShowProfile(true)}
                   className="flex items-center gap-x-3 hover:bg-gray-50 rounded-lg p-2 transition-colors"
                 >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center">
                     <User className="h-5 w-5 text-white" />
                   </div>
                   <span className="hidden lg:flex lg:items-center">
@@ -159,7 +159,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
               {/* Brand */}
               <div className="col-span-2 sm:col-span-1">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
                     <Server className="w-4 h-4 text-white" />
                   </div>
                   <span className="text-white font-bold text-lg">MozHost</span>
@@ -270,7 +270,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
             </div>
             <div className="p-6">
               <div className="text-center">
-                <div className="h-16 w-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center mx-auto mb-4">
                   <User className="h-8 w-8 text-white" />
                 </div>
                 <h4 className="text-lg font-medium text-gray-900">{user?.username || 'Usuário'}</h4>
@@ -315,11 +315,11 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
 };
 
 const SidebarContent = ({ navigation, user, onLogout }) => (
-  <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gradient-to-b from-blue-900 to-indigo-900 px-6 pb-4">
+  <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gradient-to-b from-blue-950 to-blue-900 px-6 pb-4">
     {/* Logo */}
     <div className="flex h-16 shrink-0 items-center">
       <div className="flex items-center">
-        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
+        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-700 rounded-lg flex items-center justify-center mr-3">
           <Server className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -333,7 +333,7 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
     {user && (
       <div className="bg-white/10 rounded-lg p-4 mb-2">
         <div className="flex items-center">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center mr-3">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center mr-3">
             <User className="h-5 w-5 text-white" />
           </div>
           <div className="flex-1">
@@ -375,11 +375,10 @@ const SidebarContent = ({ navigation, user, onLogout }) => (
 
         {/* Quick Actions */}
         <li className="mt-auto">
-          <div className="bg-white/5 rounded-lg p-4">
-            <Link
-              href="/containers"
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-all"
-            >
+          <div className="bg-white/5 rounded-lg p-4">              <Link
+                href="/containers"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition-all"
+              >
               <Plus className="w-4 h-4" />
               Novo Container
             </Link>

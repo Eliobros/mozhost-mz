@@ -379,8 +379,8 @@ export default function QRCodePage() {
 
                 {botInfo.device && (
                   <div className="flex items-center">
-                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                      <Smartphone className="w-6 h-6 text-purple-600" />
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                      <Smartphone className="w-6 h-6 text-blue-600" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-gray-600">Dispositivo</p>

@@ -651,7 +651,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onEdit, o
           <div className="flex space-x-2">
             <button
               onClick={() => onUpgrade(container.id)}
-              className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-purple-600 hover:bg-purple-700"
+              className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700"
             >
               <HardDrive className="w-3 h-3 mr-1" /> Upgrade
             </button>
@@ -744,7 +744,7 @@ const CreateContainerModal = ({ form, setForm, onSubmit, onClose, coins, require
             type="button"
             onClick={onSubmit}
             disabled={coins < requiredCoins}
-            className={`px-4 py-2 text-white text-sm font-medium rounded-md ${coins < requiredCoins ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'}`}
+            className={`px-4 py-2 text-white text-sm font-medium rounded-md ${coins < requiredCoins ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'}`}
           >
             Criar Container
           </button>

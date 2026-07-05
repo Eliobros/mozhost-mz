@@ -21,7 +21,7 @@ export const Containers: React.FC<ContainersProps> = ({ password }) => {
   useEffect(() => { loadContainers(); }, [password, statusFilter]);
 
   const statusBadge = (s: string) => ({ running: 'bg-green-100 text-green-800', stopped: 'bg-gray-100 text-gray-800', error: 'bg-red-100 text-red-800', building: 'bg-yellow-100 text-yellow-800' }[s] || 'bg-gray-100 text-gray-800');
-  const typeBadge = (t: string) => t === 'nodejs' ? 'bg-green-100 text-green-800' : t === 'python' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+  const typeBadge = (t: string) => t === 'nodejs' ? 'bg-green-100 text-green-800' : t === 'python' ? 'bg-blue-100 text-blue-800' : 'bg-blue-100 text-blue-800';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

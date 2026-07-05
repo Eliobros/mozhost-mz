@@ -181,7 +181,7 @@ export default function ContainerLayout({
                   href={`https://${container.domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all"
                   title={container.domain}
                 >
                   <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />

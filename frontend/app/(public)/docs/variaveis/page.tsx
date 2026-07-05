@@ -338,7 +338,7 @@ export default function VariaveisPage() {
             </p>
           </div>
 
-          <div className="border-l-4 border-purple-500 bg-purple-50 p-4">
+          <div className="border-l-4 border-blue-500 bg-blue-50 p-4">
             <p className="text-sm text-gray-700">
               <strong>🚀 Produção:</strong> Sempre defina as variáveis de ambiente pelo <strong>dashboard</strong> ou pelo <strong>CLI</strong> da MozHost. Nunca suba ficheiros <code className="bg-white px-2 py-1 rounded">.env</code> para o servidor.
             </p>
@@ -356,7 +356,7 @@ export default function VariaveisPage() {
       <section className="mb-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Exemplo Prático: Conectar ao Database MozHost</h2>
 
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">🎯 Objectivo: Conectar um container Node.js ao database MySQL da MozHost</h3>
 
           <div className="space-y-4">
@@ -391,9 +391,9 @@ export default function VariaveisPage() {
                   <p>{'}'});</p>
                   <br/>
                   <p>connection.<span className="text-blue-400">connect</span>((err) =&gt; {'{'}</p>
-                  <p className="ml-4"><span className="text-purple-400">if</span> (err) {'{'}</p>
+                  <p className="ml-4"><span className="text-blue-400">if</span> (err) {'{'}</p>
                   <p className="ml-8">console.<span className="text-blue-400">error</span>(<span className="text-yellow-300">'Erro ao conectar:'</span>, err);</p>
-                  <p className="ml-8"><span className="text-purple-400">return</span>;</p>
+                  <p className="ml-8"><span className="text-blue-400">return</span>;</p>
                   <p className="ml-4">{'}'}</p>
                   <p className="ml-4">console.<span className="text-blue-400">log</span>(<span className="text-yellow-300">'✅ Conectado ao database MozHost!'</span>);</p>
                   <p>{'}'});</p>

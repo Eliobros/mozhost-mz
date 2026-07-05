@@ -310,14 +310,14 @@ const CoinsPurchase = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-cyan-50 p-6">
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-2">
                 Comprar Coins
               </h1>
               <p className="text-gray-600">
@@ -385,13 +385,13 @@ const CoinsPurchase = () => {
               <div
                 key={pkg.id}
                 className={`relative bg-white rounded-2xl shadow-lg border-2 p-6 hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 ${
-                  pkg.popular ? 'border-purple-500' : 'border-gray-200 hover:border-blue-400'
+                  pkg.popular ? 'border-blue-500' : 'border-gray-200 hover:border-blue-400'
                 }`}
                 onClick={() => openPurchaseModal(pkg)}
               >
                 {pkg.popular && (
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
+                    <span className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
                       POPULAR
                     </span>
                   </div>
@@ -399,7 +399,7 @@ const CoinsPurchase = () => {
                 
                 <div className="text-center">
                   <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${
-                    pkg.popular ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                    pkg.popular ? 'bg-gradient-to-br from-blue-500 to-cyan-500' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                   }`}>
                     <Coins className="w-8 h-8 text-white" />
                   </div>
@@ -418,7 +418,7 @@ const CoinsPurchase = () => {
                   <button
                     className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors ${
                       pkg.popular
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
@@ -444,8 +444,8 @@ const CoinsPurchase = () => {
               </p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="w-8 h-8 text-purple-600" />
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Upgrade Flexível</h3>
               <p className="text-sm text-gray-600">
@@ -524,7 +524,7 @@ const CoinsPurchase = () => {
               </button>
 
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Coins className="w-10 h-10 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -620,7 +620,7 @@ const CoinsPurchase = () => {
                 <button
                   onClick={handlePurchase}
                   disabled={loading || phoneNumber.length !== 9 || Boolean(phoneError)}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
                 >
                   {loading ? (
                     <>

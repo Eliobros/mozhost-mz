@@ -33,7 +33,7 @@ const RecentActivity = ({ activities }) => {
                 activity.action === 'criado' ? 'bg-green-500' :
                 activity.action === 'iniciado' ? 'bg-blue-500' :
                 activity.action === 'parado' ? 'bg-orange-500' :
-                'bg-purple-500'
+                'bg-blue-500'
               }`}></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-900">

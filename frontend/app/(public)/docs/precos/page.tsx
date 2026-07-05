@@ -134,7 +134,7 @@ export default function PrecosPage() {
           </div>
 
           {/* Database */}
-          <div className="border-2 border-purple-500 rounded-lg p-6 bg-purple-50">
+          <div className="border-2 border-blue-500 rounded-lg p-6 bg-blue-50">
             <div className="flex items-center mb-4">
               <span className="text-4xl mr-3">🗄️</span>
               <div>
@@ -143,7 +143,7 @@ export default function PrecosPage() {
               </div>
             </div>
             <div className="bg-white rounded-lg p-4 text-center mb-4">
-              <p className="text-4xl font-bold text-purple-600">5 <span className="text-lg text-gray-600">coins/dia</span></p>
+              <p className="text-4xl font-bold text-blue-600">5 <span className="text-lg text-gray-600">coins/dia</span></p>
               <p className="text-sm text-gray-500 mt-1">cobrado diariamente</p>
             </div>
             <ul className="space-y-2 text-sm text-gray-700">

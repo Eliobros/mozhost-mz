@@ -148,9 +148,9 @@ const PrivacyPolicyPage = ({ onBack }) => {
                   </ul>
                 </div>
 
-                <div className="p-4 border-l-4 border-purple-500 bg-purple-50">
-                  <h4 className="font-medium text-purple-900 mb-2">📊 Melhoria dos Serviços</h4>
-                  <ul className="text-sm text-purple-800 space-y-1">
+                <div className="p-4 border-l-4 border-blue-500 bg-blue-50">
+                  <h4 className="font-medium text-blue-900 mb-2">📊 Melhoria dos Serviços</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
                     <li>• Analisar padrões de uso (dados agregados)</li>
                     <li>• Otimizar performance da plataforma</li>
                     <li>• Desenvolver novos recursos</li>
@@ -410,9 +410,9 @@ const PrivacyPolicyPage = ({ onBack }) => {
     </div>
 
     {/* Compra de Domínio */}
-    <div className="p-4 bg-purple-50 border border-purple-200 rounded">
-      <h4 className="font-medium text-purple-900 mb-2">🛒 Compra de Domínio via MozHost</h4>
-      <ul className="text-sm text-purple-800 space-y-1">
+    <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+      <h4 className="font-medium text-blue-900 mb-2">🛒 Compra de Domínio via MozHost</h4>
+      <ul className="text-sm text-blue-800 space-y-1">
         <li>• Domínios são adquiridos via parceiro Dynadot</li>
         <li>• O registo e renovação estão sujeitos às políticas da Dynadot</li>
         <li>• O domínio comprado pertence ao utilizador</li>

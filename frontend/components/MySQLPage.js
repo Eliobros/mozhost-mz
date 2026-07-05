@@ -251,7 +251,7 @@ try {
         {database.external_mysql && (
           <div className="mt-6 pt-6 border-t border-gray-200">
             <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <Database className="w-4 h-4 text-purple-600" />
+              <Database className="w-4 h-4 text-blue-600" />
               🌐 Conexão Externa MySQL
             </h3>
             
@@ -270,8 +270,8 @@ try {
               />
             </div>
             
-            <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded text-sm">
-              <p className="text-purple-900 font-medium mb-2">💡 Conexão de fora da MozHost:</p>
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+              <p className="text-blue-900 font-medium mb-2">💡 Conexão de fora da MozHost:</p>
               <code className="block bg-white p-2 rounded text-xs overflow-x-auto">
                 mysql -h {database.external_mysql.host} -P {database.external_mysql.port} -u {database.credentials.user} -p
               </code>
@@ -280,7 +280,7 @@ try {
                   `mysql -h ${database.external_mysql.host} -P ${database.external_mysql.port} -u ${database.credentials.user} -p`,
                   'Comando MySQL'
                 )}
-                className="mt-2 text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                className="mt-2 text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 {copied === 'Comando MySQL' ? (
                   <><Check className="w-3 h-3" /> Copiado!</>
@@ -307,7 +307,7 @@ try {
           <button
             onClick={testConnection}
             disabled={testing}
-            className="inline-flex items-center bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+            className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
           >
             {testing ? 'Testando...' : '🔍 Testar Conexão'}
           </button>

@@ -33,7 +33,7 @@ export const Users: React.FC<UsersProps> = ({ password, onOpenModal }) => {
   useEffect(() => { loadUsers(); }, [password, filters]);
 
   const planBadge = (plan: string) =>
-    plan === 'pro' ? 'bg-purple-100 text-purple-800' :
+    plan === 'pro' ? 'bg-blue-100 text-blue-800' :
     plan === 'basic' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
 
   const ActionButtons = ({ user: u }: { user: User }) => (

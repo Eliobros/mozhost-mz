@@ -280,7 +280,7 @@ export default function CLIUploadPage() {
       <section className="mb-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Workflow Recomendado</h2>
 
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6">
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
               <span className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">1</span>

@@ -360,7 +360,7 @@ Status: ${connected ? '🟢 Conectado' : '🔴 Desconectado'}
 
             <button
               onClick={downloadLog}
-              className="flex items-center px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+              className="flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
             >
               <Download className="w-4 h-4 mr-1" />
               Download

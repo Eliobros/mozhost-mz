@@ -51,7 +51,7 @@ function useExchangeRate() {
 const stCfg = (s) => ({
   pending: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-50 border-yellow-200', text: 'Pendente', dot: 'bg-yellow-400' },
   dns_configured: { icon: RefreshCw, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200', text: 'DNS OK', dot: 'bg-blue-400' },
-  ssl_generating: { icon: Lock, color: 'text-purple-500', bg: 'bg-purple-50 border-purple-200', text: 'SSL...', dot: 'bg-purple-400' },
+  ssl_generating: { icon: Lock, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200', text: 'SSL...', dot: 'bg-blue-400' },
   active: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50 border-green-200', text: 'Ativo', dot: 'bg-green-400' },
   failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50 border-red-200', text: 'Falhou', dot: 'bg-red-400' }
 }[s] || { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-50 border-gray-200', text: s || 'Desconhecido', dot: 'bg-gray-400' });
@@ -987,7 +987,7 @@ const submitTransferOut = async () => {
                               </span>
                             )}
                             {result.premium && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">Premium</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Premium</span>
                             )}
                             {result.renewal_price && (
                               <span className="text-xs text-gray-400">
@@ -1101,7 +1101,7 @@ const submitTransferOut = async () => {
                                 <Settings className="w-3.5 h-3.5" /> Gerenciar DNS
                               </button>
                               <button onClick={() => { setActiveTab('nameservers'); loadNs(domain); }}
-                                className="text-xs px-3 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium flex items-center gap-1.5">
+                                className="text-xs px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-1.5">
                                 <Server className="w-3.5 h-3.5" /> Nameservers
                               </button>
                               {!isConnected && (
@@ -1185,7 +1185,7 @@ const submitTransferOut = async () => {
                             <div className="font-mono font-bold">
                               <span className={`inline-block px-1.5 py-0.5 rounded text-xs ${
                                 r.type === 'A' ? 'bg-blue-100 text-blue-700' :
-                                r.type === 'CNAME' ? 'bg-purple-100 text-purple-700' :
+                                r.type === 'CNAME' ? 'bg-blue-100 text-blue-700' :
                                 r.type === 'MX' ? 'bg-orange-100 text-orange-700' :
                                 r.type === 'TXT' ? 'bg-gray-100 text-gray-700' :
                                 'bg-gray-100 text-gray-700'
@@ -1321,7 +1321,7 @@ const submitTransferOut = async () => {
           <div className="space-y-4">
             <div className="bg-white rounded-xl shadow-sm p-5 sm:p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Server className="w-5 h-5 text-purple-600" /> Gestão de Nameservers
+                <Server className="w-5 h-5 text-blue-600" /> Gestão de Nameservers
               </h3>
               <select value={selectedNsDomain}
                 onChange={e => { setSelectedNsDomain(e.target.value); if (e.target.value) loadNs(e.target.value); }}

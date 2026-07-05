@@ -4,7 +4,7 @@ import { Activity } from 'lucide-react';
 
 const WelcomeHeader = ({ user, coins, uptime }) => {
   return (
-    <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-lg shadow-lg p-6 text-white">
+    <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-lg shadow-lg p-6 text-white">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">

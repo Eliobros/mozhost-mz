@@ -292,7 +292,7 @@ const FileExplorer = ({
                 </button>
                 <button
                   onClick={handleDuplicate}
-                  className="inline-flex items-center px-2 py-1 text-xs rounded bg-purple-100 text-purple-700 hover:bg-purple-200"
+                  className="inline-flex items-center px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
                 >
                   <Copy className="w-3 h-3 mr-1" />
                   Duplicar

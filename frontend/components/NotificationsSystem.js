@@ -148,7 +148,7 @@ const NotificationsSystem = ({ isOpen, onClose, onUnreadChange }) => {
 {Notification.permission !== 'granted' && (
   <button
     onClick={requestNotificationPermission}
-    className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
   >
     🔔 Ativar push
   </button>

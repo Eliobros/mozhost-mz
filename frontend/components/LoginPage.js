@@ -382,7 +382,7 @@ setTimeout(() => {
         <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-12 py-12">
           <div className="max-w-lg">
             <div className="flex items-center mb-8">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mr-4">
                 <Server className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -393,7 +393,7 @@ setTimeout(() => {
 
             <h2 className="text-4xl font-bold text-white mb-6 leading-tight">
               Hospede seus bots<br />
-              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
                 com facilidade
               </span>
             </h2>
@@ -406,7 +406,7 @@ setTimeout(() => {
             <div className="grid grid-cols-1 gap-4">
               {features.map((feature, index) => (
                 <div key={index} className="flex items-center p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-700 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
                     <feature.icon className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -437,7 +437,7 @@ setTimeout(() => {
         <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
             <div className="lg:hidden flex items-center justify-center mb-8">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mr-4">
                 <Server className="w-8 h-8 text-white" />
               </div>
               <div>
@@ -485,7 +485,7 @@ setTimeout(() => {
                     type="button"
                     onClick={handleCompleteProfile}
                     disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50"
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50"
                   >
                     {isLoading ? 'Salvando...' : 'Continuar'}
                   </button>
@@ -516,7 +516,7 @@ setTimeout(() => {
     disabled={isLoading}
     className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white hover:bg-white/20 transition-all duration-200"
   >
-    <Shield className="w-5 h-5 text-purple-300" />
+    <Shield className="w-5 h-5 text-blue-300" />
     Entrar com Passkey
   </button>
 )}
@@ -549,7 +549,7 @@ setTimeout(() => {
                 )}
 
                 {!isLogin && (
-                  <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="p-4 bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-lg">
                     <label className="block text-sm font-medium text-blue-100 mb-3">
                       🔐 Como você quer receber o código de verificação? *
                     </label>
@@ -589,12 +589,12 @@ setTimeout(() => {
                         onClick={() => setFormData({...formData, preferredVerificationMethod: 'sms'})}
                         className={`p-3 rounded-lg border transition-all ${
                           formData.preferredVerificationMethod === 'sms' 
-                            ? 'border-purple-500 bg-purple-500/20' 
+                            ? 'border-blue-500 bg-blue-500/20' 
                             : 'border-white/20 bg-white/10'
                         }`}
                       >
                         <div className="flex items-center justify-center mb-2">
-                          <MessageSquare className="w-5 h-5 text-purple-300" />
+                          <MessageSquare className="w-5 h-5 text-blue-300" />
                         </div>
                         <div className="text-white text-xs font-medium">SMS</div>
                       </button>
@@ -606,7 +606,7 @@ setTimeout(() => {
                   <div className={`space-y-4 p-4 border rounded-lg ${
                     formData.preferredVerificationMethod === 'whatsapp' 
                       ? 'bg-green-500/10 border-green-500/30' 
-                      : 'bg-purple-500/10 border-purple-500/30'
+                      : 'bg-blue-500/10 border-blue-500/30'
                   }`}>
                     <div>
                       <label className="block text-sm font-medium text-blue-100 mb-2">Código do País *</label>
@@ -624,7 +624,7 @@ setTimeout(() => {
                         value={formData.phone}
                         onChange={handleInputChange}
                         className={`w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:border-transparent backdrop-blur-sm ${
-                          formData.preferredVerificationMethod === 'whatsapp' ? 'focus:ring-green-500' : 'focus:ring-purple-500'
+                          formData.preferredVerificationMethod === 'whatsapp' ? 'focus:ring-green-500' : 'focus:ring-blue-500'
                         }`}
                         placeholder="Número do telefone (sem o código do país)"
                         required
@@ -728,7 +728,7 @@ setTimeout(() => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center">
@@ -770,7 +770,7 @@ setTimeout(() => {
                       type="button"
                       onClick={handleVerify}
                       disabled={isLoading || !formData.verifyCode.trim()}
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
+                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50"
                     >
                       Verificar
                     </button>

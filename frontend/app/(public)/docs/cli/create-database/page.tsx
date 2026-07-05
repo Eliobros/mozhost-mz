@@ -160,7 +160,7 @@ export default function CLICreateDatabasePage() {
         </div>
 
         {/* Tipos disponíveis */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-6 mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">📚 Tipos disponíveis:</h3>
           <div className="grid md:grid-cols-3 gap-3">
             <div className="bg-white rounded-lg p-3 border border-gray-200">
@@ -418,7 +418,7 @@ export default function CLICreateDatabasePage() {
             </div>
           </div>
 
-          <div className="border-l-4 border-purple-500 bg-purple-50 p-4">
+          <div className="border-l-4 border-blue-500 bg-blue-50 p-4">
             <p className="text-sm text-gray-700 mb-2">
               <strong>🔗 Connection string pronta:</strong>
             </p>

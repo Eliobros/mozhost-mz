@@ -625,7 +625,7 @@ const ContainerSettingsModal = ({ container, isOpen, onClose, onUpdate, onDelete
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50"
             >
               {saving ? (
                 <Loader className="w-4 h-4 animate-spin mr-2" />

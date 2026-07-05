@@ -39,7 +39,7 @@ function PaymentFailureContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
         <div className="w-24 h-24 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
           <XCircle className="w-14 h-14 text-white" />
@@ -90,7 +90,7 @@ function PaymentFailureContent() {
 
         <button
           onClick={() => router.push('/#containers')}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center transition-all transform hover:scale-105 shadow-lg mb-3"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-semibold flex items-center justify-center transition-all transform hover:scale-105 shadow-lg mb-3"
         >
           <RefreshCw className="w-5 h-5 mr-2" />
           Tentar Novamente
@@ -125,7 +125,7 @@ function PaymentFailureContent() {
 export default function PaymentFailure() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
         <div className="text-center">
           <Loader className="w-16 h-16 text-red-500 animate-spin mx-auto mb-4" />
           <p className="text-lg text-gray-700 font-medium">Carregando...</p>

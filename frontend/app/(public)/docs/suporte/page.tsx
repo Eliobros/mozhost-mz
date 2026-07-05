@@ -68,7 +68,7 @@ export default function SuportePage() {
             href="https://whatsapp.com/channel/0029Vb6ydZS6rsQoxPBd861W"
             target="_blank"
             rel="noopener noreferrer"
-            className="border-2 border-purple-500 bg-purple-50 rounded-lg p-6 hover:shadow-lg transition block"
+            className="border-2 border-blue-500 bg-blue-50 rounded-lg p-6 hover:shadow-lg transition block"
           >
             <div className="text-center mb-4">
               <span className="text-4xl">👥</span>
@@ -77,7 +77,7 @@ export default function SuportePage() {
             <p className="text-sm text-gray-700 text-center mb-4">
               Junte-se à nossa comunidade no WhatsApp para novidades, dicas e ajuda de outros utilizadores.
             </p>
-            <p className="text-purple-600 font-medium text-center text-sm">
+            <p className="text-blue-600 font-medium text-center text-sm">
               Entrar na Comunidade →
             </p>
           </a>
@@ -312,7 +312,7 @@ export default function SuportePage() {
                 <strong>📢 Incidentes:</strong> Em caso de indisponibilidade, publicamos actualizações na comunidade WhatsApp e respondemos individualmente a quem contactar o suporte.
               </p>
             </div>
-            <div className="border-l-4 border-purple-500 bg-white p-4">
+            <div className="border-l-4 border-blue-500 bg-white p-4">
               <p className="text-sm text-gray-700">
                 <strong>📈 Uptime:</strong> Trabalhamos para manter um uptime de 99%. Consulte o nosso histórico de disponibilidade na comunidade.
               </p>
@@ -322,7 +322,7 @@ export default function SuportePage() {
       </section>
 
       {/* CTA Final */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-8 text-center">
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-8 text-center">
         <h3 className="text-xl font-bold text-gray-900 mb-3">Ainda precisa de ajuda?</h3>
         <p className="text-gray-700 mb-6">
           A nossa equipa está pronta para te ajudar. Escolhe o canal que preferires!
@@ -346,7 +346,7 @@ export default function SuportePage() {
             href="https://whatsapp.com/channel/0029Vb6ydZS6rsQoxPBd861W"
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-white text-purple-600 border-2 border-purple-600 px-6 py-3 rounded-lg hover:bg-purple-50 transition font-medium"
+            className="bg-white text-blue-600 border-2 border-purple-600 px-6 py-3 rounded-lg hover:bg-purple-50 transition font-medium"
           >
             👥 Comunidade WhatsApp
           </a>

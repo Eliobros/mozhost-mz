@@ -411,7 +411,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
           {/* Upgrade */}
           <button
             onClick={() => onUpgrade(container.id)}
-            className="p-2 rounded-lg text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+            className="p-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
             title="Upgrade de armazenamento"
           >
             <HardDrive className="w-4 h-4" />
@@ -421,7 +421,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
           {(container.type?.toLowerCase() === 'bot-baileys' || container.type?.toLowerCase() === 'bot-wwebjs') && (
             <a
               href={`/qrcode/${container.id}`}
-              className="p-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+              className="p-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
               title="QR Code"
             >
               <QrCode className="w-4 h-4" />
@@ -431,7 +431,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
           {/* Acessar */}
           <Link
             href={`/containers/${container.id}/files`}
-            className="p-2 rounded-lg text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all"
+            className="p-2 rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all"
             title="Acessar container"
           >
             <ExternalLink className="w-4 h-4" />
