@@ -22,6 +22,7 @@ import {
   Square as SquareIcon,
   X,
   Code,
+  Download,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.mozhost.shop";
@@ -125,6 +126,37 @@ export default function ContainerFilesPage() {
       navigateToFolder(file.path);
     } else {
       navigateToEditor(file.path);
+    }
+  };
+
+  const handleDownloadSingle = async (file: any) => {
+    if (!file || file.type === "directory") return;
+    const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
+    const url = `${API}/api/files/${containerId}/download/${encodedPath}`;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      });
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        const msg = contentType.includes("application/json")
+          ? (await res.json()).error || "Erro ao baixar"
+          : `Erro ${res.status} ao baixar`;
+        alert(msg);
+        return;
+      }
+      const blob = await res.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = file.name || "download";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Erro de conexão ao tentar baixar o arquivo");
     }
   };
 
@@ -425,6 +457,18 @@ export default function ContainerFilesPage() {
             </button>
             <div className="flex-1" />
             <button
+              onClick={() => {
+                if (selectedFiles.length !== 1) return;
+                handleDownloadSingle(selectedFiles[0]);
+                clearSelection();
+              }}
+              disabled={selectedFiles.length !== 1 || selectedFiles.some((f: any) => f.type === "directory")}
+              title={selectedFiles.length !== 1 ? "Selecione 1 arquivo por vez para baixar" : "Baixar"}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-3 h-3" /> Baixar
+            </button>
+            <button
               onClick={deleteSelected}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
             >
@@ -534,16 +578,28 @@ export default function ContainerFilesPage() {
                 </div>
 
                 {!selectionMode && file.type === "file" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigateToEditor(file.path);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-blue-100 rounded-lg flex-shrink-0 transition-all"
-                    title="Editar"
-                  >
-                    <Code className="w-3.5 h-3.5 text-blue-600" />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToEditor(file.path);
+                      }}
+                      className="p-1.5 hover:bg-blue-100 rounded-lg"
+                      title="Editar"
+                    >
+                      <Code className="w-3.5 h-3.5 text-blue-600" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadSingle(file);
+                      }}
+                      className="p-1.5 hover:bg-emerald-100 rounded-lg"
+                      title="Baixar"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    </button>
+                  </div>
                 )}
               </div>
             ))

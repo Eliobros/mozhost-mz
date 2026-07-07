@@ -11,7 +11,8 @@ import {
   FolderInput,
   Archive,
   CheckSquare,
-  Square as SquareIcon
+  Square as SquareIcon,
+  Download
 } from 'lucide-react';
 
 const FileExplorer = ({
@@ -27,7 +28,8 @@ const FileExplorer = ({
   onRename,
   onMove,
   onDuplicate,
-  onExtractZip
+  onExtractZip,
+  onDownload
 }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -366,6 +368,15 @@ const FileExplorer = ({
               )}
             </button>
 
+            {!selectionMode && file.type !== 'directory' && onDownload && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDownload(file); }}
+                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-blue-100 rounded flex-shrink-0"
+                title="Baixar"
+              >
+                <Download className="w-3 h-3 text-blue-600" />
+              </button>
+            )}
             {!selectionMode && (
               <button
                 onClick={() => onDelete(file)}

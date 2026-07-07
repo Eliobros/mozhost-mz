@@ -621,6 +621,44 @@ const editorRef = useRef(null);
     }
   };
 
+  const downloadFile = async (file) => {
+    if (!selectedContainer || file.type === 'directory') return;
+
+    // Encode each path segment individually (preserves slashes for Express wildcard)
+    const encodedPath = file.path.split('/').map(encodeURIComponent).join('/');
+    const url = `${API_BASE_URL}/files/${selectedContainer.id}/download/${encodedPath}`;
+
+    try {
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+
+      if (!response.ok) {
+        // API may return JSON error (e.g. 404) instead of a blob
+        const contentType = response.headers.get('content-type') || '';
+        const errorMsg = contentType.includes('application/json')
+          ? (await response.json()).error || 'Erro ao baixar arquivo'
+          : `Erro ${response.status} ao baixar arquivo`;
+        alert(errorMsg);
+        return;
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = file.name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Free the object URL after the browser has had a chance to use it
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error('Erro ao baixar arquivo:', error);
+      alert('Erro de conexão ao tentar baixar o arquivo');
+    }
+  };
+
   // ==================== RENDER ====================
 
   if (loading) {
@@ -824,6 +862,7 @@ const editorRef = useRef(null);
                 onMove={moveFile}
                 onDuplicate={duplicateFile}
                 onExtractZip={extractZip}
+                onDownload={downloadFile}
               />
             )}
 
