@@ -132,12 +132,15 @@ app.use('/api/', limiter);
 app.use(passport.initialize());
 
 // Body parsing
+// Garanta que o body-parser capture exatamente o formato string/buffer bruto
 app.use(express.json({
   limit: '10mb',
-  verify: (req, res, buf) => {
-    req.rawBody = buf;
+  verify: (req, res, buf, encoding) => {
+    // Captura a string exata recebida na rede antes de virar objeto
+    req.rawBody = buf.toString(encoding || 'utf8');
   }
 }));
+
 
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
