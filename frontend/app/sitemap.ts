@@ -40,6 +40,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/docs/exemplos', changeFrequency: 'weekly', priority: 0.6 },
     { path: '/docs/suporte', changeFrequency: 'weekly', priority: 0.6 },
     { path: '/docs/variaveis', changeFrequency: 'weekly', priority: 0.6 },
+
+    // Contacto
+    { path: '/contato', changeFrequency: 'monthly', priority: 0.7 },
   ]
 
   return staticUrls.map(({ path, changeFrequency, priority }) => ({

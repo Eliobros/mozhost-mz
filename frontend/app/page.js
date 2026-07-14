@@ -125,15 +125,17 @@ export default function Home() {
           </div>
           <div className={styles.footerCol}>
             <h4>Empresa</h4>
+            <Link href="/sobre">Sobre Nós</Link>
+            <Link href="/contato">Contacto</Link>
             <Link href="/termos">Termos e Condições</Link>
             <Link href="/privacidade">Política de Privacidade</Link>
-            <Link href="/faq">FAQ</Link>
           </div>
           <div className={styles.footerCol}>
             <h4>Recursos</h4>
             <Link href="/docs">📚 Documentação</Link>
             <Link href="/coins">🪙 Comprar Coins</Link>
             <Link href="/cli">⚡ CLI MozHost</Link>
+            <Link href="/contato">📞 Contacto</Link>
             <Link href="/suporte">🎧 Suporte</Link>
           </div>
         </div>

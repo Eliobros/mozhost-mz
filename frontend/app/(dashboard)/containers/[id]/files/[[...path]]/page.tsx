@@ -61,6 +61,7 @@ export default function ContainerFilesPage() {
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   // Input modal (rename, move)
   const [inputModal, setInputModal] = useState({
@@ -104,6 +105,48 @@ export default function ContainerFilesPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    if (selectedFiles.length === 0) return;
+    setDownloadingZip(true);
+    const paths = selectedFiles.map((f: any) => f.path);
+    try {
+      const res = await fetch(`${API}/api/files/${containerId}/download-zip`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ paths }),
+      });
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        const msg = contentType.includes("application/json")
+          ? (await res.json()).error || "Erro ao baixar ZIP"
+          : `Erro ${res.status} ao baixar`;
+        alert(msg);
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      const filename = match ? match[1] : `arquivos_${containerId.substring(0, 8)}.zip`;
+      const objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+      clearSelection();
+    } catch (err) {
+      console.error("Download ZIP error:", err);
+      alert("Erro de conexão ao tentar baixar o ZIP");
+    } finally {
+      setDownloadingZip(false);
     }
   };
 
@@ -455,19 +498,31 @@ export default function ContainerFilesPage() {
             <button onClick={selectAll} className="text-xs text-blue-600 hover:underline">
               {selectedFiles.length === files.length ? "Limpar" : "Todos"}
             </button>
-            <div className="flex-1" />
-            <button
-              onClick={() => {
-                if (selectedFiles.length !== 1) return;
-                handleDownloadSingle(selectedFiles[0]);
-                clearSelection();
-              }}
-              disabled={selectedFiles.length !== 1 || selectedFiles.some((f: any) => f.type === "directory")}
-              title={selectedFiles.length !== 1 ? "Selecione 1 arquivo por vez para baixar" : "Baixar"}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            <div className="flex-1" />              <button
+              onClick={handleDownloadZip}
+              disabled={selectedFiles.length === 0 || downloadingZip}
+              title={downloadingZip ? "A preparar ZIP..." : "Baixar selecionados como ZIP"}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <Download className="w-3 h-3" /> Baixar
+              {downloadingZip ? (
+                <Loader className="w-3 h-3 animate-spin" />
+              ) : (
+                <Download className="w-3 h-3" />
+              )}
+              {downloadingZip ? "ZIP..." : "Baixar ZIP"}
             </button>
+            {selectedFiles.length === 1 && selectedFiles[0].type === "file" && (
+              <button
+                onClick={() => {
+                  handleDownloadSingle(selectedFiles[0]);
+                  clearSelection();
+                }}
+                title="Baixar arquivo individual"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+              >
+                <Download className="w-3 h-3" /> Baixar indiv.
+              </button>
+            )}
             <button
               onClick={deleteSelected}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"

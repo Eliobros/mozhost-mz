@@ -986,6 +986,77 @@ router.get('/:containerId/search', async (req, res) => {
   }
 });
 
+// Download de múltiplos arquivos/pastas como ZIP
+router.post('/:containerId/download-zip', async (req, res) => {
+  try {
+    const { containerId } = req.params;
+    const { paths } = req.body;
+
+    if (!await verifyContainerOwnership(containerId, req.user.userId)) {
+      return res.status(404).json({ error: 'Container not found' });
+    }
+
+    if (!paths || !Array.isArray(paths) || paths.length === 0) {
+      return res.status(400).json({ error: 'paths must be a non-empty array' });
+    }
+
+    const containerPath = getContainerPath(containerId);
+    const archiver = require('archiver');
+
+    // Verificar se todos os paths existem
+    for (const filePath of paths) {
+      const fullPath = path.join(containerPath, filePath);
+      if (!fullPath.startsWith(containerPath)) {
+        return res.status(403).json({ error: `Access denied: ${filePath}` });
+      }
+      if (!await fs.pathExists(fullPath)) {
+        return res.status(404).json({ error: `Path not found: ${filePath}` });
+      }
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const zipName = `download_${containerId.substring(0, 8)}_${timestamp}.zip`;
+
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+    res.setHeader('Content-Type', 'application/zip');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+
+    archive.on('error', (err) => {
+      // Se já começámos a enviar o stream, não podemos responder com JSON
+      console.error('Archiver error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create ZIP' });
+      } else {
+        res.end();
+      }
+    });
+
+    archive.pipe(res);
+
+    for (const filePath of paths) {
+      const fullPath = path.join(containerPath, filePath);
+      const stats = await fs.stat(fullPath);
+
+      if (stats.isDirectory()) {
+        // Adicionar diretório inteiro preservando estrutura
+        archive.directory(fullPath, filePath);
+      } else {
+        // Adicionar arquivo individual preservando caminho
+        archive.file(fullPath, { name: filePath });
+      }
+    }
+
+    await archive.finalize();
+
+  } catch (error) {
+    console.error('Error creating ZIP download:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create ZIP download' });
+    }
+  }
+});
+
 // Backup de container (zip)
 router.post('/:containerId/backup', async (req, res) => {
   try {
