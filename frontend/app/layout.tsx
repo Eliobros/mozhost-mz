@@ -181,6 +181,9 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
+	<script
+          src="https://pl30615939.effectivecpmnetwork.com/cf/6c/64/cf6c649e8fa64b676f96b46ae140d884.js"
+        ></script>
       </body>
     </html>
   );
