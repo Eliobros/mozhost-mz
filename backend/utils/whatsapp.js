@@ -122,13 +122,25 @@ async function initializeWhatsApp() {
 
 // 📩 Envia mensagem simples
 async function sendWhatsAppMessage({ phone, message }) {
-  if (!isConnected || !sock) await initializeWhatsApp();
+  if (!isConnected || !sock) {
+    // 🛡️ FIX: nunca esperar o WhatsApp conectar (modo QR) — isso travava a API inteira
+    console.warn(`⚠️ WhatsApp não conectado — mensagem ignorada (para ${phone})`);
+    return null;
+  }
   const formattedPhone = phone.replace(/[^\d]/g, '') + '@s.whatsapp.net';
-  return await sock.sendMessage(formattedPhone, { text: message });
+  // 🛡️ Timeout defensivo: nunca travar chamadas da API esperando o envio
+  return await Promise.race([
+    sock.sendMessage(formattedPhone, { text: message }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout ao enviar WhatsApp (10s)')), 10000))
+  ]);
 }
 
 // 📩 Envia botões de suporte
 async function sendSupportOptions(phone) {
+  if (!isConnected || !sock) {
+    console.warn(`⚠️ WhatsApp não conectado — opções de suporte ignoradas (para ${phone})`);
+    return null;
+  }
   const formattedPhone = phone.replace(/[^\d]/g, '') + '@s.whatsapp.net';
 
   const buttons = [
