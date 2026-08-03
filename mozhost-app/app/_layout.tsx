@@ -94,6 +94,7 @@ function RootLayoutNav() {
         <Stack.Screen name="editor" options={{ headerShown: true }} />
         <Stack.Screen name="qrcode" options={{ headerShown: true }} />
         <Stack.Screen name="connections" options={{ headerShown: true }} />
+        <Stack.Screen name="coins" options={{ headerShown: true, title: 'Comprar Coins' }} />
       </Stack>
     </SafeAreaView>
   );
