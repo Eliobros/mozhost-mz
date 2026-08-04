@@ -741,8 +741,19 @@ const MozhostChat = () => {
     }
   };
 
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
   const formatMessage = (text) => {
-    const formatted = text
+    // 1) Escapa HTML PRIMEIRO (conteúdo da IA/agente é renderizado com
+    //    dangerouslySetInnerHTML — sem escapar, tags como <script> ou
+    //    <img onerror> executariam no browser de qualquer usuário = XSS).
+    // 2) Depois aplica o markdown simples sobre o texto já escapado.
+    const formatted = escapeHtml(text)
       .replace(/```([\s\S]*?)```/g, '<pre style="background:#1e1e2e;color:#a6e3a1;padding:12px;border-radius:8px;margin:8px 0;font-size:11px;overflow-x:auto;white-space:pre-wrap;font-family:monospace">$1</pre>')
       .replace(/`([^`]+)`/g, '<code style="background:#e8e8f0;color:#d63031;padding:2px 6px;border-radius:4px;font-size:11px;font-family:monospace">$1</code>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')

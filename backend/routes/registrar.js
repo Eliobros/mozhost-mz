@@ -76,9 +76,46 @@ async function executeDomainAction(payment) {
 }
 }
 
+// ===== HELPERS DE PREÇO =====
+// Extrai os vários preços do campo Price da Dynadot. Formato típico:
+//   "Registration Price: $12.99, Renewal Price: $15.99, Transfer Price: $14.99"
+//   "Premium Registration Price: $99.00"
+function parseDynadotPrice(priceStr) {
+  const get = (label) => {
+    const m = priceStr && priceStr.match(new RegExp(`${label}\\s*:\\s*\\$?([\\d.]+)`));
+    return m ? parseFloat(m[1]) : null;
+  };
+
+  // Extrair e remover o preço premium primeiro: 'Registration Price' é substring
+  // de 'Premium Registration Price' — sem isso, o registro pegava o valor premium.
+  const premiumMatch = priceStr && priceStr.match(/Premium Registration Price\s*:\s*\$?([\d.]+)/);
+  const premiumReg = premiumMatch ? parseFloat(premiumMatch[1]) : null;
+  const remaining = priceStr && premiumMatch ? priceStr.replace(/Premium Registration Price[^,]*/g, '') : priceStr;
+
+  const regMatch = remaining && remaining.match(/Registration Price\s*:\s*\$?([\d.]+)/);
+  const regPrice = regMatch ? parseFloat(regMatch[1]) : null;
+  const promo = get('Promo Price');
+  const renewal = get('Renewal Price');
+  const transfer = get('Transfer Price');
+
+  const premium = premiumReg != null;
+  const regular = premium ? premiumReg : regPrice;
+  const effective = premium ? premiumReg : (promo != null ? promo : regPrice);
+
+  return {
+    price: effective,
+    regular_price: regular,
+    renewal_price: renewal,
+    transfer_price: transfer,
+    premium,
+    first_year_promo: promo != null && promo < (regPrice != null ? regPrice : promo)
+  };
+}
+
 // ===== DOMÍNIOS =====
 
 // GET /api/registrar/check/:domain
+// Retorna disponibilidade + todos os preços reais (registro, promo, renovação, transferência)
 router.get('/check/:domain', auth, async (req, res) => {
   try {
     const { domain } = req.params;
@@ -92,18 +129,17 @@ router.get('/check/:domain', auth, async (req, res) => {
     const result = data.SearchResults?.[0];
     const available = result?.Available === 'yes';
 
-    // Extrair preço do campo Price
-    let price = null;
-    if (result?.Price) {
-      const match = result.Price.match(/Registration Price:\s*([\d.]+)/);
-      if (match) price = parseFloat(match[1]);
-    }
+    const prices = parseDynadotPrice(result?.Price);
+
+    // Taxa USD→MZN para o app mostrar o preço em moeda local
+    const usdToMt = parseFloat(process.env.USD_TO_MT_RATE) || 63;
 
     res.json({
       success: true,
       domain,
       available,
-      price
+      usd_to_mt: usdToMt,
+      ...prices
     });
 
   } catch (error) {
@@ -112,23 +148,75 @@ router.get('/check/:domain', auth, async (req, res) => {
   }
 });
 
-// GET /api/registrar/list
-router.get('/list', auth, async (req, res) => {
+// ===== DOMÍNIOS DO USUÁRIO =====
+
+// Helper: retorna os domínios da conta Dynadot que pertencem ao usuário
+// (baseado nos pagamentos completados de buy/transfer na MozHost).
+// Evita o vazamento da lista inteira da conta Dynadot para qualquer usuário.
+async function getOwnedDomains(userId) {
+  const rows = await database.query(
+    `SELECT DISTINCT domain FROM domain_payments
+     WHERE user_id = ? AND status = 'completed' AND action IN ('buy', 'transfer')`,
+    [userId]
+  );
+  const owned = new Set(rows.map(r => String(r.domain).toLowerCase()));
+
+  let dynadot = [];
   try {
     const data = await dynadotRequest('list_domain');
+    dynadot = data.DomainInfoList || [];
+  } catch (e) {
+    console.error('⚠️ list_domain Dynadot:', e.message);
+  }
 
-    const domains = data.DomainInfoList || [];
+  return dynadot
+    .filter(d => owned.has(String(d.Domain?.Name || '').toLowerCase()))
+    .map(d => ({
+      name: d.Domain?.Name,
+      domain: d.Domain?.Name,
+      expires: d.Domain?.Expiration,
+      expire_date: d.Domain?.Expiration,
+      auto_renew: d.Domain?.RenewOption === 'auto',
+      locked: d.Domain?.Locked === 'yes',
+    }));
+}
 
-    res.json({
-      success: true,
-      domains: domains.map(d => ({
-        name: d.Domain?.Name,
-        expires: d.Domain?.Expiration,
-        auto_renew: d.Domain?.RenewOption === 'auto',
-        locked: d.Domain?.Locked === 'yes',
-      }))
-    });
+// GET /api/registrar/list — só os domínios do usuário logado
+router.get('/list', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const domains = await getOwnedDomains(userId);
+    res.json({ success: true, domains });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// GET /api/registrar/my-domains — usado pelo app mobile
+router.get('/my-domains', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const domains = await getOwnedDomains(userId);
+    res.json({ success: true, domains });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/registrar/my-payments — histórico de pagamentos do usuário
+router.get('/my-payments', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const payments = await database.query(
+      `SELECT id, domain, action, price_usd, amount, currency, method, status,
+              created_at, completed_at, error_message
+       FROM domain_payments
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [userId]
+    );
+    res.json({ success: true, payments });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -177,37 +265,140 @@ router.put('/ns/:domain', auth, async (req, res) => {
 
 // ===== DNS =====
 
+// Helper: busca registros DNS atuais (normalizados). id = índice na lista.
+async function getDnsRecords(domain) {
+  const data = await dynadotRequest('get_dns', { domain });
+  const raw = data.GetDnsResponse?.RecordList || [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter(r => r && (r.Value || r.value))
+    .map((r, i) => {
+      const type = r.RecordType || r.type;
+      const rawContent = r.Value || r.content;
+      let content = rawContent;
+      let prio = '';
+      // MX: separar a prioridade do valor ("10 mail.exemplo.com" → prio 10, content mail.exemplo.com)
+      // para a UI exibir/editar em campos próprios (evita "10 10 mail.x.com" no round-trip).
+      if (type === 'MX') {
+        const prioMatch = String(rawContent || '').match(/^(\d+)\s+(.*)$/);
+        if (prioMatch) {
+          prio = prioMatch[1];
+          content = prioMatch[2];
+        } else if (r.Priority != null) {
+          prio = String(r.Priority);
+        }
+      }
+      return {
+        id: i,
+        name: r.Subdomain || r.subdomain || '@',
+        type,
+        content,
+        ttl: parseInt(r.Ttl || r.ttl, 10) || 1800,
+        prio,
+        // Mantém os campos originais da Dynadot p/ compatibilidade
+        Subdomain: r.Subdomain,
+        RecordType: r.RecordType,
+        Value: r.Value,
+        Ttl: r.Ttl
+      };
+    });
+}
+
+// Helper: monta o valor do registro. Para MX, a prioridade vai no início do valor
+// ("10 mail.exemplo.com"). Evita duplicar prioridade quando o conteúdo já a contém
+// (round-trip GET → editar → PUT): "10 10 mail.exemplo.com" nunca deve acontecer.
+function buildDnsContent(type, content, prio) {
+  if (type !== 'MX') return content;
+  const contentHasPrio = /^\d+\s+/.test(String(content));
+  if (prio) return `${prio} ${String(content).replace(/^\d+\s+/, '')}`;
+  return contentHasPrio ? String(content) : content;
+}
+
+// Helper: substitui TODOS os registros DNS (set_dns2 recebe a lista completa).
+// Usado para adicionar/editar/remover sem perder os registros existentes
+// (o POST antigo com set_dns2 de um único registro apagava o resto).
+async function setDnsRecords(domain, records) {
+  const params = { domain };
+  records.forEach((r, i) => {
+    params[`main_record_type${i}`] = r.type;
+    params[`main_record${i}`] = r.content;
+    params[`main_subdomain${i}`] = r.name || '@';
+    params[`main_ttl${i}`] = String(r.ttl || 1800);
+  });
+  return dynadotRequest('set_dns2', params);
+}
+
 // GET /api/registrar/dns/:domain
 router.get('/dns/:domain', auth, async (req, res) => {
   try {
     const { domain } = req.params;
-
-    const data = await dynadotRequest('get_dns', { domain });
-
-    const records = data.GetDnsResponse?.RecordList || [];
-    res.json({ success: true, records: Array.isArray(records) ? records : [records] });
-
+    const records = await getDnsRecords(domain);
+    res.json({ success: true, records });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// POST /api/registrar/dns/:domain
+// POST /api/registrar/dns/:domain — adiciona UM registro (anexa aos existentes)
 router.post('/dns/:domain', auth, async (req, res) => {
   try {
     const { domain } = req.params;
-    const { name, type, content, ttl = 1800 } = req.body;
+    const { name, type, content, ttl = 1800, prio } = req.body;
+    if (!type || !content) return res.status(400).json({ error: 'type e content são obrigatórios' });
 
-    await dynadotRequest('set_dns2', {
-      domain,
-      main_record_type0: type,
-      main_record0: content,
-      main_subdomain0: name || '@',
-      main_ttl0: String(ttl)
+    const records = await getDnsRecords(domain);
+    records.push({
+      name: name || '@',
+      type,
+      content: buildDnsContent(type, content, prio),
+      ttl: parseInt(ttl, 10) || 1800
     });
+    await setDnsRecords(domain, records);
 
-    res.status(201).json({ success: true, domain });
+    res.status(201).json({ success: true, domain, records });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// PUT /api/registrar/dns/:domain/:id — atualiza o registro no índice :id
+router.put('/dns/:domain/:id', auth, async (req, res) => {
+  try {
+    const { domain, id } = req.params;
+    const index = parseInt(id, 10);
+    const { name, type, content, ttl = 1800, prio } = req.body;
+    if (!type || !content) return res.status(400).json({ error: 'type e content são obrigatórios' });
+
+    const records = await getDnsRecords(domain);
+    if (!records[index]) return res.status(404).json({ error: 'Registro não encontrado' });
+
+    records[index] = {
+      name: name || '@',
+      type,
+      content: buildDnsContent(type, content, prio),
+      ttl: parseInt(ttl, 10) || 1800
+    };
+    await setDnsRecords(domain, records);
+
+    res.json({ success: true, domain, records });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/registrar/dns/:domain/:id — remove o registro no índice :id
+router.delete('/dns/:domain/:id', auth, async (req, res) => {
+  try {
+    const { domain, id } = req.params;
+    const index = parseInt(id, 10);
+
+    const records = await getDnsRecords(domain);
+    if (!records[index]) return res.status(404).json({ error: 'Registro não encontrado' });
+
+    records.splice(index, 1);
+    await setDnsRecords(domain, records);
+
+    res.json({ success: true, domain, records });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -406,11 +597,13 @@ router.post('/pay', auth, async (req, res) => {
 router.get('/pay/:id/status', auth, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.userId || req.user.id;
 
     // SELECT * para incluir campos de contato necessários no executeDomainAction
+    // Restringe ao dono do pagamento (evita que qualquer usuário veja/ative pagamentos alheios)
     const payments = await database.query(
-      'SELECT * FROM domain_payments WHERE id = ?',
-      [id]
+      'SELECT * FROM domain_payments WHERE id = ? AND user_id = ?',
+      [id, userId]
     );
     if (!payments.length) return res.status(404).json({ error: 'Pagamento não encontrado' });
 
@@ -528,12 +721,26 @@ router.post('/webhook/:method', async (req, res) => {
       }
     } else if (['mpesa', 'emola', 'paymoz'].includes(method)) {
       const { transaction_id, status: paymentStatus } = req.body;
+      // NUNCA confiar no corpo do webhook: verificar o status real na Alauda antes de executar.
       if (transaction_id && paymentStatus === 'completed') {
-        const payments = await database.query(
-          'SELECT * FROM domain_payments WHERE transaction_id = ? AND status IN ("pending", "processing")',
-          [transaction_id]
-        );
-        if (payments.length > 0) payment = payments[0];
+        try {
+          const statusRes = await axios.get(
+            `${ALAUDA_API_URL}/status/${transaction_id}`,
+            { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}` } }
+          );
+          const alaudaStatus = statusRes.data?.data?.status || statusRes.data?.status;
+          if (['completed', 'approved'].includes(alaudaStatus)) {
+            const payments = await database.query(
+              'SELECT * FROM domain_payments WHERE transaction_id = ? AND status IN ("pending", "processing")',
+              [transaction_id]
+            );
+            if (payments.length > 0) payment = payments[0];
+          } else {
+            console.warn(`⚠️ Webhook ${method}: status Alauda real = ${alaudaStatus} (ignorado)`);
+          }
+        } catch (e) {
+          console.error(`Erro ao validar status Alauda no webhook ${method}:`, e.message);
+        }
       }
     }
 
@@ -584,15 +791,9 @@ router.post('/transfer/check', auth, async (req, res) => {
     }
 
     const available = result?.Available === 'yes';
-
-    let registrationPrice = null;
-    let transferPrice = null;
-    if (result?.Price) {
-      const regMatch = result.Price.match(/Registration Price:\s*([\d.]+)/);
-      if (regMatch) registrationPrice = parseFloat(regMatch[1]);
-      const trfMatch = result.Price.match(/Transfer Price:\s*([\d.]+)/);
-      if (trfMatch) transferPrice = parseFloat(trfMatch[1]);
-    }
+    const prices = parseDynadotPrice(result?.Price);
+    const transferPrice = prices.transfer_price;
+    const registrationPrice = prices.regular_price;
 
     // Se nem preço de transferência nem de registro vierem da Dynadot,
     // NÃO adivinhar — retornar erro para a UI explicar (não repetir o bug do cost=10).
@@ -612,7 +813,10 @@ router.post('/transfer/check', auth, async (req, res) => {
       // Só é transferível se não estiver disponível para registro novo
       can_transfer: !available,
       transfer_price: transferPrice || registrationPrice,
-      registration_price: registrationPrice
+      registration_price: registrationPrice,
+      renewal_price: prices.renewal_price,
+      // Taxa USD→MZN para o app mostrar o preço em moeda local
+      usd_to_mt: parseFloat(process.env.USD_TO_MT_RATE) || 63
     });
   } catch (error) {
     console.error('Erro transfer check:', error);

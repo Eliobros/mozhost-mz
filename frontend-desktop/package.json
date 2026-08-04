@@ -33,34 +33,5 @@
     "nextron": "^9.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
-  },
-  "build": {
-    "appId": "mz.co.mozhost",
-    "productName": "MozHost",
-    "files": [
-      "app",
-      "renderer/out"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "resources/icon.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "icon": "resources/icon.png",
-      "category": "Development"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "resources/icon.icns",
-      "category": "public.app-category.developer-tools"
-    }
   }
 }

@@ -15,7 +15,9 @@ class TemplateManager {
     const templates = {
       'api': this.getApiTemplate(),
       'bot-baileys': this.getBaileysTemplate(),
-      'bot-wwebjs': this.getWWEBJSTemplate()
+      'bot-wwebjs': this.getWWEBJSTemplate(),
+      'bot-telegram': this.getTelegramTemplate(),
+      'bot-discord': this.getDiscordTemplate()
     };
 
     if (!templates[type]) {
@@ -1148,6 +1150,591 @@ Dúvidas? Entre em contato pelo painel MozHost!
     };
   }
 
+  // ============================================
+  // TEMPLATE: Bot Telegram (node-telegram-bot-api)
+  // ============================================
+  getTelegramTemplate() {
+    return {
+      directories: ['commands', 'utils'],
+      files: {
+        'index.js': `require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const TelegramBot = require('node-telegram-bot-api');
+
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OWNER_ID = process.env.OWNER_ID || '';
+
+if (!TOKEN) {
+  console.error('❌ TELEGRAM_BOT_TOKEN não configurado!');
+  console.error('👉 Coloque o token do seu bot nas Variáveis de Ambiente do container no painel MozHost.');
+  process.exit(1);
+}
+
+const bot = new TelegramBot(TOKEN, { polling: true });
+
+// ============================================
+// CARREGAR COMANDOS DINAMICAMENTE
+// ============================================
+const commands = new Map();
+
+function loadCommands() {
+  const commandsPath = path.join(__dirname, 'commands');
+
+  if (!fs.existsSync(commandsPath)) {
+    console.warn('⚠️ Pasta de comandos não encontrada. Criando...');
+    fs.mkdirSync(commandsPath, { recursive: true });
+    return;
+  }
+
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+  if (commandFiles.length === 0) {
+    console.warn('⚠️ Nenhum comando encontrado');
+    return;
+  }
+
+  for (const file of commandFiles) {
+    try {
+      const command = require(path.join(commandsPath, file));
+      commands.set(command.name, command);
+      console.log(\`✅ Comando carregado: /\${command.name}\`);
+    } catch (error) {
+      console.error(\`❌ Erro ao carregar comando \${file}:\`, error.message);
+    }
+  }
+}
+
+// ============================================
+// HANDLER DE MENSAGENS
+// ============================================
+bot.on('message', async (msg) => {
+  if (!msg.text || msg.from?.is_bot) return;
+
+  const chatId = msg.chat.id;
+  const text = msg.text.trim();
+
+  if (!text.startsWith('/')) return;
+
+  const [cmdName, ...args] = text.slice(1).split(' ');
+  const command = commands.get(cmdName.toLowerCase());
+
+  if (!command) return;
+
+  try {
+    console.log(\`📨 Executando comando: /\${cmdName}\`);
+    await command.execute(bot, msg, args);
+  } catch (error) {
+    console.error(\`❌ Erro ao executar /\${cmdName}:\`, error);
+    await bot.sendMessage(chatId, \`❌ Erro ao executar comando: \${error.message}\`);
+  }
+});
+
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
+async function start() {
+  console.log('');
+  console.log('╔════════════════════════════════════╗');
+  console.log('║   🤖 MozHost Bot (Telegram)       ║');
+  console.log('╚════════════════════════════════════╝');
+  console.log('');
+
+  loadCommands();
+  console.log(\`✅ \${commands.size} comando(s) carregado(s)\`);
+  console.log('');
+
+  const me = await bot.getMe();
+  console.log(\`✅ Bot @\${me.username} conectado ao Telegram!\`);
+  console.log(\`📌 Comandos: \${[...commands.keys()].map(c => '/' + c).join(', ')}\`);
+}
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Erro não capturado:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Promise rejeitada:', err);
+});
+
+start().catch(err => {
+  console.error('❌ Erro fatal ao iniciar bot:', err);
+  process.exit(1);
+});
+`,
+
+        'commands/ping.js': `module.exports = {
+  name: 'ping',
+  description: 'Testa a velocidade de resposta do bot',
+
+  async execute(bot, msg, args) {
+    const start = Date.now();
+    const sentMsg = await bot.sendMessage(msg.chat.id, '🏓 Pong!');
+    const latency = Date.now() - start;
+
+    await bot.editMessageText(\`🏓 Pong!\\n⏱️ Latência: \${latency}ms\`, {
+      chat_id: msg.chat.id,
+      message_id: sentMsg.message_id
+    });
+  }
+};`,
+
+        'commands/menu.js': `module.exports = {
+  name: 'menu',
+  description: 'Mostra o menu de comandos',
+
+  async execute(bot, msg, args) {
+    const menuText = [
+      '📋 *MENU DO BOT*',
+      '',
+      '• /ping — Testa a velocidade do bot',
+      '• /menu — Mostra este menu',
+      '• /info — Informações do bot',
+      '• /echo <texto> — Repete uma mensagem',
+      '',
+      '🤖 *Bot criado com MozHost*',
+      '🌐 mozhost.shop'
+    ].join('\\n');
+
+    await bot.sendMessage(msg.chat.id, menuText, { parse_mode: 'Markdown' });
+  }
+};`,
+
+        'commands/info.js': `module.exports = {
+  name: 'info',
+  description: 'Informações sobre o bot',
+
+  async execute(bot, msg, args) {
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+
+    const me = await bot.getMe();
+
+    const infoText = [
+      'ℹ️ *INFORMAÇÕES*',
+      '',
+      \`🤖 *Bot:* @\${me.username}\`,
+      \`⏱️ *Uptime:* \${hours}h \${minutes}m \${seconds}s\`,
+      '📦 *Versão:* 1.0.0',
+      '🔧 *Plataforma:* Telegram',
+      '🌐 *Host:* MozHost'
+    ].join('\\n');
+
+    await bot.sendMessage(msg.chat.id, infoText, { parse_mode: 'Markdown' });
+  }
+};`,
+
+        'commands/echo.js': `module.exports = {
+  name: 'echo',
+  description: 'Repete uma mensagem',
+
+  async execute(bot, msg, args) {
+    const text = args.join(' ');
+
+    if (!text) {
+      return bot.sendMessage(msg.chat.id, '❌ Uso: /echo <texto>');
+    }
+
+    await bot.sendMessage(msg.chat.id, \`🔁 \${text}\`);
+  }
+};`,
+
+        'utils/helper.js': `/**
+ * Funções auxiliares para o bot
+ */
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  return \`\${days}d \${hours}h \${minutes}m \${secs}s\`;
+}
+
+function isOwner(userId, ownerId) {
+  return String(userId) === String(ownerId);
+}
+
+module.exports = {
+  sleep,
+  formatUptime,
+  isOwner
+};`,
+
+        '.env.example': `# Token do bot (crie com @BotFather no Telegram)
+TELEGRAM_BOT_TOKEN=123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Seu ID no Telegram (opcional)
+OWNER_ID=`,
+
+        'package.json': JSON.stringify({
+          name: 'mozhost-telegram-bot',
+          version: '1.0.0',
+          main: 'index.js',
+          scripts: {
+            start: 'node index.js',
+            dev: 'nodemon index.js'
+          },
+          dependencies: {
+            'node-telegram-bot-api': '^0.64.0',
+            'dotenv': '^16.0.0'
+          },
+          devDependencies: {
+            'nodemon': '^3.0.1'
+          }
+        }, null, 2),
+
+        'README.md': `# MozHost Bot - Telegram
+
+Bot de Telegram criado com node-telegram-bot-api pelo MozHost.
+
+## 🚀 Como Usar
+
+1. Crie seu bot com **@BotFather** no Telegram e copie o token
+2. Coloque o token na variável de ambiente \`TELEGRAM_BOT_TOKEN\`
+3. Inicie o container
+4. Pronto! Seu bot está online
+
+## 📋 Comandos Disponíveis
+
+- \`/ping\` - Testa a velocidade do bot
+- \`/menu\` - Mostra o menu de comandos
+- \`/info\` - Informações do bot
+- \`/echo <texto>\` - Repete uma mensagem
+
+## 🔧 Adicionar Novos Comandos
+
+1. Crie um arquivo em \`commands/seucomando.js\`
+2. Use este template:
+
+\`\`\`javascript
+module.exports = {
+  name: 'seucomando',
+  description: 'Descrição do comando',
+
+  async execute(bot, msg, args) {
+    await bot.sendMessage(msg.chat.id, 'Resposta do comando');
+  }
+};
+\`\`\`
+
+3. Reinicie o bot
+
+## 📚 Documentação
+
+- [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)
+- [BotFather](https://t.me/BotFather)
+- [MozHost](https://mozhost.shop)
+`
+      },
+      packageJson: {
+        name: 'mozhost-telegram-bot',
+        version: '1.0.0',
+        main: 'index.js',
+        scripts: {
+          start: 'node index.js'
+        },
+        dependencies: {
+          'node-telegram-bot-api': '^0.64.0',
+          'dotenv': '^16.0.0'
+        }
+      },
+      startCommand: 'npm start',
+      readme: 'Bot de Telegram usando node-telegram-bot-api'
+    };
+  }
+
+  // ============================================
+  // TEMPLATE: Bot Discord (discord.js)
+  // ============================================
+  getDiscordTemplate() {
+    return {
+      directories: ['commands', 'utils'],
+      files: {
+        'index.js': `require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+
+const TOKEN = process.env.DISCORD_BOT_TOKEN;
+const PREFIX = process.env.PREFIX || '!';
+
+if (!TOKEN) {
+  console.error('❌ DISCORD_BOT_TOKEN não configurado!');
+  console.error('👉 Coloque o token do seu bot nas Variáveis de Ambiente do container no painel MozHost.');
+  process.exit(1);
+}
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+client.commands = new Collection();
+
+// ============================================
+// CARREGAR COMANDOS DINAMICAMENTE
+// ============================================
+function loadCommands() {
+  const commandsPath = path.join(__dirname, 'commands');
+
+  if (!fs.existsSync(commandsPath)) {
+    console.warn('⚠️ Pasta de comandos não encontrada. Criando...');
+    fs.mkdirSync(commandsPath, { recursive: true });
+    return;
+  }
+
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+  if (commandFiles.length === 0) {
+    console.warn('⚠️ Nenhum comando encontrado');
+    return;
+  }
+
+  for (const file of commandFiles) {
+    try {
+      const command = require(path.join(commandsPath, file));
+      client.commands.set(command.name, command);
+      console.log(\`✅ Comando carregado: \${PREFIX}\${command.name}\`);
+    } catch (error) {
+      console.error(\`❌ Erro ao carregar comando \${file}:\`, error.message);
+    }
+  }
+}
+
+// ============================================
+// HANDLER DE MENSAGENS
+// ============================================
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (!message.content.startsWith(PREFIX)) return;
+
+  const [cmdName, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const command = client.commands.get(cmdName.toLowerCase());
+
+  if (!command) return;
+
+  try {
+    console.log(\`📨 Executando comando: \${PREFIX}\${cmdName}\`);
+    await command.execute(client, message, args);
+  } catch (error) {
+    console.error(\`❌ Erro ao executar \${PREFIX}\${cmdName}:\`, error);
+    await message.reply(\`❌ Erro ao executar comando: \${error.message}\`);
+  }
+});
+
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
+async function start() {
+  console.log('');
+  console.log('╔════════════════════════════════════╗');
+  console.log('║   🤖 MozHost Bot (Discord)        ║');
+  console.log('╚════════════════════════════════════╝');
+  console.log('');
+
+  loadCommands();
+  console.log(\`✅ \${client.commands.size} comando(s) carregado(s)\`);
+  console.log('');
+
+  await client.login(TOKEN);
+}
+
+client.once('ready', () => {
+  console.log(\`✅ Bot @\${client.user.username} conectado ao Discord!\`);
+  console.log(\`📌 Comandos: \${client.commands.map(c => PREFIX + c.name).join(', ')}\`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Erro não capturado:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Promise rejeitada:', err);
+});
+
+start().catch(err => {
+  console.error('❌ Erro fatal ao iniciar bot:', err);
+  process.exit(1);
+});
+`,
+
+        'commands/ping.js': `module.exports = {
+  name: 'ping',
+  description: 'Testa a velocidade de resposta do bot',
+
+  async execute(client, message, args) {
+    const start = Date.now();
+    const sentMsg = await message.reply('🏓 Pong!');
+    const latency = Date.now() - start;
+
+    await sentMsg.edit(\`🏓 Pong!\\n⏱️ Latência: \${latency}ms\`);
+  }
+};`,
+
+        'commands/menu.js': `module.exports = {
+  name: 'menu',
+  description: 'Mostra o menu de comandos',
+
+  async execute(client, message, args) {
+    const prefix = process.env.PREFIX || '!';
+
+    const menuText = [
+      '📋 **MENU DO BOT**',
+      '',
+      \`• \${prefix}ping — Testa a velocidade do bot\`,
+      \`• \${prefix}menu — Mostra este menu\`,
+      \`• \${prefix}info — Informações do bot\`,
+      '',
+      '🤖 **Bot criado com MozHost**',
+      '🌐 mozhost.shop'
+    ].join('\\n');
+
+    await message.reply(menuText);
+  }
+};`,
+
+        'commands/info.js': `module.exports = {
+  name: 'info',
+  description: 'Informações sobre o bot',
+
+  async execute(client, message, args) {
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+
+    const infoText = [
+      'ℹ️ **INFORMAÇÕES**',
+      '',
+      \`🤖 **Bot:** @\${client.user.username}\`,
+      \`⏱️ **Uptime:** \${hours}h \${minutes}m \${seconds}s\`,
+      '📦 **Versão:** 1.0.0',
+      '🔧 **Plataforma:** discord.js',
+      '🌐 **Host:** MozHost'
+    ].join('\\n');
+
+    await message.reply(infoText);
+  }
+};`,
+
+        'utils/helper.js': `/**
+ * Funções auxiliares para o bot
+ */
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  return \`\${days}d \${hours}h \${minutes}m \${secs}s\`;
+}
+
+module.exports = {
+  sleep,
+  formatUptime
+};`,
+
+        '.env.example': `# Token do bot (crie no Discord Developer Portal)
+DISCORD_BOT_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.Gxxxx.xxxxxxxxxxxxxxxxxxxx
+
+# Prefixo dos comandos
+PREFIX=!`,
+
+        'package.json': JSON.stringify({
+          name: 'mozhost-discord-bot',
+          version: '1.0.0',
+          main: 'index.js',
+          scripts: {
+            start: 'node index.js',
+            dev: 'nodemon index.js'
+          },
+          dependencies: {
+            'discord.js': '^14.15.3',
+            'dotenv': '^16.0.0'
+          },
+          devDependencies: {
+            'nodemon': '^3.0.1'
+          }
+        }, null, 2),
+
+        'README.md': `# MozHost Bot - Discord
+
+Bot de Discord criado com discord.js pelo MozHost.
+
+## 🚀 Como Usar
+
+1. Crie sua aplicação em **discord.com/developers/applications**
+2. Crie um Bot e copie o **token**
+3. Coloque o token na variável de ambiente \`DISCORD_BOT_TOKEN\`
+4. Convide o bot para o seu servidor (scope: bot + applications.commands)
+5. Inicie o container
+6. Pronto! Seu bot está online
+
+## 📋 Comandos Disponíveis
+
+- \`!ping\` - Testa a velocidade do bot
+- \`!menu\` - Mostra o menu de comandos
+- \`!info\` - Informações do bot
+
+## 🔧 Adicionar Novos Comandos
+
+1. Crie um arquivo em \`commands/seucomando.js\`
+2. Use este template:
+
+\`\`\`javascript
+module.exports = {
+  name: 'seucomando',
+  description: 'Descrição do comando',
+
+  async execute(client, message, args) {
+    await message.reply('Resposta do comando');
+  }
+};
+\`\`\`
+
+3. Reinicie o bot
+
+## 📚 Documentação
+
+- [discord.js](https://discord.js.org/)
+- [Discord Developer Portal](https://discord.com/developers/applications)
+- [MozHost](https://mozhost.shop)
+`
+      },
+      packageJson: {
+        name: 'mozhost-discord-bot',
+        version: '1.0.0',
+        main: 'index.js',
+        scripts: {
+          start: 'node index.js'
+        },
+        dependencies: {
+          'discord.js': '^14.15.3',
+          'dotenv': '^16.0.0'
+        }
+      },
+      startCommand: 'npm start',
+      readme: 'Bot de Discord usando discord.js'
+    };
+  }
+
   /**
    * Listar templates disponíveis
    */
@@ -1173,6 +1760,20 @@ Dúvidas? Entre em contato pelo painel MozHost!
         description: 'Bot de WhatsApp usando whatsapp-web.js',
         language: 'nodejs',
         features: ['Sistema de Comandos', 'Stickers', 'QR Code']
+      },
+      {
+        id: 'bot-telegram',
+        name: 'Bot Telegram',
+        description: 'Bot de Telegram usando node-telegram-bot-api',
+        language: 'nodejs',
+        features: ['Sistema de Comandos', 'Token via painel', 'Polling']
+      },
+      {
+        id: 'bot-discord',
+        name: 'Bot Discord',
+        description: 'Bot de Discord usando discord.js',
+        language: 'nodejs',
+        features: ['Sistema de Comandos', 'Token via painel', 'Mensagens']
       }
     ];
   }

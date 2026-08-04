@@ -431,9 +431,10 @@ router.ws('/:containerId', (ws, req, next) => {
       console.log(`[QR Code WS] 📦 Container: ${container.name} → Docker: ${containerDockerName}`);
 
       // ========================================
-      // 2. VERIFICAR SE É UM BOT
+      // 2. VERIFICAR SE É UM BOT WHATSAPP
       // ========================================
-      if (!container.type.startsWith('bot-')) {
+      const whatsappBotTypes = ['bot-baileys', 'bot-wwebjs'];
+      if (!whatsappBotTypes.includes(container.type)) {
         ws.send(JSON.stringify({
           type: 'error',
           message: 'Este container não é um bot WhatsApp'

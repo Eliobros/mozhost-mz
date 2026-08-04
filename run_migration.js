@@ -3,6 +3,7 @@
 require('dotenv').config({ path: './backend/.env' });
 
 const { fixContainersStatusEnum } = require('./backend/migrations/fix_containers_status');
+const { fixDomainPayments } = require('./backend/migrations/fix_domain_payments');
 
 async function main() {
   console.log('🚀 Iniciando migração do banco de dados...');
@@ -13,6 +14,7 @@ async function main() {
   
   try {
     await fixContainersStatusEnum();
+    await fixDomainPayments();
     console.log('✅ Migração concluída com sucesso!');
   } catch (error) {
     console.error('❌ Erro na migração:', error.message);

@@ -2,7 +2,7 @@
 // Serviço de IA para MozHost - Gemini com Function Calling
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { functionDeclarations, executeFunction } = require('./mozhostAiFunctions');
+const { functionDeclarations, executeFunction, ADMIN_ONLY_FUNCTIONS } = require('./mozhostAiFunctions');
 
 const SYSTEM_INSTRUCTION = `Você é a assistente de IA da MozHost, a plataforma moçambicana de hospedagem de bots e APIs.
 
@@ -59,6 +59,7 @@ class MozhostAiService {
       let functionCallCount = 0;
 
       // Loop para processar Function Calls
+      let response = '';
       while (true) {
         const candidate = result.response.candidates?.[0];
         const part = candidate?.content?.parts?.[0];
@@ -69,7 +70,7 @@ class MozhostAiService {
           console.log(`🔧 MozHost IA chamou: ${name}`, JSON.stringify(args));
 
           // Executar função no banco
-          const functionResult = await executeFunction(name, args || {}, userId);
+          const functionResult = await executeFunction(name, args || {}, userId, userInfo?.isAdmin);
 
           // Enviar resultado de volta ao Gemini
           result = await chat.sendMessage([{
@@ -81,14 +82,16 @@ class MozhostAiService {
 
           if (functionCallCount >= 5) {
             console.warn('⚠️ Limite de function calls atingido');
+            // O último turno foi só functionResponse (sem texto). Devolve um
+            // aviso amigável em vez de tentar ler text() de um turno vazio.
+            response = 'Atingi o limite de operações nesta conversa. Envie outra mensagem para continuar.';
             break;
           }
         } else {
+          response = result.response.text();
           break;
         }
       }
-
-      const response = result.response.text();
 
       return {
         success: true,
@@ -106,7 +109,10 @@ class MozhostAiService {
    * Cria ou reutiliza um chat para o usuário
    */
   getOrCreateChat(userId, userInfo) {
-    const key = String(userId);
+    // Inclui isAdmin na chave: se o papel mudar, o chat é recriado com o
+    // conjunto de funções correto (evita cache com função de admin para um
+    // usuário que deixou de ser admin e vice-versa).
+    const key = `${userId}:${userInfo?.isAdmin ? 'admin' : 'user'}`;
 
     if (this.chats.has(key)) {
       return this.chats.get(key);
@@ -123,6 +129,12 @@ class MozhostAiService {
 Quando o usuário perguntar sobre "meus containers", "minha conta", "meus dados", etc., use o ID ${userInfo.userId} ou username "${userInfo.username}" para buscar os dados dele. Use a função "minha_conta" para dados da conta e "meus_containers" para listar os containers dele.`
       : '';
 
+    // 🔒 Usuários comuns NÃO recebem as funções de administrador no schema,
+    // para que o modelo nem sequer as sugira (o servidor bloqueia de novo).
+    const declarations = userInfo?.isAdmin
+      ? functionDeclarations
+      : functionDeclarations.filter((d) => !ADMIN_ONLY_FUNCTIONS.has(d.name));
+
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: SYSTEM_INSTRUCTION + userContext,
@@ -130,7 +142,7 @@ Quando o usuário perguntar sobre "meus containers", "minha conta", "meus dados"
         temperature: 0.7,
         maxOutputTokens: 2000,
       },
-      tools: [{ functionDeclarations }]
+      tools: [{ functionDeclarations: declarations }]
     });
 
     const chat = model.startChat({ history: [] });
@@ -149,7 +161,8 @@ Quando o usuário perguntar sobre "meus containers", "minha conta", "meus dados"
    * Limpa o chat de um usuário (reseta conversa)
    */
   resetChat(userId) {
-    this.chats.delete(String(userId));
+    this.chats.delete(`${userId}:admin`);
+    this.chats.delete(`${userId}:user`);
   }
 }
 

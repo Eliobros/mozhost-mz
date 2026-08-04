@@ -115,6 +115,31 @@ export default function BotsPage() {
             <strong>💡 Dica:</strong> Todos os bots acima funcionam com <strong>Node.js</strong>. Ao criar o container, escolha o tipo <strong>Node.js</strong> para ter o ambiente já configurado.
           </p>
         </div>
+
+        {/* Templates Prontos */}
+        <div className="mt-8 bg-green-50 border-l-4 border-green-600 p-4 rounded-r-lg">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">⚡ Templates Prontos (sem código)</h3>
+          <p className="text-sm text-gray-700 mb-3">
+            Ao criar um novo container, escolha <strong>BOT</strong> e selecione o template do seu bot. Você recebe um bot pronto com comandos básicos (<code className="bg-white px-1 rounded">!ping</code>, <code className="bg-white px-1 rounded">!menu</code>, <code className="bg-white px-1 rounded">!info</code>):
+          </p>
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-start space-x-2">
+              <span>📱</span>
+              <span><strong>WhatsApp Baileys / WWEB.JS</strong> — autentica com QR Code pela aba QR Code do painel.</span>
+            </li>
+            <li className="flex items-start space-x-2">
+              <span>✈️</span>
+              <span><strong>Telegram</strong> — coloque o token (criado com <a href="https://t.me/BotFather" className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">@BotFather</a>) no campo que aparece no formulário.</span>
+            </li>
+            <li className="flex items-start space-x-2">
+              <span>🎮</span>
+              <span><strong>Discord</strong> — coloque o token (Discord Developer Portal) no campo que aparece no formulário.</span>
+            </li>
+          </ul>
+          <p className="text-xs text-gray-500 mt-2">
+            🔒 Os tokens são salvos como variáveis de ambiente e podem ser alterados a qualquer momento nas configurações do container.
+          </p>
+        </div>
       </section>
 
       {/* Passo a Passo para Deploy */}

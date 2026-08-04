@@ -86,6 +86,8 @@ PMA_PASSWORD=${dbInfo.dbPassword}
         'php': 'php',
         'bot-baileys': 'bot-baileys',
         'bot-wwebjs': 'bot-wwebjs',
+        'bot-telegram': 'bot-telegram',
+        'bot-discord': 'bot-discord',
         'api': 'api'
       };
 

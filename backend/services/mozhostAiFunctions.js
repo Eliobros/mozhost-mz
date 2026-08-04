@@ -6,6 +6,89 @@ const Docker = require('dockerode');
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 // ============================================
+// 🔒 CONTROLE DE ACESSO / SEGURANÇA
+// ============================================
+
+// Funções que expõem dados de TODOS os usuários (só administradores)
+const ADMIN_ONLY_FUNCTIONS = new Set([
+  'contar_usuarios',
+  'usuarios_inativos',
+  'estatisticas_gerais',
+  'consultar_containers',
+  'estatisticas_pagamentos',
+  'buscar_usuario',
+  'containers_por_usuario',
+  'receita_por_periodo',
+  'subscricoes_expirando',
+  'top_usuarios_coins',
+  'estatisticas_whatsapp',
+  'notificacoes_recentes',
+]);
+
+// Controle de tentativas de verificação de código (anti brute-force)
+const codeAttempts = new Map();
+const MAX_CODE_ATTEMPTS = 5;
+const CODE_ATTEMPTS_TTL_MS = 10 * 60 * 1000; // 10 minutos
+
+const DOCKER_EXEC_TIMEOUT_MS = 15000; // 15s por comando
+
+/**
+ * Executa um comando dentro do container com timeout.
+ * Resolve com o output (stdout+stderr) ou rejeita se exceder o tempo,
+ * destruindo o stream para não vazar recursos.
+ */
+function runDockerExec(exec, timeoutMs = DOCKER_EXEC_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stream = null;
+    let output = '';
+
+    const cleanup = () => {
+      if (stream) { try { stream.destroy(); } catch (_e) {} }
+    };
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('Comando excedeu o tempo limite'));
+    }, timeoutMs);
+
+    exec.start({ Detach: false }).then((s) => {
+      stream = s;
+      s.on('data', (chunk) => {
+        if (!settled) output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, '');
+      });
+      s.on('end', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(output);
+      });
+      s.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    }).catch((err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Escapa um valor para uso seguro dentro de aspas simples no shell.
+ * Ex.: 'foo' → ''foo'' (técnica padrão de quoting POSIX).
+ */
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\''`)}'`;
+}
+
+// ============================================
 // 🔒 VALIDAÇÃO DE SEGURANÇA
 // ============================================
 
@@ -33,11 +116,12 @@ async function validateContainerOwnership(containerId, userId) {
 }
 
 function sanitizePath(filePath) {
-  if (!filePath || filePath.includes('..')) {
-    return null;
-  }
-  // Remove leading slash if present to make relative
-  return filePath.replace(/^\/+/, '');
+  if (!filePath || typeof filePath !== 'string') return null;
+  const cleaned = filePath.trim().replace(/^\/+/, '');
+  if (!cleaned || cleaned.includes('..') || cleaned.includes('~')) return null;
+  // Whitelist de caracteres seguros em caminhos de projeto (bloqueia ; & | $ ` > < * ?)
+  if (!/^[\w.\-\/ ]+$/.test(cleaned)) return null;
+  return cleaned;
 }
 
 // ============================================
@@ -486,10 +570,17 @@ const functionImplementations = {
   },
 
   async consultar_containers({ status, limite = 15 }) {
+    // Valida o status no servidor e usa query parametrizada (anti SQL injection)
+    const VALID_STATUSES = ['todos', 'running', 'stopped', 'error', 'building'];
+    const safeStatus = VALID_STATUSES.includes(status) ? status : 'todos';
+
     let where = '';
-    if (status && status !== 'todos') {
-      where = `WHERE c.status = '${status}'`;
+    const params = [];
+    if (safeStatus !== 'todos') {
+      where = 'WHERE c.status = ?';
+      params.push(safeStatus);
     }
+    params.push(limite);
 
     const containers = await database.query(
       `SELECT c.id, c.name, c.type, c.status, c.domain, c.memory_limit_mb, c.port,
@@ -499,7 +590,7 @@ const functionImplementations = {
        ${where}
        ORDER BY c.created_at DESC
        LIMIT ?`,
-      [limite]
+      params
     );
 
     const statusCounts = await database.query(
@@ -600,6 +691,19 @@ async enviar_codigo_suporte({ purpose }, userId) {
 },
 
 async verificar_codigo_suporte({ code, purpose }, userId) {
+  const key = `${userId}:${purpose}`;
+  const attempt = codeAttempts.get(key) || 0;
+
+  // Bloqueia depois de MAX_CODE_ATTEMPTS tentativas erradas
+  if (attempt >= MAX_CODE_ATTEMPTS) {
+    await database.query(
+      `UPDATE verification_codes SET used_at = NOW()
+       WHERE user_id = ? AND purpose = ? AND used_at IS NULL`,
+      [userId, purpose]
+    );
+    return { valido: false, motivo: 'Muitas tentativas. Solicite um novo código.' };
+  }
+
   const codes = await database.query(
     `SELECT id, code, expires_at, used_at 
      FROM verification_codes 
@@ -622,8 +726,26 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
 
   // Verificar código
   if (record.code !== String(code)) {
+    const newCount = attempt + 1;
+    codeAttempts.set(key, newCount);
+    // Expira a contagem após TTL
+    setTimeout(() => {
+      if (codeAttempts.get(key) === newCount) codeAttempts.delete(key);
+    }, CODE_ATTEMPTS_TTL_MS);
+
+    if (newCount >= MAX_CODE_ATTEMPTS) {
+      // Invalida o código atual para forçar a solicitação de um novo
+      await database.query(
+        'UPDATE verification_codes SET used_at = NOW() WHERE id = ?',
+        [record.id]
+      );
+      return { valido: false, motivo: 'Código incorreto. Muitas tentativas — solicite um novo código.' };
+    }
     return { valido: false, motivo: 'Código incorreto' };
   }
+
+  // Sucesso — limpa contagem
+  codeAttempts.delete(key);
 
   // Marcar como usado
   await database.query(
@@ -663,7 +785,7 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
     );
 
     const pendentes = await database.query(
-      `SELECT COUNT(*) as t FROM payments WHERE status = 'pending' ${dateFilter.replace('AND', 'AND')}`,
+      `SELECT COUNT(*) as t FROM payments WHERE status = 'pending' ${dateFilter}`,
       periodo_dias ? [periodo_dias] : []
     );
 
@@ -1038,17 +1160,12 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
 
     try {
       const exec = await validation.dockerContainer.exec({
-        Cmd: ['/bin/sh', '-c', `ls -la ${safePath || '.'}`],
+        Cmd: ['/bin/sh', '-c', `ls -la ${shellQuote(safePath || '.')}`],
         AttachStdout: true,
         AttachStderr: true
       });
 
-      const stream = await exec.start({ Detach: false });
-      let output = '';
-      await new Promise((resolve) => {
-        stream.on('data', (chunk) => { output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, ''); });
-        stream.on('end', resolve);
-      });
+      const output = await runDockerExec(exec);
 
       return {
         container: validation.container.name,
@@ -1071,17 +1188,12 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
 
     try {
       const exec = await validation.dockerContainer.exec({
-        Cmd: ['/bin/sh', '-c', `cat ${safePath}`],
+        Cmd: ['/bin/sh', '-c', `cat ${shellQuote(safePath)}`],
         AttachStdout: true,
         AttachStderr: true
       });
 
-      const stream = await exec.start({ Detach: false });
-      let output = '';
-      await new Promise((resolve) => {
-        stream.on('data', (chunk) => { output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, ''); });
-        stream.on('end', resolve);
-      });
+      const output = await runDockerExec(exec);
 
       if (output.length > 10000) {
         output = output.substring(0, 10000) + '\n... (truncado, arquivo muito grande)';
@@ -1109,17 +1221,12 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
     try {
       const encoded = Buffer.from(novo_conteudo).toString('base64');
       const exec = await validation.dockerContainer.exec({
-        Cmd: ['/bin/sh', '-c', `echo '${encoded}' | base64 -d > ${safePath}`],
+        Cmd: ['/bin/sh', '-c', `echo ${shellQuote(encoded)} | base64 -d > ${shellQuote(safePath)}`],
         AttachStdout: true,
         AttachStderr: true
       });
 
-      const stream = await exec.start({ Detach: false });
-      let output = '';
-      await new Promise((resolve) => {
-        stream.on('data', (chunk) => { output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, ''); });
-        stream.on('end', resolve);
-      });
+      const output = await runDockerExec(exec);
 
       const inspectResult = await exec.inspect();
 
@@ -1145,12 +1252,7 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
         AttachStderr: true
       });
 
-      const stream = await exec.start({ Detach: false });
-      let output = '';
-      await new Promise((resolve) => {
-        stream.on('data', (chunk) => { output += chunk.toString('utf-8').replace(/[\x00-\x08]/g, ''); });
-        stream.on('end', resolve);
-      });
+      const output = await runDockerExec(exec);
 
       const inspectResult = await exec.inspect();
 
@@ -1174,7 +1276,14 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
 // 🔧 EXECUTOR DE FUNÇÕES
 // ============================================
 
-async function executeFunction(functionName, args, userId) {
+async function executeFunction(functionName, args, userId, isAdmin = false) {
+  // 🔒 Funções de administrador são bloqueadas no servidor, mesmo que a IA
+  // tente chamá-las (defense-in-depth — não confia só no filtro de schema).
+  if (ADMIN_ONLY_FUNCTIONS.has(functionName) && !isAdmin) {
+    console.warn(`🔒 Acesso negado: ${functionName} requer admin (user ${userId})`);
+    return { erro: 'Acesso restrito a administradores' };
+  }
+
   const fn = functionImplementations[functionName];
   if (!fn) {
     return { erro: `Função '${functionName}' não encontrada` };
@@ -1193,5 +1302,6 @@ async function executeFunction(functionName, args, userId) {
 
 module.exports = {
   functionDeclarations,
-  executeFunction
+  executeFunction,
+  ADMIN_ONLY_FUNCTIONS,
 };

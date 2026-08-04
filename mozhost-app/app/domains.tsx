@@ -51,6 +51,12 @@ function fmtDate(dateStr) {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+// Converte USD → MZN (moeda local) para exibição. Usa a taxa real vinda do backend.
+function fmtMt(usd, rate) {
+  if (usd == null || !rate) return null;
+  const v = Math.ceil(usd * rate);
+  try { return `${v.toLocaleString('pt-MZ')} MT`; } catch { return `${v} MT`; }
+}
 function statusColor(status) {
   const map = { completed: '#22c55e', failed: '#ef4444', processing: '#f59e0b', pending: '#6b7280', executing: '#3b82f6' };
   return map[status] || '#6b7280';
@@ -168,7 +174,7 @@ function Btn({ children, onClick, variant='primary', disabled, loading, size='md
 function DnsModal({ domain, onClose, toast }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', type: 'A', content: '', ttl: '1800' });
+  const [form, setForm] = useState({ name: '', type: 'A', content: '', ttl: '1800', prio: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -183,7 +189,7 @@ function DnsModal({ domain, onClose, toast }) {
       toast('Registo DNS adicionado', 'success');
       const d = await api(`/dns/${domain}`);
       setRecords(d.records || []);
-      setForm({ name:'', type:'A', content:'', ttl:'1800' });
+      setForm({ name:'', type:'A', content:'', ttl:'1800', prio:'' });
     } catch(e) { toast(e.message, 'error'); }
     setSaving(false);
   }
@@ -197,14 +203,15 @@ function DnsModal({ domain, onClose, toast }) {
           ? <div style={{ color:'#6b7280', fontSize:13 }}>Sem registos DNS personalizados.</div>
           : records.map((r, i) => (
             <div key={i} style={{
-              display:'grid', gridTemplateColumns:'1fr 60px 1fr 60px',
+              display:'grid', gridTemplateColumns:'1fr 52px 1fr 36px 48px',
               gap:8, padding:'8px 12px', background:'#1a1d2e', borderRadius:6, marginBottom:4,
               fontSize:12, color:'#cbd5e1', alignItems:'center'
             }}>
-              <span style={{ fontFamily:'monospace' }}>{r.Subdomain || r.subdomain || '@'}</span>
-              <Badge label={r.RecordType || r.type || '?'} color="#3b5bdb" />
-              <span style={{ fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.Value || r.content || '—'}</span>
-              <span style={{ color:'#6b7280' }}>{r.Ttl || r.ttl}s</span>
+              <span style={{ fontFamily:'monospace' }}>{r.name || '@'}</span>
+              <Badge label={r.type || '?'} color="#3b5bdb" />
+              <span style={{ fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.content || '—'}</span>
+              <span style={{ color:'#f59e0b', fontFamily:'monospace' }}>{r.prio || '—'}</span>
+              <span style={{ color:'#6b7280' }}>{r.ttl}s</span>
             </div>
           ))
         }
@@ -218,7 +225,12 @@ function DnsModal({ domain, onClose, toast }) {
           </Select>
         </div>
         <Input label="Valor / Destino" placeholder="IP, hostname ou valor" value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} />
-        <Input label="TTL (segundos)" type="number" value={form.ttl} onChange={e=>setForm(f=>({...f,ttl:e.target.value}))} />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <Input label="TTL (segundos)" type="number" value={form.ttl} onChange={e=>setForm(f=>({...f,ttl:e.target.value}))} />
+          {form.type === 'MX' && (
+            <Input label="Prioridade" type="number" placeholder="10" value={form.prio} onChange={e=>setForm(f=>({...f,prio:e.target.value}))} />
+          )}
+        </div>
         <Btn onClick={addRecord} loading={saving} icon={<Icon d={Icons.plus} size={14} />}>Adicionar</Btn>
       </div>
     </Modal>
@@ -306,8 +318,15 @@ function TransferModal({ onClose, toast, onSuccess }) {
   async function pay() {
     setPaying(true);
     try {
-      const cost = info?.transfer_price || 10;
-      await api('/pay', { method:'POST', body: JSON.stringify({ ...form, action:'transfer', cost }) });
+      // Preço REAL da Dynadot (nunca inventar cost). A rota correta para
+      // transferência para dentro é /transfer/in (o /pay rejeita action:'transfer').
+      const cost = info?.transfer_price || info?.registration_price;
+      if (!cost) {
+        toast('Não foi possível obter o preço real da transferência. Tente novamente.', 'error');
+        setPaying(false);
+        return;
+      }
+      await api('/transfer/in', { method:'POST', body: JSON.stringify({ ...form, cost }) });
       toast('Pedido de transferência iniciado! Confirme no email WHOIS.', 'success');
       onSuccess?.();
       onClose();
@@ -340,9 +359,14 @@ function TransferModal({ onClose, toast, onSuccess }) {
         <>
           <div style={{ background:'#14532d22', border:'1px solid #166534', borderRadius:8, padding:12, marginBottom:18, fontSize:13 }}>
             <strong style={{ color:'#86efac' }}>{form.domain}</strong>
-            <span style={{ color:'#94a3b8', marginLeft:10 }}>
-              Transferência — {info?.transfer_price ? `$${info.transfer_price}` : 'Preço a confirmar'}
-            </span>
+            <div style={{ marginLeft:10, marginTop:2 }}>
+              <span style={{ color:'#86efac', fontWeight:700 }}>
+                {fmtMt(info?.transfer_price, info?.usd_to_mt) || (info?.transfer_price ? `$${info.transfer_price}` : 'Preço a confirmar')}
+              </span>
+              {info?.transfer_price && (
+                <span style={{ color:'#64748b', marginLeft:6 }}>~${info.transfer_price} USD</span>
+              )}
+            </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <Input label="Nome" value={form.first_name} onChange={f('first_name')} />
@@ -376,8 +400,83 @@ function TransferModal({ onClose, toast, onSuccess }) {
   );
 }
 
+// ─── TRANSFER OUT MODAL ───────────────────────────────────────────────────────
+// Gera o EPP/Auth Code na Dynadot e desbloqueia o domínio para o usuário
+// levar o domínio para outro registrador.
+function TransferOutModal({ domain, onClose, toast }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function start() {
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await api(`/transfer/out/${encodeURIComponent(domain.name || domain.domain)}`, { method:'POST' });
+      setResult(d);
+    } catch(e) { setError(e.message); }
+    setLoading(false);
+  }
+
+  function copy(text) {
+    try { navigator.clipboard.writeText(text); toast('Auth code copiado!', 'success'); } catch { toast('Não foi possível copiar', 'error'); }
+  }
+
+  return (
+    <Modal title={`Transferir para fora — ${domain.name || domain.domain}`} onClose={onClose} width={520}>
+      {!result ? (
+        <>
+          <div style={{ background:'#1a1d2e', borderRadius:8, padding:14, marginBottom:18, fontSize:12, color:'#94a3b8' }}>
+            <div style={{ display:'flex', gap:8, alignItems:'flex-start', marginBottom:8 }}>
+              <Icon d={Icons.warn} size={15} stroke="#f59e0b" />
+              <strong style={{ color:'#fbbf24' }}>O que vai acontecer</strong>
+            </div>
+            <ul style={{ margin:0, padding:'0 0 0 20px', lineHeight:1.8 }}>
+              <li>O domínio será <strong style={{ color:'#e2e8f0' }}>desbloqueado</strong> no registador</li>
+              <li>Geramos o <strong style={{ color:'#e2e8f0' }}>Auth Code (EPP)</strong> para usares no novo registador</li>
+              <li>Após iniciar a transferência no novo registador, tens <strong style={{ color:'#e2e8f0' }}>5 dias</strong> para confirmar por email</li>
+            </ul>
+          </div>
+          {error && (
+            <div style={{ background:'#7f1d1d22', border:'1px solid #991b1b', borderRadius:6, padding:'8px 12px', marginBottom:14, fontSize:12, color:'#fca5a5' }}>
+              {error}
+            </div>
+          )}
+          <Btn onClick={start} loading={loading} icon={<Icon d={Icons.unlock} size={14}/>}>
+            Desbloquear & Gerar Auth Code
+          </Btn>
+        </>
+      ) : (
+        <>
+          <div style={{ background:'#14532d22', border:'1px solid #166534', borderRadius:8, padding:12, marginBottom:14, fontSize:13, color:'#86efac' }}>
+            <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <Icon d={Icons.check} size={15} /> Domínio desbloqueado com sucesso!
+            </span>
+          </div>
+          <div style={{ fontSize:12, color:'#64748b', marginBottom:6 }}>Auth Code (EPP) — copia e guarda em segurança:</div>
+          <div style={{
+            background:'#1a1d2e', border:'1px solid #3b5bdb66', borderRadius:7,
+            padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10,
+            fontFamily:'monospace', fontSize:13, color:'#93c5fd', wordBreak:'break-all', marginBottom:14
+          }}>
+            <span>{result.auth_code}</span>
+            <button onClick={() => copy(result.auth_code)} style={{ background:'none', border:'none', color:'#3b5bdb', cursor:'pointer', flexShrink:0 }}>
+              <Icon d={Icons.copy} size={16} />
+            </button>
+          </div>
+          <div style={{ fontSize:11, color:'#64748b', marginBottom:14, display:'flex', gap:6 }}>
+            <Icon d={Icons.warn} size={13} stroke="#f59e0b" />
+            <span>{result.warning || 'Após iniciar a transferência no novo registador, confirma por email (prazo: 5 dias).'}</span>
+          </div>
+          <Btn onClick={onClose} icon={<Icon d={Icons.check} size={14}/>}>Concluído</Btn>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 // ─── DOMAIN CARD ─────────────────────────────────────────────────────────────
-function DomainCard({ domain, onDns, onNs, onRenew }) {
+function DomainCard({ domain, onDns, onNs, onRenew, onTransferOut }) {
   const days = daysUntil(domain.expires);
   const expColor = expiryColor(days);
 
@@ -430,6 +529,7 @@ function DomainCard({ domain, onDns, onNs, onRenew }) {
         <Btn size="sm" variant="ghost" onClick={() => onDns(domain)} icon={<Icon d={Icons.dns} size={13}/>}>DNS</Btn>
         <Btn size="sm" variant="ghost" onClick={() => onNs(domain)} icon={<Icon d={Icons.ns} size={13}/>}>Nameservers</Btn>
         <Btn size="sm" variant="ghost" onClick={() => onRenew(domain)} icon={<Icon d={Icons.refresh} size={13}/>}>Renovar</Btn>
+        <Btn size="sm" variant="ghost" onClick={() => onTransferOut(domain)} icon={<Icon d={Icons.transfer} size={13}/>}>Transferir</Btn>
       </div>
     </div>
   );
@@ -476,17 +576,34 @@ function RenewModal({ domain, onClose, toast, onSuccess }) {
   const [method, setMethod] = useState('mpesa');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(true);
+  // Preço real de renovação por ano (vindo da Dynadot via /check)
+  const [pricePerYear, setPricePerYear] = useState(null);
+  // Taxa USD→MZN real vinda do backend
+  const [usdToMt, setUsdToMt] = useState(null);
 
-  // Preço estimado (podes ajustar conforme TLD)
-  const estimatedUSD = 12 * parseInt(years);
+  useEffect(() => {
+    const domainName = domain.name || domain.domain;
+    api(`/check/${encodeURIComponent(domainName)}`)
+      .then(d => {
+        setPricePerYear(d.renewal_price || d.price || null);
+        setUsdToMt(d.usd_to_mt || null);
+      })
+      .catch(() => setPricePerYear(null))
+      .finally(() => setPriceLoading(false));
+  }, [domain]);
+
+  const totalUSD = pricePerYear != null ? (pricePerYear * parseInt(years)) : null;
 
   async function pay() {
     if ((method === 'mpesa' || method === 'emola') && !phone) { toast('Número obrigatório', 'error'); return; }
+    if (totalUSD == null) { toast('Não foi possível obter o preço real de renovação. Tente novamente.', 'error'); return; }
     setLoading(true);
     try {
+      // cost = preço/ano × anos → o valor cobrado bate com o total exibido
       await api('/pay', { method:'POST', body: JSON.stringify({
         domain: domain.name || domain.domain,
-        action: 'renew', cost: estimatedUSD, method, phone, years
+        action: 'renew', cost: pricePerYear * parseInt(years), method, phone, years
       })});
       toast('Renovação iniciada!', 'success');
       onSuccess?.();
@@ -501,8 +618,16 @@ function RenewModal({ domain, onClose, toast, onSuccess }) {
         {['1','2','3','5'].map(y=><option key={y} value={y}>{y} {y==='1'?'ano':'anos'}</option>)}
       </Select>
       <div style={{ background:'#1a1d2e', borderRadius:7, padding:'10px 14px', marginBottom:14, fontSize:13, color:'#94a3b8' }}>
-        Estimativa: <strong style={{ color:'#e2e8f0' }}>${estimatedUSD}</strong>
-        <span style={{ fontSize:11, color:'#64748b', marginLeft:8 }}>(preço real calculado no pagamento)</span>
+        {priceLoading ? (
+          <span>A carregar preço real...</span>
+        ) : totalUSD != null ? (
+          <>
+            Total: <strong style={{ color:'#86efac', fontSize:15 }}>{fmtMt(totalUSD, usdToMt)}</strong>
+            <span style={{ fontSize:11, color:'#64748b', marginLeft:8 }}>(~${totalUSD.toFixed(2)} USD · ${pricePerYear}/ano × {years})</span>
+          </>
+        ) : (
+          <span style={{ color:'#fca5a5' }}>Não foi possível obter o preço real. Tente novamente.</span>
+        )}
       </div>
       <Select label="Método de pagamento" value={method} onChange={e=>setMethod(e.target.value)}>
         <option value="mpesa">M-Pesa</option>
@@ -512,7 +637,7 @@ function RenewModal({ domain, onClose, toast, onSuccess }) {
       {(method === 'mpesa' || method === 'emola') &&
         <Input label="Número de telefone" placeholder="84XXXXXXX" value={phone} onChange={e=>setPhone(e.target.value)} />
       }
-      <Btn onClick={pay} loading={loading} icon={<Icon d={Icons.refresh} size={14}/>}>Renovar Domínio</Btn>
+      <Btn onClick={pay} loading={loading} disabled={priceLoading || totalUSD == null} icon={<Icon d={Icons.refresh} size={14}/>}>Renovar Domínio</Btn>
     </Modal>
   );
 }
@@ -531,6 +656,7 @@ export default function DomainManager() {
   const [nsModal, setNsModal] = useState(null);
   const [renewModal, setRenewModal] = useState(null);
   const [transferModal, setTransferModal] = useState(false);
+  const [transferOutModal, setTransferOutModal] = useState(null);
 
   const toast = useCallback((msg, type='info') => {
     const id = Date.now();
@@ -674,6 +800,7 @@ export default function DomainManager() {
                   onDns={() => setDnsModal(d)}
                   onNs={() => setNsModal(d)}
                   onRenew={() => setRenewModal(d)}
+                  onTransferOut={(dom) => setTransferOutModal(dom)}
                 />
               ))}
             </div>
@@ -690,6 +817,7 @@ export default function DomainManager() {
       {nsModal && <NsModal domain={nsModal.name||nsModal.domain} onClose={()=>setNsModal(null)} toast={toast} />}
       {renewModal && <RenewModal domain={renewModal} onClose={()=>setRenewModal(null)} toast={toast} onSuccess={loadDomains} />}
       {transferModal && <TransferModal onClose={()=>setTransferModal(false)} toast={toast} onSuccess={loadDomains} />}
+      {transferOutModal && <TransferOutModal domain={transferOutModal} onClose={()=>setTransferOutModal(null)} toast={toast} />}
       <Toast toasts={toasts} />
     </div>
   );

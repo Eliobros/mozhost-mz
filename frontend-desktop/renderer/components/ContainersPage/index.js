@@ -21,7 +21,9 @@ const ContainersPage = () => {
   const [isCreating, setIsCreating] = useState(false); // ← NOVO ESTADO
   const [createForm, setCreateForm] = useState({
     name: '',
-    type: 'nodejs',
+    type: 'api',
+    projectType: 'api',
+    template: 'api',
     environment: {}
   });
   const [filter, setFilter] = useState('all');
@@ -85,6 +87,17 @@ const ContainersPage = () => {
       return;
     }
 
+    // ✅ TOKEN OBRIGATÓRIO PARA BOTS TELEGRAM/DISCORD
+    if (createForm.template === 'bot-telegram' || createForm.template === 'bot-discord') {
+      const tokenKey = createForm.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN';
+      if (!((createForm.environment?.[tokenKey] || '') + '').trim()) {
+        alert(createForm.template === 'bot-telegram'
+          ? 'Informe o Token do Telegram (crie com @BotFather)'
+          : 'Informe o Token do Discord (Discord Developer Portal)');
+        return;
+      }
+    }
+
     // ✅ PREVINE MÚLTIPLOS CLIQUES
     if (isCreating) return;
 
@@ -93,7 +106,7 @@ const ContainersPage = () => {
     try {
       await createContainer(createForm);
       setShowCreateModal(false);
-      setCreateForm({ name: '', type: 'nodejs', environment: {} });
+      setCreateForm({ name: '', type: 'api', projectType: 'api', template: 'api', environment: {} });
       await loadContainers();
     } catch (error) {
       alert(`Erro ao criar container: ${error.message}`);
@@ -354,7 +367,7 @@ const ContainersPage = () => {
             onClose={() => {
               if (isCreating) return; // ← Previne fechar durante criação
               setShowCreateModal(false);
-              setCreateForm({ name: '', type: 'nodejs', environment: {} });
+              setCreateForm({ name: '', type: 'api', projectType: 'api', template: 'api', environment: {} });
             }}
           />
         )}

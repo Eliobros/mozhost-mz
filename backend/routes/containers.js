@@ -188,14 +188,14 @@ router.post('/', [
     .matches(/^[a-zA-Z0-9_-\s]+$/)
     .withMessage('Name must be 3-100 characters and contain only letters, numbers, spaces, _ or -'),
   body('type')
-  .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'static'])
-  .withMessage('Type must be nodejs, python, php, api, bot-baileys,  bot-wwebjs, or static'),  body('template')
+  .isIn(['nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'bot-telegram', 'bot-discord', 'static'])
+  .withMessage('Type must be nodejs, python, php, api, bot-baileys, bot-wwebjs, bot-telegram, bot-discord, or static'),  body('template')
     .optional()
     .isIn([
-      'api', 'bot-baileys', 'bot-wwebjs', 'static',
+      'api', 'bot-baileys', 'bot-wwebjs', 'bot-telegram', 'bot-discord', 'static',
       'nodejs', 'python', 'php'
     ])
-    .withMessage('Template must be api, bot-baileys, bot-wwebjs, static, nodejs, python or php'),
+    .withMessage('Template must be api, bot-baileys, bot-wwebjs, bot-telegram, bot-discord, static, nodejs, python or php'),
   body('environment')
     .optional()
     .isObject()

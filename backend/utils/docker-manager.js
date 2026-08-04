@@ -896,6 +896,16 @@ server {
       internalPort: 3000,
       cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ chromium nss freetype harfbuzz ca-certificates ttf-freefont && cd /app/code && npm install && npm start']
     },
+    'bot-telegram': {
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
+    },
+    'bot-discord': {
+      image: 'node:20-alpine',
+      internalPort: 3000,
+      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ && cd /app/code && npm install && npm start']
+    },
     python: {
       image: 'python:3.11-alpine',
       internalPort: 8000,

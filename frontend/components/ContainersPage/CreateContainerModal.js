@@ -10,6 +10,13 @@ const CreateContainerModal = ({
   requiredCoins,
   isCreating = false
 }) => {
+  // Bots que exigem token (Telegram / Discord)
+  const needsToken = form.template === 'bot-telegram' || form.template === 'bot-discord';
+  const tokenKey = needsToken
+    ? (form.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN')
+    : null;
+  const hasToken = !!((tokenKey && form.environment?.[tokenKey]) || '').toString().trim();
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
@@ -80,7 +87,7 @@ const CreateContainerModal = ({
               
               <button
                 type="button"
-                onClick={() => setForm({ ...form, projectType: 'bot', type: 'bot-baileys', template: 'bot-baileys' })}
+                onClick={() => setForm({ ...form, projectType: 'bot', type: 'bot-baileys', template: 'bot-baileys', environment: {} })}
                 disabled={isCreating}
                 className={`p-4 border-2 rounded-lg text-center transition-all ${
                   form.projectType === 'bot'
@@ -90,7 +97,7 @@ const CreateContainerModal = ({
               >
                 <div className="text-2xl mb-2">🤖</div>
                 <div className="font-medium text-sm">BOT</div>
-                <div className="text-xs text-gray-500 mt-1">Bot WhatsApp</div>
+                <div className="text-xs text-gray-500 mt-1">WhatsApp • Telegram • Discord</div>
               </button >
 
 	    {/* ← adiciona aqui o card Site */}
@@ -123,7 +130,7 @@ const CreateContainerModal = ({
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'bot-baileys', template: 'bot-baileys' })}
+                  onClick={() => setForm({ ...form, type: 'bot-baileys', template: 'bot-baileys', environment: {} })}
                   disabled={isCreating}
                   className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
                     form.template === 'bot-baileys'
@@ -147,7 +154,7 @@ const CreateContainerModal = ({
 
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, type: 'bot-wwebjs', template: 'bot-wwebjs' })}
+                  onClick={() => setForm({ ...form, type: 'bot-wwebjs', template: 'bot-wwebjs', environment: {} })}
                   disabled={isCreating}
                   className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
                     form.template === 'bot-wwebjs'
@@ -168,7 +175,112 @@ const CreateContainerModal = ({
                     )}
                   </div>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({
+                    ...form,
+                    type: 'bot-telegram',
+                    template: 'bot-telegram',
+                    environment: { TELEGRAM_BOT_TOKEN: form.environment?.TELEGRAM_BOT_TOKEN || '' }
+                  })}
+                  disabled={isCreating}
+                  className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
+                    form.template === 'bot-telegram'
+                      ? 'border-sky-500 bg-sky-50'
+                      : 'border-gray-300 hover:border-sky-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-start">
+                    <div className="text-2xl mr-3">✈️</div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">Telegram</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Comandos com / • Polling • Rápido de configurar
+                      </div>
+                    </div>
+                    {form.template === 'bot-telegram' && (
+                      <div className="text-sky-500">✓</div>
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({
+                    ...form,
+                    type: 'bot-discord',
+                    template: 'bot-discord',
+                    environment: { DISCORD_BOT_TOKEN: form.environment?.DISCORD_BOT_TOKEN || '' }
+                  })}
+                  disabled={isCreating}
+                  className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
+                    form.template === 'bot-discord'
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-300 hover:border-indigo-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <div className="flex items-start">
+                    <div className="text-2xl mr-3">🎮</div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">Discord</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        discord.js • Mensagens • Servidores
+                      </div>
+                    </div>
+                    {form.template === 'bot-discord' && (
+                      <div className="text-indigo-500">✓</div>
+                    )}
+                  </div>
+                </button>
               </div>
+
+              {/* Campo de Token (Telegram / Discord) */}
+              {(form.template === 'bot-telegram' || form.template === 'bot-discord') && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {form.template === 'bot-telegram'
+                      ? 'Token do Bot do Telegram'
+                      : 'Token do Bot do Discord'}
+                  </label>
+                  <input
+                    type="password"
+                    value={form.environment?.[form.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN'] || ''}
+                    onChange={(e) => setForm({
+                      ...form,
+                      environment: {
+                        ...(form.environment || {}),
+                        [form.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN']: e.target.value
+                      }
+                    })}
+                    disabled={isCreating}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    placeholder={form.template === 'bot-telegram'
+                      ? '123456789:AAHxxxx...'
+                      : 'MTIzNDU2Nzg5...'}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {form.template === 'bot-telegram' ? (
+                      <>Crie seu bot com{' '}
+                        <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">@BotFather</a>
+                        {' '}e cole o token aqui.</>
+                    ) : (
+                      <>Gere o token em{' '}
+                        <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Discord Developer Portal</a>
+                        {' '}e cole aqui.</>
+                    )}
+                  </p>
+                  {!hasToken && (
+                    <p className="mt-1 text-xs text-red-600">
+                      ⚠️ Informe o token para o bot funcionar.
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-400">
+                    🔒 Seu token fica salvo como variável de ambiente e pode ser alterado depois nas configurações.
+                  </p>
+                </div>
+              )}
+
               <p className="mt-2 text-xs text-gray-500">
                 ✨ Bots vêm prontos com comandos básicos (!ping, !menu, !info)
               </p>
@@ -223,9 +335,9 @@ const CreateContainerModal = ({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={coins < requiredCoins || isCreating}
+              disabled={coins < requiredCoins || isCreating || (needsToken && !hasToken)}
               className={`px-4 py-2 text-white text-sm font-medium rounded-md flex items-center ${
-                coins < requiredCoins || isCreating
+                coins < requiredCoins || isCreating || (needsToken && !hasToken)
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
               }`}

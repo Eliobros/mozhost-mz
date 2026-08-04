@@ -427,17 +427,41 @@ const [transferProcessing, setTransferProcessing] = useState(false);
 
 
 
+  // Abre o modal de renovação buscando o preço REAL de renovação na Dynadot
+  // (nunca inventar cost — o fallback hardcoded 10 fazia o usuário pagar errado).
+  const openRenewModal = async (domain) => {
+    setRenewYears(1);
+    setShowRenewModal({ domain, renewal_price: null, price: null, loading_price: true });
+    try {
+      const res = await fetch(`${API}/api/registrar/check/${domain}`, { headers: hdrs() });
+      const data = await res.json();
+      if (res.ok) {
+        setShowRenewModal({
+          domain,
+          renewal_price: data.renewal_price || null,
+          price: data.price || null,
+          loading_price: false
+        });
+      } else {
+        setShowRenewModal({ domain, renewal_price: null, price: null, loading_price: false });
+      }
+    } catch {
+      setShowRenewModal({ domain, renewal_price: null, price: null, loading_price: false });
+    }
+  };
+
   const renewDomain = () => {
     if (!showRenewModal) return;
+    const price = showRenewModal.renewal_price || showRenewModal.price;
+    if (!price) {
+      showToast('Não foi possível obter o preço real de renovação. Tente novamente.', 'error');
+      return;
+    }
     // Renovation NÃO exige dados do registrante (já estão no banco),
     // então passamos um objeto vazio.
-    submitDomainPaymentWithRegistrant(
-      'renew',
-      showRenewModal.domain,
-      (showRenewModal.renewal_price || showRenewModal.price || 10),
-      renewYears,
-      {}
-    );
+    // cost = preço/ano × anos → o pagamento cobrado bate com o total exibido
+    // (sem isso, renovar 3 anos cobrava apenas 1 ano mas renovava 3).
+    submitDomainPaymentWithRegistrant('renew', showRenewModal.domain, price * renewYears, renewYears, {});
   };
 
   // ===== DNS =====
@@ -1083,7 +1107,7 @@ const submitTransferOut = async () => {
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <button onClick={() => { setShowRenewModal({ domain }); setRenewYears(1); }}
+                              <button onClick={() => openRenewModal(domain)}
                                 className="text-xs px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 font-medium flex items-center gap-1">
                                 <RefreshCw className="w-3 h-3" /> Renovar
                               </button>
@@ -1179,7 +1203,7 @@ const submitTransferOut = async () => {
                   <div className="divide-y">
                     {filteredDnsRecords.map((r, i) => (
                       <div key={r.id || i} className="px-5 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 hover:bg-gray-50">
-                        <div className="min-w-0 flex-1 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-sm w-full">
+                        <div className="min-w-0 flex-1 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-1 text-sm w-full">
                           <div>
                             <span className="text-gray-400 text-xs">Tipo</span>
                             <div className="font-mono font-bold">
@@ -1196,7 +1220,7 @@ const submitTransferOut = async () => {
                             <span className="text-gray-400 text-xs">Nome</span>
                             <div className="font-mono truncate text-sm">{r.name || '@'}</div>
                           </div>
-                          <div className="col-span-2 sm:col-span-1 truncate">
+                          <div className="truncate">
                             <span className="text-gray-400 text-xs">Conteúdo</span>
                             <div className="font-mono truncate text-xs flex items-center gap-1">
                               <span className="truncate">{r.content}</span>
@@ -1205,6 +1229,10 @@ const submitTransferOut = async () => {
                                 <Copy className="w-3 h-3 text-gray-400" />
                               </button>
                             </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-xs">Prioridade</span>
+                            <div className="font-mono text-sm">{r.prio || '—'}</div>
                           </div>
                           <div>
                             <span className="text-gray-400 text-xs">TTL</span>
@@ -1292,12 +1320,14 @@ const submitTransferOut = async () => {
                         <input type="number" value={dnsForm.ttl} onChange={e => setDnsForm({ ...dnsForm, ttl: e.target.value })}
                           className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Prioridade</label>
-                        <input type="number" value={dnsForm.prio} onChange={e => setDnsForm({ ...dnsForm, prio: e.target.value })}
-                          placeholder={dnsForm.type === 'MX' ? '10' : 'Opcional'}
-                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
-                      </div>
+                      {dnsForm.type === 'MX' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Prioridade</label>
+                          <input type="number" value={dnsForm.prio} onChange={e => setDnsForm({ ...dnsForm, prio: e.target.value })}
+                            placeholder="10"
+                            className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-3 mt-6">
@@ -1641,19 +1671,25 @@ const submitTransferOut = async () => {
                 <button onClick={closeRenewModal} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
               </div>
 
-              {/* ← PREÇO EM MZN NO MODAL DE RENOVAÇÃO */}
+              {/* ← PREÇO REAL EM MZN NO MODAL DE RENOVAÇÃO */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center justify-between">
                   <p className="font-bold text-gray-900 text-lg">{showRenewModal.domain}</p>
-                  {showRenewModal.renewal_price && (
+                  {showRenewModal.loading_price ? (
+                    <p className="text-sm text-yellow-700 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> A carregar preço real...
+                    </p>
+                  ) : (showRenewModal.renewal_price || showRenewModal.price) ? (
                     <div className="text-right">
                       <p className="text-xl font-bold text-gray-900">
-                        {formatMZN((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears, exchangeRate)}
+                        {formatMZN((showRenewModal.renewal_price || showRenewModal.price) * renewYears, exchangeRate)}
                       </p>
                       <p className="text-xs text-gray-400">
-                        ~${((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears).toFixed(2)} USD
+                        ~${((showRenewModal.renewal_price || showRenewModal.price) * renewYears).toFixed(2)} USD
                       </p>
                     </div>
+                  ) : (
+                    <p className="text-sm text-red-600">Não foi possível obter o preço real. Tente novamente.</p>
                   )}
                 </div>
               </div>
@@ -1672,10 +1708,12 @@ const submitTransferOut = async () => {
                         </button>
                       ))}
                     </div>
-                    {/* ← preço total da renovação em MZN conforme anos selecionados */}
+                    {/* ← preço total da renovação em MZN conforme anos selecionados (preço real) */}
                     <p className="text-xs text-gray-400 text-center mt-2">
                       Total: <span className="font-semibold text-gray-700">
-                        {formatMZN((showRenewModal.renewal_price || showRenewModal.price || 10) * renewYears, exchangeRate)}
+                        {showRenewModal.renewal_price || showRenewModal.price
+                          ? formatMZN((showRenewModal.renewal_price || showRenewModal.price) * renewYears, exchangeRate)
+                          : '—'}
                       </span>
                     </p>
                   </div>

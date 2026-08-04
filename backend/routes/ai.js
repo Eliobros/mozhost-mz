@@ -4,6 +4,7 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const mozhostAi = require('../services/mozhostAiService');
+const { isAdminUser } = require('../utils/admin');
 
 const router = express.Router();
 
@@ -21,7 +22,12 @@ router.post('/chat', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Mensagem muito longa (máximo 5000 caracteres)' });
     }
 
-    const result = await mozhostAi.chat(userId, message, req.user);
+    // 🔒 Passa isAdmin para a IA: usuários comuns não veem nem podem chamar
+    // as funções de administrador (estatísticas, busca de usuários, etc).
+    const result = await mozhostAi.chat(userId, message, {
+      ...req.user,
+      isAdmin: isAdminUser(req.user.userId),
+    });
 
     if (!result.success) {
       return res.status(503).json({ error: result.error });

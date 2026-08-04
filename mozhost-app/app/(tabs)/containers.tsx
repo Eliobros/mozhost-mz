@@ -44,6 +44,7 @@ export default function ContainersScreen() {
     name: '',
     type: 'nodejs',
     template: 'api',
+    environment: {} as Record<string, string>,
   });
 
   const loadContainers = useCallback(async () => {
@@ -107,9 +108,27 @@ export default function ContainersScreen() {
     );
   };
 
+  const needsToken =
+    createForm.template === 'bot-telegram' || createForm.template === 'bot-discord';
+  const tokenKey = needsToken
+    ? createForm.template === 'bot-telegram'
+      ? 'TELEGRAM_BOT_TOKEN'
+      : 'DISCORD_BOT_TOKEN'
+    : '';
+  const hasToken = !!(createForm.environment[tokenKey] || '').trim();
+
   const handleCreate = async () => {
     if (!createForm.name.trim()) {
       Alert.alert('Erro', 'Insira um nome para o container');
+      return;
+    }
+    if (needsToken && !hasToken) {
+      Alert.alert(
+        'Token necessário',
+        createForm.template === 'bot-telegram'
+          ? 'Crie seu bot com @BotFather no Telegram e informe o token.'
+          : 'Gere o token no Discord Developer Portal e informe.'
+      );
       return;
     }
     if (isCreating) return;
@@ -117,7 +136,7 @@ export default function ContainersScreen() {
     try {
       await api.post('/containers', createForm);
       setShowCreateModal(false);
-      setCreateForm({ name: '', type: 'nodejs', template: 'api' });
+      setCreateForm({ name: '', type: 'nodejs', template: 'api', environment: {} });
       await loadContainers();
       Alert.alert('Sucesso', 'Container criado com sucesso!');
     } catch (err: any) {
@@ -397,6 +416,8 @@ export default function ContainersScreen() {
                   { key: 'api', label: 'API' },
                   { key: 'bot-baileys', label: 'Bot Baileys' },
                   { key: 'bot-wwebjs', label: 'Bot WWebJS' },
+                  { key: 'bot-telegram', label: 'Bot Telegram' },
+                  { key: 'bot-discord', label: 'Bot Discord' },
                 ].map((t) => (
                   <TouchableOpacity
                     key={t.key}
@@ -405,7 +426,16 @@ export default function ContainersScreen() {
                       createForm.template === t.key && styles.typeBtnActive,
                     ]}
                     onPress={() =>
-                      setCreateForm((prev) => ({ ...prev, template: t.key }))
+                      setCreateForm((prev) => {
+                        // Mantém apenas o token do template escolhido
+                        const env =
+                          t.key === 'bot-telegram'
+                            ? { TELEGRAM_BOT_TOKEN: prev.environment.TELEGRAM_BOT_TOKEN || '' }
+                            : t.key === 'bot-discord'
+                              ? { DISCORD_BOT_TOKEN: prev.environment.DISCORD_BOT_TOKEN || '' }
+                              : {};
+                        return { ...prev, template: t.key, environment: env };
+                      })
                     }>
                     <Text
                       style={[
@@ -419,10 +449,47 @@ export default function ContainersScreen() {
               </View>
             </View>
 
+            {(createForm.template === 'bot-telegram' || createForm.template === 'bot-discord') && (
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>
+                  {createForm.template === 'bot-telegram'
+                    ? 'Token do Bot do Telegram'
+                    : 'Token do Bot do Discord'}
+                </Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder={createForm.template === 'bot-telegram'
+                    ? '123456789:AAHxxxx...'
+                    : 'MTIzNDU2Nzg5...'}
+                  placeholderTextColor={Colors.textMuted}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  value={createForm.environment[createForm.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN'] || ''}
+                  onChangeText={(v) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      environment: {
+                        ...prev.environment,
+                        [createForm.template === 'bot-telegram' ? 'TELEGRAM_BOT_TOKEN' : 'DISCORD_BOT_TOKEN']: v,
+                      },
+                    }))
+                  }
+                />
+                <Text style={styles.tokenHint}>
+                  {createForm.template === 'bot-telegram'
+                    ? 'Crie com @BotFather no Telegram'
+                    : 'Gere no Discord Developer Portal'}
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={[styles.createBtn, isCreating && { opacity: 0.5 }]}
+              style={[
+                styles.createBtn,
+                (isCreating || (needsToken && !hasToken)) && { opacity: 0.5 },
+              ]}
               onPress={handleCreate}
-              disabled={isCreating}>
+              disabled={isCreating || (needsToken && !hasToken)}>
               {isCreating ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -594,6 +661,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceVariant,
   },
   templateLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  tokenHint: { fontSize: 12, color: Colors.textSecondary, marginTop: 6 },
   createBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 10,

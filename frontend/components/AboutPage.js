@@ -11,18 +11,18 @@ export default function AboutPage() {
 
   const milestones = [
     {
-      date: 'Nov/Dez 2024',
-      title: 'Nasceu a ZapHost-MZ',
-      description: 'A semente de tudo. Uma plataforma de hospedagem de bots de WhatsApp com Docker, API própria e ambiente isolado por utilizador.',
-      color: 'purple',
-      icon: <Zap className="w-5 h-5" />
-    },
-    {
       date: '15 Mai 2024',
       title: 'Fundação da Eliobros Tech',
       description: 'A empresa ganhou nome, identidade e propósito — ainda sem registo formal, mas com visão clara do futuro.',
       color: 'blue',
       icon: <Star className="w-5 h-5" />
+    },
+    {
+      date: 'Nov/Dez 2024',
+      title: 'Nasceu a ZapHost-MZ',
+      description: 'A semente de tudo. Uma plataforma de hospedagem de bots de WhatsApp com Docker, API própria e ambiente isolado por utilizador.',
+      color: 'purple',
+      icon: <Zap className="w-5 h-5" />
     },
     {
       date: 'Mar 2025',
@@ -37,8 +37,39 @@ export default function AboutPage() {
       description: 'Docker, múltiplas stacks, bases de dados, editor de código Monaco, Git, webhooks, domínios personalizados e muito mais.',
       color: 'orange',
       icon: <Rocket className="w-5 h-5" />
+    },
+    {
+      date: '2026',
+      title: 'App na Play Store e primeiros clientes',
+      description: 'A MozHost entra em testes na Google Play Store e conquista os primeiros clientes pagantes, que já elogiam a velocidade da plataforma.',
+      color: 'blue',
+      icon: <Users className="w-5 h-5" />
     }
   ];
+
+  // Classes fixas (o Tailwind não gera classes montadas dinamicamente em runtime)
+  const colorClasses = {
+    blue: {
+      dot: 'bg-blue-100 border-2 border-blue-400 text-blue-600',
+      card: 'bg-blue-50 border border-blue-200',
+      badge: 'text-blue-700 bg-blue-100',
+    },
+    purple: {
+      dot: 'bg-purple-100 border-2 border-purple-400 text-purple-600',
+      card: 'bg-purple-50 border border-purple-200',
+      badge: 'text-purple-700 bg-purple-100',
+    },
+    green: {
+      dot: 'bg-green-100 border-2 border-green-400 text-green-600',
+      card: 'bg-green-50 border border-green-200',
+      badge: 'text-green-700 bg-green-100',
+    },
+    orange: {
+      dot: 'bg-orange-100 border-2 border-orange-400 text-orange-600',
+      card: 'bg-orange-50 border border-orange-200',
+      badge: 'text-orange-700 bg-orange-100',
+    },
+  };
 
   const values = [
     {
@@ -164,24 +195,27 @@ export default function AboutPage() {
           <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 hidden md:block"></div>
 
           <div className="space-y-6">
-            {milestones.map((m, i) => (
-              <div key={i} className="flex gap-6 items-start">
-                {/* Dot */}
-                <div className={`relative z-10 flex-shrink-0 w-12 h-12 rounded-full bg-${m.color}-100 border-2 border-${m.color}-400 flex items-center justify-center text-${m.color}-600`}>
-                  {m.icon}
-                </div>
-                <div className={`flex-1 bg-${m.color}-50 border border-${m.color}-200 rounded-xl p-5`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className={`text-xs font-bold text-${m.color}-700 bg-${m.color}-100 px-2 py-1 rounded-full flex items-center gap-1`}>
-                      <Calendar className="w-3 h-3" />
-                      {m.date}
-                    </span>
+            {milestones.map((m, i) => {
+              const c = colorClasses[m.color] || colorClasses.blue;
+              return (
+                <div key={i} className="flex gap-6 items-start">
+                  {/* Dot */}
+                  <div className={`relative z-10 flex-shrink-0 w-12 h-12 rounded-full ${c.dot} flex items-center justify-center`}>
+                    {m.icon}
                   </div>
-                  <h3 className="font-bold text-gray-900 mb-1">{m.title}</h3>
-                  <p className="text-sm text-gray-700">{m.description}</p>
+                  <div className={`flex-1 ${c.card} rounded-xl p-5`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className={`text-xs font-bold ${c.badge} px-2 py-1 rounded-full flex items-center gap-1`}>
+                        <Calendar className="w-3 h-3" />
+                        {m.date}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-1">{m.title}</h3>
+                    <p className="text-sm text-gray-700">{m.description}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -232,10 +266,10 @@ export default function AboutPage() {
         </p>
         <div className="flex flex-wrap gap-3 justify-center">
           <Link
-            href="/register"
+            href="/login"
             className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2"
           >
-            Criar conta grátis <ArrowRight className="w-4 h-4" />
+            Criar conta / Entrar <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             href="/docs"
@@ -252,7 +286,7 @@ export default function AboutPage() {
           <Link href="/docs" className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm">
             ← Documentação
           </Link>
-          <Link href="/suporte" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium text-sm">
+          <Link href="/docs/suporte" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium text-sm">
             Suporte →
           </Link>
         </div>

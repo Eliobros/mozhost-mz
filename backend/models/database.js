@@ -324,7 +324,7 @@ console.log('✅ Email tables initialized successfully');
           id INT PRIMARY KEY AUTO_INCREMENT,
           user_id INT NOT NULL,
           domain VARCHAR(255) NOT NULL,
-          action ENUM('buy', 'renew') NOT NULL,
+          action ENUM('buy', 'renew', 'transfer') NOT NULL,
           price_usd DECIMAL(10,2) NOT NULL,
           amount DECIMAL(10,2) NOT NULL,
           currency VARCHAR(5) DEFAULT 'MZN',
@@ -333,6 +333,7 @@ console.log('✅ Email tables initialized successfully');
           years INT DEFAULT 1,
           reference_code VARCHAR(100) UNIQUE,
           transaction_id VARCHAR(100),
+          auth_code VARCHAR(255) NULL,
           status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
           error_message TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -340,7 +341,8 @@ console.log('✅ Email tables initialized successfully');
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
           INDEX idx_dompay_user (user_id),
           INDEX idx_dompay_status (status),
-          INDEX idx_dompay_ref (reference_code)
+          INDEX idx_dompay_ref (reference_code),
+          INDEX idx_dompay_domain (domain)
         )
       `);
 

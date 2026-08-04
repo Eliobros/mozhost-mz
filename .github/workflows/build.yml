@@ -2,7 +2,12 @@ name: Build MozHost Desktop
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'cursor/**']
+  workflow_dispatch:
+
+concurrency:
+  group: build-mozhost-desktop-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-linux:
@@ -16,8 +21,10 @@ jobs:
       - run: cd frontend-desktop && npm run build
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-appimage
-          path: frontend-desktop/dist/*.AppImage
+          name: linux-appimage-deb
+          path: |
+            frontend-desktop/dist/*.AppImage
+            frontend-desktop/dist/*.deb
 
   build-windows:
     runs-on: windows-latest

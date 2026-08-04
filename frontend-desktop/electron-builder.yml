@@ -1,4 +1,4 @@
-appId: mz.eliobros.mozhost
+appId: mz.co.mozhost
 productName: MozHost
 copyright: Copyright © 2026 MozHost
 directories:
@@ -20,3 +20,13 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: resources/icon.png
+  category: Development
+  maintainer: MozHost <mozhost@topaziocoin.online>
+  synopsis: MozHost Desktop
+  description: MozHost - Plataforma de Hospedagem de Containers e APIs

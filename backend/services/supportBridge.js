@@ -170,15 +170,6 @@ function attachSocket(waSocket) {
 // ─── Criar ticket ─────────────────────────────────────────────────────────────
 
 async function createTicket({ userId, summary, lastMessage, conversationHistory = [] }) {
-  const existing = await database.query(
-    `SELECT id FROM support_tickets WHERE user_id = ? AND status IN ('waiting','active') LIMIT 1`,
-    [userId]
-  );
-  if (existing.length > 0) {
-    console.log(`ℹ️  Ticket já existe para userId ${userId}: #${existing[0].id}`);
-    return { ticketId: existing[0].id, userId, alreadyExists: true };
-  }
-
   const users = await database.query(
     'SELECT id, username, email FROM users WHERE id = ?',
     [userId]
@@ -187,12 +178,32 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
   if (users.length === 0) throw new Error('Usuário não encontrado');
   const user = users[0];
 
+  // INSERT atômico: só cria se NÃO existir ticket waiting/active para o
+  // usuário. Elimina a corrida (TOCTOU) entre o SELECT e o INSERT anteriores,
+  // que podia gerar tickets duplicados em requisições simultâneas.
   const result = await database.query(
     `INSERT INTO support_tickets
-     (user_id, status, summary, last_message, conversation_history, created_at)
-     VALUES (?, 'waiting', ?, ?, ?, NOW())`,
-    [userId, summary, lastMessage, JSON.stringify(conversationHistory)]
+       (user_id, status, summary, last_message, conversation_history, created_at)
+     SELECT ?, 'waiting', ?, ?, ?, NOW()
+     FROM DUAL
+     WHERE NOT EXISTS (
+       SELECT 1 FROM support_tickets
+       WHERE user_id = ? AND status IN ('waiting', 'active')
+     )`,
+    [userId, summary, lastMessage, JSON.stringify(conversationHistory), userId]
   );
+
+  if (result.affectedRows === 0) {
+    const existing = await database.query(
+      `SELECT id FROM support_tickets WHERE user_id = ? AND status IN ('waiting','active') LIMIT 1`,
+      [userId]
+    );
+    if (existing.length > 0) {
+      console.log(`ℹ️  Ticket já existe para userId ${userId}: #${existing[0].id}`);
+      return { ticketId: existing[0].id, userId, alreadyExists: true };
+    }
+    throw new Error('Não foi possível criar o ticket (conflito). Tente novamente.');
+  }
 
   const ticketId = result.insertId;
   console.log(`🎫 Ticket #${ticketId} criado para ${user.username}`);
@@ -665,7 +676,10 @@ async function handleIncomingWhatsApp({ messages, type }) {
       }
 
       if (id === 'recusar_suporte') {
-        await closeOwnActiveTicket(phone);
+        // "Recusar" apenas recusa o ticket oferecido — NÃO deve encerrar o
+        // ticket ativo do agente (isso era um bug: podia fechar conversas em
+        // andamento por engano). Outro agente pode aceitar o ticket.
+        await sendAgent(phone, `ℹ️ Ticket recusado. Outro agente pode aceitá-lo.`);
         continue;
       }
     }
@@ -699,7 +713,18 @@ async function handleIncomingWhatsApp({ messages, type }) {
       continue;
     }
 
-    if ((m = text.match(CLOSE_REGEX)) || (m = text.match(RECUSE_REGEX))) {
+    if ((m = text.match(RECUSE_REGEX))) {
+      const id = m[1] ? parseInt(m[1], 10) : null;
+      await sendAgent(
+        phone,
+        id
+          ? `ℹ️ Ticket #${id} recusado por você. Outro agente pode aceitá-lo.`
+          : `ℹ️ Recusa registrada. Você continua com seu ticket ativo (se houver) — use *!encerrar* para fechá-lo.`
+      );
+      continue;
+    }
+
+    if ((m = text.match(CLOSE_REGEX))) {
       const id = m[1] ? parseInt(m[1], 10) : null;
       if (id) {
         await closeTicket({ ticketId: id, agentPhone: phone });

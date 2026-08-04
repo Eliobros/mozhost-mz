@@ -7,6 +7,34 @@ const bridge = require('../services/supportBridge');
 const database = require('../models/database');
 const authMiddleware  = require('../middleware/auth'); // o teu middleware JWT
 
+// ─── Rate limit simples (em memória) ─────────────────────────────────────────
+// Evita que um usuário spame o agente de suporte com mensagens.
+// Limite: 12 mensagens por janela de 15 segundos.
+const messageRate = new Map();
+const MESSAGE_MAX = 12;
+const MESSAGE_WINDOW_MS = 15000;
+
+function messageRateLimit(scope, userId, max = MESSAGE_MAX, windowMs = MESSAGE_WINDOW_MS) {
+  const now = Date.now();
+  const key = `${scope}:${userId}`;
+  const rec = messageRate.get(key) || { count: 0, resetAt: now + windowMs };
+  if (now > rec.resetAt) {
+    rec.count = 0;
+    rec.resetAt = now + windowMs;
+  }
+  rec.count += 1;
+  messageRate.set(key, rec);
+
+  // Limpeza ocasional para a memória não crescer sem limite
+  if (messageRate.size > 1000) {
+    for (const [k, v] of messageRate) {
+      if (now > v.resetAt) messageRate.delete(k);
+    }
+  }
+
+  return rec.count <= max;
+}
+
 // ─── POST /api/support/ticket ─────────────────────────────────────────────────
 // Cria um novo ticket de suporte (chamado pelo frontend ou pelo function calling da IA)
 
@@ -14,6 +42,12 @@ router.post('/ticket', authMiddleware, async (req, res) => {
   try {
     const { summary, lastMessage, conversationHistory } = req.body;
     const userId = req.user.id;
+
+    // Rate limit: evita que um usuário crie/cancele tickets em loop para
+    // spammar os agentes com notificações no WhatsApp (5 por minuto).
+    if (!messageRateLimit('ticket', userId, 5, 60000)) {
+      return res.status(429).json({ success: false, error: 'Muitas solicitações de ticket em pouco tempo. Aguarde um pouco.' });
+    }
 
     if (!summary || !lastMessage) {
       return res.status(400).json({ success: false, error: 'summary e lastMessage são obrigatórios' });
@@ -64,6 +98,10 @@ router.post('/message', authMiddleware, async (req, res) => {
 
     if (message.length > 2000) {
       return res.status(400).json({ success: false, error: 'Mensagem muito longa (máx 2000 chars)' });
+    }
+
+    if (!messageRateLimit('msg', userId)) {
+      return res.status(429).json({ success: false, error: 'Muitas mensagens em pouco tempo. Aguarde alguns segundos.' });
     }
 
     await bridge.userToAgent({ ticketId: parseInt(ticketId), userId, message });
