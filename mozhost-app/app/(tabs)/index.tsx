@@ -171,11 +171,11 @@ export default function DashboardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => router.push('/(tabs)/profile')}>
+            onPress={() => router.push('/coins')}>
             <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
               <Ionicons name="wallet" size={24} color={Colors.coins} />
             </View>
-            <Text style={styles.actionLabel}>Coins</Text>
+            <Text style={styles.actionLabel}>Comprar Coins</Text>
           </TouchableOpacity>
         </View>
       </View>

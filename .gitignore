@@ -91,4 +91,5 @@ temp/
 .aider*
 .env
 .env
-user-data/
+
+mozhost-app/mozhost-key.json

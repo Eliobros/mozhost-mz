@@ -66,7 +66,7 @@ class NotificationManager {
         console.log(`📤 Notificação enviada via WebSocket para usuário ${userId}`);
       }
 
-      // 4. Enviar via Expo Push Notification (app mobile)
+      // 4. Enviar via Expo Push Notification (app mobile) — 🔥 fire-and-forget, NÃO bloqueia a API
       try {
         const tokens = await database.query(
           'SELECT token FROM expo_push_tokens WHERE user_id = ?',
@@ -86,49 +86,51 @@ class NotificationManager {
 
           if (messages.length > 0) {
             const chunks = expo.chunkPushNotifications(messages);
-            for (const chunk of chunks) {
-              try {
-                const receipts = await expo.sendPushNotificationsAsync(chunk);
-                console.log(`📱 Push enviado para ${messages.length} dispositivo(s) do user ${userId}`);
+            (async () => {
+              for (const chunk of chunks) {
+                try {
+                  const receipts = await expo.sendPushNotificationsAsync(chunk);
+                  console.log(`📱 Push enviado para ${messages.length} dispositivo(s) do user ${userId}`);
 
-                // Remover tokens inválidos
-                for (let i = 0; i < receipts.length; i++) {
-                  if (receipts[i].status === 'error') {
-                    console.error(`❌ Erro no push: ${receipts[i].message}`);
-                    if (receipts[i].details?.error === 'DeviceNotRegistered') {
-                      await database.query(
-                        'DELETE FROM expo_push_tokens WHERE token = ?',
-                        [chunk[i].to]
-                      );
-                      console.log(`🗑️ Token inválido removido: ${chunk[i].to}`);
+                  // Remover tokens inválidos
+                  for (let i = 0; i < receipts.length; i++) {
+                    if (receipts[i].status === 'error') {
+                      console.error(`❌ Erro no push: ${receipts[i].message}`);
+                      if (receipts[i].details?.error === 'DeviceNotRegistered') {
+                        await database.query(
+                          'DELETE FROM expo_push_tokens WHERE token = ?',
+                          [chunk[i].to]
+                        );
+                        console.log(`🗑️ Token inválido removido: ${chunk[i].to}`);
+                      }
                     }
                   }
+                } catch (pushError) {
+                  console.error('❌ Erro ao enviar push chunk:', pushError);
                 }
-              } catch (pushError) {
-                console.error('❌ Erro ao enviar push chunk:', pushError);
               }
-            }
+            })().catch(err => console.error('❌ Erro no push (fire-and-forget):', err));
           }
         }
       } catch (pushError) {
         console.error('❌ Erro ao buscar tokens expo:', pushError);
       }
 
-      // 5. Enviar via Web Push (browser)
+      // 5. Enviar via Web Push (browser) — 🔥 fire-and-forget, NÃO bloqueia a API
       try {
         const { sendPushToUser } = require('../routes/push');
-        await sendPushToUser(userId, {
+        sendPushToUser(userId, {
           title: title,
           message: message,
           icon: '/mozhost.png',
           url: '/',
           tag: `mozhost-${notificationId}`
-        });
+        }).catch(pushError => console.error('❌ Erro ao enviar Web Push:', pushError.message));
       } catch (pushError) {
         console.error('❌ Erro ao enviar Web Push:', pushError.message);
       }
 
-      // 6. Enviar via WhatsApp (se vinculado)
+      // 6. Enviar via WhatsApp (se vinculado) — 🔥 fire-and-forget, NÃO bloqueia a API
       try {
         const waAccounts = await database.query(
           'SELECT whatsapp_number FROM whatsapp_accounts WHERE user_id = ? AND verified = TRUE',
@@ -137,10 +139,10 @@ class NotificationManager {
 
         if (waAccounts.length > 0) {
           const { sendWhatsAppMessage } = require('./whatsapp');
-          await sendWhatsAppMessage({
+          sendWhatsAppMessage({
             phone: waAccounts[0].whatsapp_number,
             message: `*${title}*\n\n${message}`
-          });
+          }).catch(waError => console.error('❌ Erro ao enviar WhatsApp:', waError.message));
         }
       } catch (waError) {
         console.error('❌ Erro ao enviar WhatsApp:', waError.message);

@@ -12,11 +12,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { Colors } from '@/constants/Colors';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const [coins, setCoins] = useState(0);
   const [stats, setStats] = useState({ total: 0, running: 0 });
@@ -47,6 +49,13 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Recarrega saldo ao voltar para a aba (ex: depois de comprar coins em /coins)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleRedeemCoupon = async () => {
     if (!couponCode.trim()) {
@@ -138,6 +147,12 @@ export default function ProfileScreen() {
             <Text style={styles.coinsAmount}>{coins}</Text>
             <Text style={styles.coinsLabel}>coins</Text>
           </View>
+          <TouchableOpacity
+            style={styles.buyCoinsBtn}
+            onPress={() => router.push('/coins')}>
+            <Ionicons name="cart" size={16} color="#fff" />
+            <Text style={styles.buyCoinsBtnText}>Comprar Coins</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -268,6 +283,19 @@ const styles = StyleSheet.create({
   coinsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   coinsAmount: { fontSize: 32, fontWeight: '800', color: Colors.text },
   coinsLabel: { fontSize: 16, color: Colors.textSecondary },
+  buyCoinsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginTop: 16,
+    width: '100%',
+  },
+  buyCoinsBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   messageBox: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 8, marginBottom: 10, gap: 6 },
   successBox: { backgroundColor: '#f0fdf4' },
   errorBox: { backgroundColor: '#fef2f2' },
