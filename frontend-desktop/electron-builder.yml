@@ -8,8 +8,7 @@ files:
   - from: .
     filter:
       - package.json
-      - main
-      - renderer/out
+      - app
 publish: null
 
 win:

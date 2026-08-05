@@ -1,148 +1,100 @@
+Bom — aqui está exatamente o que você deve fazer e os patches concretos para corrigir os dois erros que derrubaram o job.
 
-➜  mozhost-mz git:(cursor/adicionar-verifica-o-de-conta-via-whatsapp-ou-email-c97a) vercel --prod
-  Inspect     https://vercel.com/eliobros-tech/mozhost/37SSgyHPW3h8huooNvUj4YpQCYCQ
-▲ Production  https://mozhost-rnk7e0g7m-eliobros-tech.vercel.app
-2026-07-02T21:49:26.312Z  Running build in Washington, D.C., USA (East) – iad1                                                              2026-07-02T21:49:26.314Z  Build machine configuration: 2 cores, 8 GB
-2026-07-02T21:49:26.623Z  Retrieving list of deployment files...
-2026-07-02T21:49:27.544Z  Downloading 3480 deployment files...
-2026-07-02T21:49:37.598Z  Restored build cache from previous deployment (2kKkmkYH9vCezafNbxD7CgV4p7wi)
-2026-07-02T21:49:37.972Z  Running "vercel build"
-2026-07-02T21:49:38.006Z  Vercel CLI 54.18.7
-2026-07-02T21:49:38.531Z  Installing dependencies...
-2026-07-02T21:49:40.543Z
-2026-07-02T21:49:40.543Z  up to date in 2s
-2026-07-02T21:49:40.544Z
-2026-07-02T21:49:40.544Z  177 packages are looking for funding
-2026-07-02T21:49:40.544Z  run `npm fund` for details
-2026-07-02T21:49:40.601Z  Detected Next.js version: 16.0.7
-2026-07-02T21:49:40.610Z  Running "npm run build"
-2026-07-02T21:49:40.774Z
-2026-07-02T21:49:40.775Z  > frontend@0.1.0 build
-2026-07-02T21:49:40.775Z  > next build --webpack
-2026-07-02T21:49:40.775Z
-2026-07-02T21:49:41.202Z  [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
-2026-07-02T21:49:43.386Z  ▲ Next.js 16.0.7 (webpack)
-2026-07-02T21:49:43.387Z
-2026-07-02T21:49:43.502Z  Creating an optimized production build ...
-2026-07-02T21:49:43.787Z  > [PWA] Compile server
-2026-07-02T21:49:43.787Z  > [PWA] Compile server
-2026-07-02T21:49:43.788Z  > [PWA] Compile client (static)
-2026-07-02T21:49:43.788Z  > [PWA] Auto register service worker with: /vercel/path0/frontend/node_modules/next-pwa/register.js
-2026-07-02T21:49:43.789Z  > [PWA] Service worker: /vercel/path0/frontend/public/sw.js
-2026-07-02T21:49:43.789Z  > [PWA]   url: /sw.js
-2026-07-02T21:49:43.789Z  > [PWA]   scope: /
-2026-07-02T21:50:04.494Z  Failed to compile.
-2026-07-02T21:50:04.494Z
-2026-07-02T21:50:04.495Z  ./app/(public)/docs/cli/create-database/page.tsx
-2026-07-02T21:50:04.495Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
-2026-07-02T21:50:04.496Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/create-database/page.tsx:469:1]
-2026-07-02T21:50:04.496Z  466 |       </section>
-2026-07-02T21:50:04.497Z  467 |     </div>
-2026-07-02T21:50:04.497Z  468 |   );
-2026-07-02T21:50:04.497Z  469 | }
-2026-07-02T21:50:04.498Z  : ^
-2026-07-02T21:50:04.498Z  `----
-2026-07-02T21:50:04.499Z  x Expected '</', got '<eof>'
-2026-07-02T21:50:04.499Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/create-database/page.tsx:469:3]
-2026-07-02T21:50:04.499Z  467 |     </div>
-2026-07-02T21:50:04.500Z  468 |   );
-2026-07-02T21:50:04.500Z  469 | }
-2026-07-02T21:50:04.500Z  `----
-2026-07-02T21:50:04.501Z
-2026-07-02T21:50:04.501Z  Caused by:
-2026-07-02T21:50:04.502Z  Syntax Error
-2026-07-02T21:50:04.502Z
-2026-07-02T21:50:04.503Z  Import trace for requested module:
-2026-07-02T21:50:04.503Z  ./app/(public)/docs/cli/create-database/page.tsx
-2026-07-02T21:50:04.504Z
-2026-07-02T21:50:04.504Z  ./app/(public)/docs/cli/page.tsx
-2026-07-02T21:50:04.504Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
-2026-07-02T21:50:04.504Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/page.tsx:503:1]
-2026-07-02T21:50:04.504Z  500 |       </section>
-2026-07-02T21:50:04.505Z  501 |     </div>
-2026-07-02T21:50:04.505Z  502 |   );
-2026-07-02T21:50:04.505Z  503 | }
-2026-07-02T21:50:04.505Z  : ^
-2026-07-02T21:50:04.505Z  `----
-2026-07-02T21:50:04.505Z  x Expected '</', got '<eof>'
-2026-07-02T21:50:04.505Z  ,-[/vercel/path0/frontend/app/(public)/docs/cli/page.tsx:503:3]
-2026-07-02T21:50:04.506Z  501 |     </div>
-2026-07-02T21:50:04.506Z  502 |   );
-2026-07-02T21:50:04.506Z  503 | }
-2026-07-02T21:50:04.506Z  `----
-2026-07-02T21:50:04.507Z
-2026-07-02T21:50:04.514Z  Caused by:
-2026-07-02T21:50:04.514Z  Syntax Error
-2026-07-02T21:50:04.514Z
-2026-07-02T21:50:04.515Z  Import trace for requested module:
-2026-07-02T21:50:04.515Z  ./app/(public)/docs/cli/page.tsx
-2026-07-02T21:50:04.515Z
-2026-07-02T21:50:04.516Z  ./app/(public)/docs/comprar-coins/page.tsx
-2026-07-02T21:50:04.518Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
-2026-07-02T21:50:04.518Z  ,-[/vercel/path0/frontend/app/(public)/docs/comprar-coins/page.tsx:487:1]
-2026-07-02T21:50:04.519Z  484 |     </div>
-2026-07-02T21:50:04.519Z  485 |
-2026-07-02T21:50:04.519Z  486 |   );
-2026-07-02T21:50:04.520Z  487 | }
-2026-07-02T21:50:04.520Z  : ^
-2026-07-02T21:50:04.520Z  `----
-2026-07-02T21:50:04.520Z  x Expected '</', got '<eof>'
-2026-07-02T21:50:04.520Z  ,-[/vercel/path0/frontend/app/(public)/docs/comprar-coins/page.tsx:487:3]
-2026-07-02T21:50:04.521Z  485 |
-2026-07-02T21:50:04.521Z  486 |   );
-2026-07-02T21:50:04.521Z  487 | }
-2026-07-02T21:50:04.521Z  `----
-2026-07-02T21:50:04.521Z
-2026-07-02T21:50:04.521Z  Caused by:
-2026-07-02T21:50:04.522Z  Syntax Error
-2026-07-02T21:50:04.522Z
-2026-07-02T21:50:04.522Z  Import trace for requested module:
-2026-07-02T21:50:04.522Z  ./app/(public)/docs/comprar-coins/page.tsx
-2026-07-02T21:50:04.522Z
-2026-07-02T21:50:04.522Z  ./app/(public)/docs/criar-database/page.tsx
-2026-07-02T21:50:04.523Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
-2026-07-02T21:50:04.523Z  ,-[/vercel/path0/frontend/app/(public)/docs/criar-database/page.tsx:560:1]
-2026-07-02T21:50:04.523Z  557 |       </section>
-2026-07-02T21:50:04.523Z  558 |     </div>
-2026-07-02T21:50:04.523Z  559 |   )
-2026-07-02T21:50:04.523Z  560 | }
-2026-07-02T21:50:04.523Z  : ^
-2026-07-02T21:50:04.523Z  `----
-2026-07-02T21:50:04.524Z  x Expected '</', got '<eof>'
-2026-07-02T21:50:04.524Z  ,-[/vercel/path0/frontend/app/(public)/docs/criar-database/page.tsx:560:3]
-2026-07-02T21:50:04.524Z  558 |     </div>
-2026-07-02T21:50:04.524Z  559 |   )
-2026-07-02T21:50:04.524Z  560 | }
-2026-07-02T21:50:04.524Z  `----
-2026-07-02T21:50:04.524Z
-2026-07-02T21:50:04.524Z  Caused by:
-2026-07-02T21:50:04.524Z  Syntax Error
-2026-07-02T21:50:04.524Z
-2026-07-02T21:50:04.525Z  Import trace for requested module:
-2026-07-02T21:50:04.525Z  ./app/(public)/docs/criar-database/page.tsx
-2026-07-02T21:50:04.525Z
-2026-07-02T21:50:04.525Z  ./app/(public)/docs/dominio/page.tsx
-2026-07-02T21:50:04.525Z  Error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
-2026-07-02T21:50:04.525Z  ,-[/vercel/path0/frontend/app/(public)/docs/dominio/page.tsx:377:1]
-2026-07-02T21:50:04.525Z  374 |       </section>
-2026-07-02T21:50:04.525Z  375 |     </div>
-2026-07-02T21:50:04.525Z  376 |   )
-2026-07-02T21:50:04.525Z  377 | }
-2026-07-02T21:50:04.526Z  : ^
-2026-07-02T21:50:04.526Z  `----
-2026-07-02T21:50:04.526Z  x Expected '</', got '<eof>'
-2026-07-02T21:50:04.526Z  ,-[/vercel/path0/frontend/app/(public)/docs/dominio/page.tsx:377:3]
-2026-07-02T21:50:04.526Z  375 |     </div>
-2026-07-02T21:50:04.526Z  376 |   )
-2026-07-02T21:50:04.526Z  377 | }
-2026-07-02T21:50:04.526Z  `----
-2026-07-02T21:50:04.526Z
-2026-07-02T21:50:04.527Z  Caused by:
-2026-07-02T21:50:04.527Z  Syntax Error
-2026-07-02T21:50:04.527Z
-2026-07-02T21:50:04.527Z  Import trace for requested module:
-2026-07-02T21:50:04.527Z  ./app/(public)/docs/dominio/page.tsx
-2026-07-02T21:50:04.527Z
-2026-07-02T21:50:04.617Z
-2026-07-02T21:50:04.618Z  > Build failed because of webpack errors
-2026-07-02T21:50:04.794Z  Error: Command "npm run build" exited with 1
+Resumo rápido
+- Erro 1 (runtime): lucide-react não exporta Youtube → substituir por um ícone existente (ex.: Play) ou usar SVG inline. Precisa mudar em dois arquivos: frontend/components/SuportPage.js e frontend-desktop/renderer/components/SuportPage.js.
+- Erro 2 (build TS): selectedPackage foi inicializado sem tipo → TypeScript infere never/null e você tenta acessar .id. Corrigir tipando os estados (packages e selectedPackage) em frontend-desktop/renderer/app/coins/page.tsx.
+
+PATCH 1 — substituir o ícone Youtube
+(editar ambos os arquivos SuportPage.js)
+
+No topo, troque a importação para não usar Youtube. Exemplo usando Play:
+
+```javascript name=frontend/components/SuportPage.js
+- import { Mail, MessageCircle, Users, BookOpen, Youtube, Clock, CheckCircle } from 'lucide-react';
++ import { Mail, MessageCircle, Users, BookOpen, Play, Clock, CheckCircle } from 'lucide-react';
+```
+
+E no array selfHelpResources, substitua uso de <Youtube ... /> por <Play ... />:
+
+```javascript name=frontend/components/SuportPage.js
+-     {
+-       icon: <Youtube className="w-6 h-6 text-red-600" />,
+-       title: 'Tutoriais em Vídeo',
+-       description: 'Aprenda visualmente com nossos tutoriais passo a passo',
+-       link: 'https://youtube.com/playlist?...'
+-     },
++     {
++       icon: <Play className="w-6 h-6 text-red-600" />,
++       title: 'Tutoriais em Vídeo',
++       description: 'Aprenda visualmente com nossos tutoriais passo a passo',
++       link: 'https://youtube.com/playlist?...'
++     },
+```
+
+Repita a mesma modificação em frontend-desktop/renderer/components/SuportPage.js (mesmas linhas).
+
+Observações:
+- Se a sua versão do lucide-react não tem Play, escolha outro ícone exportado (ex.: PlayCircle, Video). Se preferir o logo do YouTube, pode inserir um pequeno SVG inline no lugar do componente do pacote.
+
+PATCH 2 — tipar states em app/coins/page.tsx
+(arquivo: frontend-desktop/renderer/app/coins/page.tsx)
+
+No topo do arquivo, logo após os imports, adicione o tipo do pacote e ajuste os useState para usar genéricos:
+
+```tsx name=frontend-desktop/renderer/app/coins/page.tsx
+// Adicione depois dos imports
+type CoinPackage = {
+  id: number;
+  coins: number;
+  price: number;
+  name: string;
+  popular: boolean;
+};
+```
+
+Altere as declarações de state:
+
+```tsx
+- const [packages, setPackages] = useState([
++ const [packages, setPackages] = useState<CoinPackage[]>([
+    { id: 1, coins: 100, price: 50, name: '100 Coins', popular: false },
+    ...
+- ]);
++ ]);
+```
+
+e
+
+```tsx
+- const [selectedPackage, setSelectedPackage] = useState(null);
++ const [selectedPackage, setSelectedPackage] = useState<CoinPackage | null>(null);
+```
+
+e tipar a função openPurchaseModal:
+
+```tsx
+- const openPurchaseModal = (pkg) => {
++ const openPurchaseModal = (pkg: CoinPackage) => {
+    setSelectedPackage(pkg);
+    ...
+};
+```
+
+Observações explicativas:
+- Com essas mudanças TypeScript passa a conhecer que selectedPackage tem .id/.coins/.price quando não for null.
+- O seu código já faz verificações (if (!selectedPackage) return) antes de usar .id no handlePurchase; com o tipo declarado o compilador aceitará o acesso depois da verificação.
+- Não use (any) nem asserções "as any" a menos que seja temporário — preferível tipar os dados.
+
+Passos locais para testar antes de subir
+1. Aplicar as mudanças nos arquivos citados.
+2. No seu ambiente local, ir para a pasta do renderer onde o Next é construído e rodar checagens:
+   - Rode o TypeScript check: npx tsc --noEmit
+   - Rode o build do Next (o mesmo comando CI usa): cd frontend-desktop/renderer && npm run build  (ou yarn build / pnpm build conforme seu projeto)
+3. Corrija eventuais pequenos erros de importação/nomes (ex.: Play vs PlayCircle).
+4. Commit e push com branch/PR e re-execute a workflow.
+
+Comandos úteis
+- Para checar TS: npx tsc --noEmit
+- Para build do renderer: cd frontend-desktop/renderer && npm run build
+
+Se preferir, eu faço os patches preparados para commit: diga se quer que eu gere os diffs/PR (eu posso criar os arquivos atualizados aqui). Também me diga qual ícone do lucide-react prefere (Play, PlayCircle, Video, ou quer um SVG inline do logo do YouTube) que eu gero os patches automaticamente.

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 export default function FAQPage() {
-  const [openIndex, setOpenIndex] = useState(null);
+  const [openIndex, setOpenIndex] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const faqs = [
@@ -191,7 +191,7 @@ export default function FAQPage() {
     )
   })).filter(category => category.questions.length > 0);
 
-  const toggleQuestion = (categoryIndex, questionIndex) => {
+  const toggleQuestion = (categoryIndex: number, questionIndex: number) => {
     const index = `${categoryIndex}-${questionIndex}`;
     setOpenIndex(openIndex === index ? null : index);
   };

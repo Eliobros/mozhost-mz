@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { Mail, MessageCircle, Users, BookOpen, Youtube, Clock, CheckCircle } from 'lucide-react';
+import { Mail, MessageCircle, Users, BookOpen, Play, Clock, CheckCircle } from 'lucide-react';
 
 export default function SuportePage() {
   const supportChannels = [
@@ -44,7 +44,7 @@ export default function SuportePage() {
       link: '/docs'
     },
     {
-      icon: <Youtube className="w-6 h-6 text-red-600" />,
+      icon: <Play className="w-6 h-6 text-red-600" />,
       title: 'Tutoriais em Vídeo',
       description: 'Aprenda visualmente com nossos tutoriais passo a passo',
       link: 'https://youtube.com/playlist?list=PLT04Pp33I859F87tPvwKSPupCznNFKsxF&si=ieB-abhwDpG4eV4m'

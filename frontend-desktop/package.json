@@ -4,7 +4,8 @@
   "description": "MozHost - Plataforma de Hospedagem de Containers e APIs",
   "version": "1.0.0",
   "author": "MozHost <mozhost@topaziocoin.online>",
-  "main": "main/background.js",
+  "homepage": "https://mozhost.shop",
+  "main": "app/background.js",
   "scripts": {
     "dev": "nextron",
     "build": "nextron build",
@@ -13,6 +14,8 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/postcss": "^4.2.4",
+    "electron-is-dev": "^3.0.1",
+    "electron-next": "^3.1.5",
     "electron-serve": "^1.3.0",
     "electron-store": "^8.2.0",
     "geist": "^1.7.0",

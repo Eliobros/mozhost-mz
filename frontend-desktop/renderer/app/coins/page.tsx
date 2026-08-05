@@ -15,8 +15,16 @@ import {
   History
 } from 'lucide-react';
 
+type CoinPackage = {
+  id: number;
+  coins: number;
+  price: number;
+  name: string;
+  popular: boolean;
+};
+
 const CoinsPurchase = () => {
-  const [packages, setPackages] = useState([
+  const [packages, setPackages] = useState<CoinPackage[]>([
     { id: 1, coins: 100, price: 50, name: '100 Coins', popular: false },
     { id: 2, coins: 250, price: 100, name: '250 Coins', popular: false },
     { id: 3, coins: 500, price: 200, name: '500 Coins', popular: true },
@@ -24,7 +32,7 @@ const CoinsPurchase = () => {
     { id: 5, coins: 2500, price: 800, name: '2500 Coins', popular: false }
   ]);
 
-  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState<CoinPackage | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -187,7 +195,7 @@ const CoinsPurchase = () => {
     }
   };
 
-  const openPurchaseModal = (pkg) => {
+  const openPurchaseModal = (pkg: CoinPackage) => {
     setSelectedPackage(pkg);
     setShowModal(true);
     setError('');
@@ -196,7 +204,7 @@ const CoinsPurchase = () => {
     setPhoneError('');
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch(status) {
       case 'completed': return 'bg-green-100 text-green-800 border-green-200';
       case 'processing': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
@@ -206,7 +214,7 @@ const CoinsPurchase = () => {
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = (status: string) => {
     switch(status) {
       case 'completed': return 'Completo';
       case 'processing': return 'Processando';
@@ -502,7 +510,7 @@ const CoinsPurchase = () => {
                 {/* Botão de Compra */}
                 <button
                   onClick={handlePurchase}
-                  disabled={loading || phoneNumber.length !== 9 || phoneError}
+                  disabled={loading || phoneNumber.length !== 9 || !!phoneError}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-lg font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
                 >
                   {loading ? (

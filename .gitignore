@@ -93,3 +93,4 @@ temp/
 .env
 
 mozhost-app/mozhost-key.json
+.env*

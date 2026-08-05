@@ -2,6 +2,12 @@
 const nextConfig = {
   // CRÍTICO: Electron precisa de static export
   output: 'export',
+
+  // Nextron: em produção, exporta para ../app (o nextron usa esse dir)
+  distDir:
+    process.env.NODE_ENV === 'production'
+      ? '../app'
+      : '.next',
   
   // Desabilita otimização de imagens
   images: {

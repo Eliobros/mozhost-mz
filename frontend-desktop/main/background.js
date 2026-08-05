@@ -1,14 +1,10 @@
 import { app, BrowserWindow } from 'electron';
 import isDev from 'electron-is-dev';
 import { join } from 'path';
-import prepareNext from 'electron-next';
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindow = null;
 
 const createWindow = async () => {
-  // Prepara Next.js
-  await prepareNext('./renderer');
-
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -23,7 +19,7 @@ const createWindow = async () => {
 
   const url = isDev
     ? 'http://localhost:8888' // Nextron usa porta 8888
-    : `file://${join(__dirname, '../renderer/out/index.html')}`;
+    : `file://${join(__dirname, 'index.html')}`;
 
   mainWindow.loadURL(url);
 
