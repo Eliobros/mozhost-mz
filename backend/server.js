@@ -281,6 +281,12 @@ const passkeysRouter = require('./routes/passkeys');
 app.use('/api/passkeys', passkeysRouter);
 app.use('/api/email-forwarding', emailForwarding);
 
+// 🟢 Webhook oficial do WhatsApp (Cloud API / Meta)
+// Fora do /api para não sofrer rate limit. URLs:
+//   GET  https://api.mozhost.shop/webhook/whatsapp  (verificação da Meta)
+//   POST https://api.mozhost.shop/webhook/whatsapp  (mensagens recebidas)
+app.use('/webhook/whatsapp', require('./routes/whatsapp-webhook'));
+
 app.use('*', async (req, res, next) => {
   const hostHeader = req.get('host') || '';
   const host = hostHeader.split(':')[0];
@@ -375,8 +381,8 @@ async function startServer() {
     startWhatsApp();
 
     // ✅ NOVO: inicializar bridge APÓS o WhatsApp estar a arrancar
-    // Aguarda um pouco para o Baileys conectar antes de ligar o bridge
-    supportBridge.init(io, null);
+    // No Cloud API não há sessão/QR: ligamos o bridge ao sender da API oficial
+    supportBridge.init(io, getWhatsAppSocket());
 
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');

@@ -2,14 +2,17 @@ const express = require('express');
 const router = express.Router();
 const whatsapp = require('../utils/whatsapp');
 
-// Verificar status da conexão
+// Verificar status da conexão (Cloud API: configurado com token + Phone Number ID)
 router.get('/status', (req, res) => {
   try {
     const isConnected = whatsapp.checkWhatsAppConnection();
     res.json({
       success: true,
       connected: isConnected,
-      message: isConnected ? 'WhatsApp conectado' : 'WhatsApp desconectado'
+      provider: 'cloud-api',
+      message: isConnected
+        ? 'WhatsApp Cloud API configurada e ativa'
+        : 'WhatsApp Cloud API não configurada (verifique WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID no .env)'
     });
   } catch (error) {
     res.status(500).json({
@@ -19,28 +22,13 @@ router.get('/status', (req, res) => {
   }
 });
 
-// Obter QR Code (se disponível)
+// QR Code NÃO é usado na Cloud API (não existe sessão local)
 router.get('/qr', (req, res) => {
-  try {
-    const qr = whatsapp.getCurrentQR();
-    if (qr) {
-      res.json({
-        success: true,
-        qr: qr,
-        message: 'QR Code disponível'
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'Nenhum QR Code disponível. WhatsApp pode já estar conectado.'
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  res.json({
+    success: false,
+    qr: null,
+    message: 'QR Code não é usado na API oficial do WhatsApp (Cloud API). Configure o webhook no painel da Meta.'
+  });
 });
 
 // Enviar mensagem de teste
@@ -57,6 +45,13 @@ router.post('/send-test', async (req, res) => {
 
     const result = await whatsapp.sendWhatsAppMessage({ phone, message });
 
+    if (!result) {
+      return res.status(500).json({
+        success: false,
+        error: 'Falha ao enviar mensagem. Verifique a configuração da Cloud API (token, Phone Number ID) e os logs do servidor.'
+      });
+    }
+
     res.json({
       success: true,
       result,
@@ -70,13 +65,13 @@ router.post('/send-test', async (req, res) => {
   }
 });
 
-// Desconectar WhatsApp
+// Desconectar: no Cloud API não há sessão local para desconectar
 router.post('/disconnect', (req, res) => {
   try {
     whatsapp.disconnectWhatsApp();
     res.json({
       success: true,
-      message: 'WhatsApp desconectado com sucesso'
+      message: 'A Cloud API não possui sessão local para desconectar. Para pausar o bot, desative o webhook no painel da Meta.'
     });
   } catch (error) {
     res.status(500).json({
@@ -86,13 +81,13 @@ router.post('/disconnect', (req, res) => {
   }
 });
 
-// Reconectar WhatsApp
+// Reconectar: apenas revalida a configuração
 router.post('/reconnect', async (req, res) => {
   try {
     await whatsapp.initializeWhatsApp();
     res.json({
       success: true,
-      message: 'Tentando reconectar ao WhatsApp...'
+      message: 'Configuração da Cloud API revalidada com sucesso'
     });
   } catch (error) {
     res.status(500).json({

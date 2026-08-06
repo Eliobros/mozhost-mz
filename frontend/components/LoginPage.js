@@ -23,6 +23,7 @@ const LoginPage = () => {
   });
   const [showVerifyStep, setShowVerifyStep] = useState(false);
   const [showCompleteProfile, setShowCompleteProfile] = useState(false);
+  const [waLink, setWaLink] = useState('');
   const [oauthUsername, setOauthUsername] = useState('');
   const [pendingToken, setPendingToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -183,7 +184,20 @@ const LoginPage = () => {
             setPendingToken(data.token);
             const method = data.user.preferredVerificationMethod || 'email';
             const destination = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'e-mail';
-            setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
+
+            // Se a Meta bloqueou o envio (política 24h, sem template), pedimos
+            // para o usuário iniciar a conversa no WhatsApp para receber o código.
+            if (data.verification?.requiresInitiation && data.verification?.waLink) {
+              setWaLink(data.verification.waLink);
+              setSuccess('Quase lá! Para receber seu código, toque no botão abaixo e envie uma mensagem no WhatsApp.');
+            } else if (data.verification && data.verification.delivered === false) {
+              // WhatsApp não configurado no servidor ou outro erro de envio
+              setWaLink('');
+              setSuccess('Não foi possível enviar o código pelo WhatsApp. Tente novamente em instantes ou escolha outro método.');
+            } else {
+              setWaLink('');
+              setSuccess(`Enviamos um código de verificação para o seu ${destination}.`);
+            }
             return;
           }
         }
@@ -319,11 +333,17 @@ setTimeout(() => {
         },
         body: JSON.stringify({ method })
       });
+      const data = await resp.json();
       if (resp.ok) {
         const destination = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'e-mail';
-        setSuccess(`Novo código enviado para o seu ${destination}`);
+        if (data.requiresInitiation && data.waLink) {
+          setWaLink(data.waLink);
+          setSuccess('Toque no botão abaixo e envie uma mensagem no WhatsApp para receber o código.');
+        } else {
+          setWaLink('');
+          setSuccess(`Novo código enviado para o seu ${destination}`);
+        }
       } else {
-        const data = await resp.json();
         setError(data.error || 'Falha ao reenviar código');
       }
     } catch (e) {
@@ -757,6 +777,27 @@ setTimeout(() => {
                     />
                     <p className="text-blue-300 text-xs mt-1">Válido por 15 minutos.</p>
                   </div>
+
+                  {waLink && (
+                    <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                      <p className="text-green-200 text-sm mb-3">
+                        💬 Para receber o código, inicie uma conversa com a MozHost no WhatsApp:
+                      </p>
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                        Abrir WhatsApp e receber o código
+                      </a>
+                      <p className="text-green-300 text-xs mt-2">
+                        Envie qualquer mensagem (ex.: "verificar") e o código chegará automaticamente.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <button
                       type="button"

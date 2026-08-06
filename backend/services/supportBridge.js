@@ -3,7 +3,22 @@
 
 const database = require('../models/database');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { jidDecode } = require('baileys');
+
+// Decodifica um JID do WhatsApp sem depender do Baileys (que é ESM-only e
+// não pode ser usado via require() em CommonJS). Equivalente ao antigo
+// jidDecode do Baileys para os campos que usamos.
+//   "258840075123@s.whatsapp.net" → { user: "258840075123", server: "s.whatsapp.net" }
+//   "258840075123:42@c.us"        → { user: "258840075123", server: "c.us" }
+function decodeJid(jid) {
+  if (!jid) return null;
+  const str = String(jid);
+  const atIndex = str.lastIndexOf('@');
+  if (atIndex === -1) return null;
+  const user = str.slice(0, atIndex).split(':')[0];
+  const server = str.slice(atIndex + 1);
+  if (!user) return null;
+  return { user, server };
+}
 
 // ─── Referências injetadas no init() ────────────────────────────────────────
 let _io = null;
@@ -56,7 +71,7 @@ function extractAgentPhone(msg) {
   for (const c of candidates) {
     if (!c) continue;
     try {
-      const decoded = typeof jidDecode === 'function' ? jidDecode(c) : null;
+      const decoded = decodeJid(c);
       if (!decoded) continue;
       if (decoded.server !== 's.whatsapp.net' && decoded.server !== 'c.us') continue;
       const digits = String(decoded.user || '').replace(/[^\d]/g, '');

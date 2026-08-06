@@ -9,7 +9,7 @@ const passport = require('../utils/passport');
 
 const router = express.Router();
 const { sendEmail, generateCode } = require('../utils/email');
-const { sendWhatsAppMessage, formatVerificationMessage, checkWhatsAppConnection } = require('../utils/whatsapp');
+const { sendVerificationCode, checkWhatsAppConnection } = require('../utils/whatsapp');
 const { sendSMS, formatSMSVerificationMessage } = require('../utils/sms');
 
 // Registro de usuário
@@ -120,6 +120,7 @@ if (existingUser.length > 0) {
     const userId = result.insertId;
 
     // Gerar e enviar código de verificação
+    let whatsappSendResult = null;
     try {
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
@@ -134,12 +135,15 @@ if (existingUser.length > 0) {
         );
 
         const fullPhone = countryCode + phone;
-        const message = formatVerificationMessage(code);
-        await sendWhatsAppMessage({
+        whatsappSendResult = await sendVerificationCode({
           phone: fullPhone,
-          message: message
+          code: code
         });
-        console.log(`📱 Código de verificação WhatsApp enviado para: ${fullPhone}`);
+        if (whatsappSendResult.ok) {
+          console.log(`📱 Código de verificação WhatsApp enviado para: ${fullPhone} (via ${whatsappSendResult.method})`);
+        } else {
+          console.warn(`⚠️ Código de verificação WhatsApp NÃO enviado para ${fullPhone}: ${whatsappSendResult.reason}`);
+        }
 
       } else if (verificationMethod === 'sms' && phone && countryCode) {
         // Verificação via SMS
@@ -185,6 +189,21 @@ if (existingUser.length > 0) {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
+    // Se a Meta bloqueou o envio (política 24h, sem template), informamos o
+    // frontend para pedir ao usuário que inicie a conversa pelo link wa.me.
+    // Assim que ele mandar a primeira mensagem, o webhook entrega o código.
+    // Também expomos o resultado quando o WhatsApp não está configurado, para
+    // o frontend não mostrar "código enviado" sem nada ter sido enviado.
+    const verification =
+      preferredVerificationMethod === 'whatsapp' && whatsappSendResult
+        ? {
+            method: 'whatsapp',
+            delivered: whatsappSendResult.ok,
+            requiresInitiation: !whatsappSendResult.ok && whatsappSendResult.reason === 'policy_24h',
+            waLink: whatsappSendResult.waLink || null
+          }
+        : null;
+
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -201,6 +220,7 @@ if (existingUser.length > 0) {
         smsVerified: preferredVerificationMethod === 'sms' ? false : null,
         preferredVerificationMethod: preferredVerificationMethod || 'email'
       },
+      verification,
       token
     });
 
@@ -903,13 +923,31 @@ router.post('/resend-code', [
       await database.query('UPDATE users SET whatsapp_verification_code = ?, whatsapp_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
 
       const fullPhone = info[0].country_code + info[0].phone;
-      const message = formatVerificationMessage(code);
-      await sendWhatsAppMessage({
+      const sendResult = await sendVerificationCode({
         phone: fullPhone,
-        message: message
+        code: code
       });
 
-      res.json({ message: 'WhatsApp verification code sent' });
+      if (!sendResult.ok && sendResult.reason === 'policy_24h') {
+        // O usuário precisa iniciar a conversa no WhatsApp para receber o código
+        return res.json({
+          message: 'WhatsApp verification code pending — user must start the conversation',
+          requiresInitiation: true,
+          waLink: sendResult.waLink
+        });
+      }
+
+      if (!sendResult.ok) {
+        // WhatsApp não configurado ou erro de envio — avisa para o frontend não
+        // mostrar "código enviado" quando nada foi entregue.
+        return res.json({
+          message: 'WhatsApp verification code not sent',
+          requiresInitiation: false,
+          delivered: false
+        });
+      }
+
+      res.json({ message: 'WhatsApp verification code sent', delivered: true });
     } else {
       // Email (padrão)
       if (info[0].email_verified) return res.status(400).json({ error: 'Email already verified' });
