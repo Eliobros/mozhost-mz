@@ -6,9 +6,9 @@ class SubscriptionService {
     const ramMb = 1024; // 1GB RAM
     const storageMb = 1024; // 1GB Storage
     
-    // Expiração: 30 dias a partir de agora
+    // Expiração alinhada ao ciclo mensal do plano (30 dias)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + 30);
     
     await db.query(
       `INSERT INTO subscriptions (user_id, container_id, coins_paid, ram_mb, storage_mb, expires_at)
@@ -20,7 +20,7 @@ class SubscriptionService {
     await db.query(
       `INSERT INTO notifications (user_id, type, category, title, message)
        VALUES (?, 'success', 'subscription', 'Assinatura ativada!', ?)`,
-      [userId, `Seu container foi ativado por 7  dias. Expira em ${expiresAt.toLocaleDateString('pt-MZ')}.`]
+      [userId, `Seu container foi ativado por 30 dias. Expira em ${expiresAt.toLocaleDateString('pt-MZ')}.`]
     );
     
     return { expiresAt, ramMb, storageMb };

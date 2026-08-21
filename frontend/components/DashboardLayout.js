@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Server,
   Plus,
@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import NotificationsSystem from './NotificationsSystem';
 import MozhostChat from './MozhostChat';
+import SuspendedScreen from './SuspendedScreen';
+
+const API = 'https://api.mozhost.shop';
 
 const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const router = useRouter();
@@ -33,6 +36,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
   const [notifications, setNotifications] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [account, setAccount] = useState(null); // { suspended, suspension_reason, plan, ... }
 
   useEffect(() => {
     const userData = localStorage.getItem('mozhost_user');
@@ -41,11 +45,36 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
     }
   }, []);
 
+  // Verifica se a conta está suspensa (trial expirado / plano sem renovação)
+  useEffect(() => {
+    const token = localStorage.getItem('mozhost_token');
+    if (!token) return;
+
+    fetch(`${API}/api/billing/current`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('não autorizado')))
+      .then(data => setAccount(data.current || null))
+      .catch(() => {});
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('mozhost_token');
     localStorage.removeItem('mozhost_user');
     router.push('/login');
   };
+
+  // 🔒 Conta suspensa → mostra a página de bloqueio com dados de pagamento.
+  // A página /billing fica liberada para o usuário poder pagar/reativar.
+  const pathname = usePathname();
+  if (account && account.suspended && !pathname?.startsWith('/billing')) {
+    return (
+      <SuspendedScreen
+        username={user?.username}
+        reason={account.suspension_reason || 'trial_expired'}
+      />
+    );
+  }
 
   const navigation = [
     { name: 'Dashboard',     href: '/dashboard',  icon: Home,          current: currentPage === 'dashboard' },

@@ -225,6 +225,172 @@
 .card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
 .card p  { font-size: 0.82rem; color: #94a3b8; line-height: 1.6; }
 
+/* ── NAV LINKS ── */
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+.navLink {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.navLink:hover { color: #f1f5f9; }
+
+/* ── PRICING ── */
+.pricing {
+  scroll-margin-top: 90px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+.pricingSub {
+  color: #94a3b8;
+  max-width: 480px;
+  line-height: 1.7;
+  font-size: 0.95rem;
+  margin-bottom: 1.8rem;
+}
+.trialStrip {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.05));
+  border: 1px solid rgba(34,197,94,0.35);
+  border-radius: 12px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 2rem;
+}
+.trialBadge {
+  background: #22c55e;
+  color: #052e16;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+}
+.trialText {
+  font-size: 0.9rem;
+  color: #d1fae5;
+}
+.pricingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+}
+.planCard {
+  position: relative;
+  background: #1a2035;
+  border: 1px solid #252d40;
+  border-radius: 14px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.planCard:hover { border-color: #6c3de8; transform: translateY(-3px); }
+.planPopular {
+  border-color: #f97316;
+  box-shadow: 0 0 40px rgba(249,115,22,0.18);
+}
+.planBadge {
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #f97316;
+  color: #431407;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.planName {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin-bottom: 0.2rem;
+}
+.planTagline {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+.planPrice {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+.planPriceValue {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #5b21e8, #7c3aed, #4f46e5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.planPopular .planPriceValue {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.planPriceUnit {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.planPriceBrl {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+.planFeatures {
+  list-style: none;
+  margin: 0 0 1.4rem;
+  flex: 1;
+}
+.planFeature {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  padding: 0.3rem 0;
+}
+.planBtn {
+  display: block;
+  text-align: center;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.planBtn:hover { opacity: 0.85; }
+.planBtnPopular {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  color: #431407;
+}
+.pricingNote {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+.pricingNote a {
+  color: #8b5cf6;
+  text-decoration: none;
+}
+.pricingNote a:hover { text-decoration: underline; }
+
 /* ── PAYMENT ── */
 .paymentSection {
   max-width: 900px;

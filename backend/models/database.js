@@ -53,7 +53,7 @@ class Database {
           password_hash VARCHAR(255) NOT NULL,
 	  email_quota INT DEFAULT 500,
 	  email_plan ENUM('free', 'basic', 'pro', 'business') DEFAULT 'free',
-          plan ENUM('free', 'basic', 'pro') DEFAULT 'free',
+          plan ENUM('free', 'starter', 'basic', 'pro', 'business') DEFAULT 'free',
           max_containers INT DEFAULT 2,
           max_ram_mb INT DEFAULT 0,
           max_storage_mb INT DEFAULT 0,
@@ -78,9 +78,27 @@ class Database {
         // Column already exists
       }
 
-      // Definir trial de 30 dias para usuários free existentes que não têm
+      // Definir trial de 7 dias para usuários free existentes que não têm
       try {
-        await this.query(`UPDATE users SET free_trial_ends = DATE_ADD(created_at, INTERVAL 30 DAY) WHERE plan = 'free' AND free_trial_ends IS NULL`);
+        await this.query(`UPDATE users SET free_trial_ends = DATE_ADD(created_at, INTERVAL 7 DAY) WHERE plan = 'free' AND free_trial_ends IS NULL`);
+      } catch (e) {}
+
+      // Adicionar coluna suspended_at se não existir (conta suspensa por falta de pagamento)
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN suspended_at TIMESTAMP NULL`);
+        console.log('✅ Added suspended_at column');
+      } catch (e) {}
+
+      // Ampliar ENUM de planos (starter/business eram usados pelo billing mas não cabiam no ENUM)
+      try {
+        await this.query(`ALTER TABLE users MODIFY COLUMN plan ENUM('free', 'starter', 'basic', 'pro', 'business') DEFAULT 'free'`);
+        console.log('✅ users.plan ENUM atualizado (free, starter, basic, pro, business)');
+      } catch (e) {}
+
+      // Permitir método 'manual' no billing (migração de cliente feita por script)
+      try {
+        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'manual') NOT NULL`);
+        console.log('✅ billing.method ENUM atualizado (inclui manual)');
       } catch (e) {}
 
       // OAuth columns

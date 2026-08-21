@@ -219,14 +219,23 @@ router.post('/', [
     );
 
     const userInfo = await database.query(
-      'SELECT max_containers, coins FROM users WHERE id = ?',
+      'SELECT max_containers, coins, plan, suspended_at FROM users WHERE id = ?',
       [req.user.userId]
     );
+
+    // Conta suspensa (trial free expirado ou plano pago sem renovação)
+    if (userInfo[0].suspended_at) {
+      return res.status(402).json({
+        error: 'Account suspended',
+        message: 'Sua conta está suspensa. Renove seu plano para criar containers.',
+        suspended: true
+      });
+    }
 
     if (userContainers[0].count >= userInfo[0].max_containers) {
       return res.status(403).json({
         error: 'Container limit reached',
-        message: `Maximum ${userInfo[0].max_containers} containers allowed for your plan`
+        message: `Seu plano ${userInfo[0].plan} permite no máximo ${userInfo[0].max_containers} container(s).`
       });
     }
 
@@ -241,27 +250,15 @@ router.post('/', [
       });
     }
 
-    const MIN_COINS_TO_CREATE = Number(process.env.MIN_COINS_CREATE) || 500;
-    if ((userInfo[0].coins || 0) < MIN_COINS_TO_CREATE) {
-      return res.status(402).json({
-        error: 'Insufficient coins',
-        message: `Você precisa de ${MIN_COINS_TO_CREATE} coins para criar um container.`,
-        currentCoins: userInfo[0].coins || 0
-      });
-    }
-
+    // A criação agora é limitada pelo plano (max_containers), não por coins.
+    // Coins continuam sendo usados para extras (databases, upgrade de storage).
     const containerData = await dockerManager.createUserContainer(req.user.userId, {
   name,
   type: templateType, // Usar o template selecionado
   environment: environment || {}
 });
 
-    const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, MIN_COINS_TO_CREATE);
-
-    await database.query(
-      'UPDATE users SET coins = coins - ? WHERE id = ?',
-      [MIN_COINS_TO_CREATE, req.user.userId]
-    );
+    const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, 0);
 
     const responseData = {
       message: 'Container created successfully',
@@ -276,7 +273,7 @@ router.post('/', [
       },
       subscription: {
         expiresAt: subscription.expiresAt,
-        daysLeft: 7
+        daysLeft: 30
       }
     };
 
@@ -310,15 +307,24 @@ router.post('/:id/start', async (req, res) => {
 
     const container = containers[0];
 
-    const subStatus = await subscriptionService.getSubscriptionStatus(id);
-    if (subStatus.expired) {
-      // ✨ NOVO: Notificar subscription expirada
-      await notificationManager.notifySubscriptionExpired(req.user.userId, container.name);
+    // Conta suspensa (trial free expirado ou plano pago sem renovação) → não inicia containers
+    const users = await database.query(
+      `SELECT u.suspended_at, u.plan, u.free_trial_ends,
+              (SELECT b.expires_at FROM billing b
+               WHERE b.user_id = u.id AND b.status = 'active' AND b.expires_at > NOW()
+               ORDER BY b.expires_at DESC LIMIT 1) as billing_expires
+       FROM users u WHERE u.id = ?`,
+      [req.user.userId]
+    );
+    const acc = users.length ? users[0] : null;
+    const hasActiveBilling = acc && acc.billing_expires;
+    const trialExpired = acc && acc.free_trial_ends && new Date(acc.free_trial_ends) <= new Date();
 
+    if (acc && (acc.suspended_at || (!hasActiveBilling && trialExpired))) {
       return res.status(402).json({
-        error: 'Assinatura expirada',
-        message: 'Recarregue 500 coins para reativar este container.',
-        subscription: subStatus
+        error: 'Account suspended',
+        message: 'Sua conta está suspensa. Renove seu plano para reativar seus containers.',
+        suspended: true
       });
     }
 

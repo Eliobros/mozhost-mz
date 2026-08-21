@@ -7,7 +7,6 @@ const CreateContainerModal = ({
   onSubmit,
   onClose,
   coins,
-  requiredCoins,
   isCreating = false
 }) => {
   // Bots que exigem token (Telegram / Discord)
@@ -33,18 +32,14 @@ const CreateContainerModal = ({
 
         <div className="p-6 space-y-4">
           <div className="text-sm">
-            <div className="inline-flex items-center bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md px-3 py-1">
+            <div className="inline-flex items-center bg-blue-50 border border-blue-200 text-blue-800 rounded-md px-3 py-1">
               <Coins className="w-4 h-4 mr-2" />
-              Coins disponíveis: <span className="font-semibold ml-1">{coins}</span>
+              Saldo de coins: <span className="font-semibold ml-1">{coins}</span>
             </div>
             <p className="mt-2 text-xs text-gray-600">
-              É necessário <span className="font-semibold">{requiredCoins} coins</span> para criar um container.
+              A criação é limitada pelo <span className="font-semibold">seu plano</span> (quantidade de containers).
+              Coins são usadas para extras como databases e upgrade de storage.
             </p>
-            {coins < requiredCoins && (
-              <p className="mt-2 text-xs text-red-600">
-                Você não possui coins suficientes. <a href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins" target="_blank" rel="noopener noreferrer" className="underline">Comprar coins</a>
-              </p>
-            )}
           </div>
 
           <div>
@@ -335,9 +330,9 @@ const CreateContainerModal = ({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={coins < requiredCoins || isCreating || (needsToken && !hasToken)}
+              disabled={isCreating || (needsToken && !hasToken)}
               className={`px-4 py-2 text-white text-sm font-medium rounded-md flex items-center ${
-                coins < requiredCoins || isCreating || (needsToken && !hasToken)
+                isCreating || (needsToken && !hasToken)
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
               }`}

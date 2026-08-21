@@ -53,7 +53,7 @@ async function registerForPushNotifications() {
 }
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, accountStatus } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -61,13 +61,23 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inSuspended = segments[0] === 'suspended';
+
+    // 🔒 Conta suspensa → tela de bloqueio com dados de pagamento
+    if (isAuthenticated && accountStatus?.suspended && !inSuspended) {
+      router.replace('/suspended');
+      return;
+    }
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
+    } else if (isAuthenticated && inSuspended && !accountStatus?.suspended) {
+      // Conta reativada → volta pro painel
+      router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isLoading, accountStatus, segments, router]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -95,6 +105,7 @@ function RootLayoutNav() {
         <Stack.Screen name="qrcode" options={{ headerShown: true }} />
         <Stack.Screen name="connections" options={{ headerShown: true }} />
         <Stack.Screen name="coins" options={{ headerShown: true, title: 'Comprar Coins' }} />
+        <Stack.Screen name="suspended" options={{ headerShown: false }} />
       </Stack>
     </SafeAreaView>
   );

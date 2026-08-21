@@ -35,7 +35,6 @@ const ContainersPage = () => {
   const [coins, setCoins] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [storageAlerts, setStorageAlerts] = useState([]);
-  const REQUIRED_COINS = 500;
   const [statsMap, setStatsMap] = useState({});
   const searchParams = useSearchParams();
 const router = useRouter();
@@ -430,7 +429,6 @@ useEffect(() => {
             form={createForm}
             setForm={setCreateForm}
             coins={coins}
-            requiredCoins={REQUIRED_COINS}
             isCreating={isCreating} // ← PASSA A PROP
             onSubmit={handleCreateContainer}
             onClose={() => {

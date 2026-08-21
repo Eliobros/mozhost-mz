@@ -108,12 +108,12 @@ if (existingUser.length > 0) {
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
     // Criar usuário
-    // Free tier: 2 containers max, mas 0 RAM/Storage grátis - precisa comprar com coins
-    // 250 coins de boas-vindas (não suficiente para 1 container que custa 500)
-    // Após verificar email/whatsapp/sms: +350 coins = 600 total (suficiente para 1 container)
+    // Plano Free: 1 container de 512MB RAM / 0.5 vCPU por 7 dias de teste.
+    // Coins continuam existindo para extras (databases, upgrade de storage), mas
+    // a criação de container agora é limitada pelo plano, não por coins.
     const result = await database.query(
       `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
-       VALUES (?, ?, ?, ?, ?, ?, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+       VALUES (?, ?, ?, ?, ?, ?, 'free', 1, 512, 1024, 250, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
       [username, email, passwordHash, phone || null, countryCode || null, preferredVerificationMethod || 'email']
     );
 
@@ -213,7 +213,9 @@ if (existingUser.length > 0) {
         phone: phone || null,
         countryCode: countryCode || null,
         plan: 'free',
-        maxContainers: 2,
+        maxContainers: 1,
+        maxRamMb: 512,
+        maxStorageMb: 1024,
         coins: 250,
         emailVerified: preferredVerificationMethod === 'email' ? false : null,
         whatsappVerified: preferredVerificationMethod === 'whatsapp' ? false : null,

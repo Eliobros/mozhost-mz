@@ -19,16 +19,27 @@ type User = {
   maxStorageMb?: number;
 };
 
+type AccountStatus = {
+  suspended: boolean;
+  suspension_reason?: string | null;
+  suspended_at?: string | null;
+  plan?: string;
+};
+
 type AuthContextType = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  accountStatus: AccountStatus | null;
+  refreshAccountStatus: () => Promise<void>;
   login: (loginStr: string, password: string) => Promise<{ needsVerification?: boolean; method?: string }>;
   register: (data: any) => Promise<{ needsVerification?: boolean; method?: string }>;
   verifyCode: (code: string, method: string) => Promise<any>;
   resendCode: (method: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Define o usuário no contexto (usado no fluxo OAuth, onde os dados já vieram da API) */
+  setAuthUser: (user: User) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +47,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -51,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await api.verifyToken();
       setUser(data.user);
+      await refreshAccountStatus().catch(() => {});
     } catch {
       await removeToken();
       await AsyncStorage.removeItem('mozhost_user');
@@ -59,11 +72,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Busca o status da conta (suspensa por trial expirado / plano sem renovação)
+  const refreshAccountStatus = async () => {
+    try {
+      const data = await api.getAccountStatus();
+      const current = data?.current;
+      setAccountStatus({
+        suspended: !!current?.suspended,
+        suspension_reason: current?.suspension_reason || null,
+        suspended_at: current?.suspended_at || null,
+        plan: current?.plan,
+      });
+    } catch {
+      setAccountStatus({ suspended: false });
+    }
+  };
+
   const login = async (loginStr: string, password: string) => {
     const data = await api.login(loginStr, password);
     await setToken(data.token);
     await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
     setUser(data.user);
+    await refreshAccountStatus().catch(() => {});
     return {};
   };
 
@@ -110,18 +140,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Sincroniza o estado com um usuário que já veio da API (sem nova chamada de rede),
+  // para que isAuthenticated fique true e o guard de rota deixe o usuário entrar.
+  const setAuthUser = (user: User) => {
+    setUser(user);
+    AsyncStorage.setItem('mozhost_user', JSON.stringify(user)).catch(() => {});
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isAuthenticated: !!user,
         isLoading,
+        accountStatus,
+        refreshAccountStatus,
         login,
         register,
         verifyCode,
         resendCode,
         logout,
         refreshUser,
+        setAuthUser,
       }}>
       {children}
     </AuthContext.Provider>

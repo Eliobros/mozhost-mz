@@ -23,7 +23,11 @@ export default function Home() {
           <div className={styles.logoIcon}>🗄️</div>
           <span className={styles.logoText}>MozHost</span>
         </div>
-        <Link className={styles.btnNav} href="/login">Entrar →</Link>
+        <div className={styles.navLinks}>
+          <a href="#recursos" className={styles.navLink}>Recursos</a>
+          <a href="#precos" className={styles.navLink}>Preços</a>
+          <Link className={styles.btnNav} href="/login">Entrar →</Link>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -44,7 +48,7 @@ export default function Home() {
             <div className={styles.welcome}>Bem-vindo de volta! 👋</div>
             <div className={styles.hintText}>Aqui está um resumo da sua conta MozHost</div>
             <div className={styles.previewPills}>
-              <span className={styles.pill}>Coins: 0.00</span>
+              <span className={styles.pill}>🎁 Plano Free · 7 dias</span>
               <span className={styles.pill}>⚡ Uptime: 99.9%</span>
             </div>
           </div>
@@ -72,7 +76,7 @@ export default function Home() {
       </section>
 
       {/* FEATURES */}
-      <section className={styles.features}>
+      <section id="recursos" className={styles.features}>
         <div className={styles.sectionLabel}>Recursos</div>
         <div className={styles.sectionTitle}>Tudo que você precisa</div>
         <div className={styles.grid}>
@@ -89,6 +93,88 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="precos" className={styles.pricing}>
+        <div className={styles.sectionLabel}>Planos &amp; Preços</div>
+        <div className={styles.sectionTitle}>Preços simples, sem surpresas</div>
+        <p className={styles.pricingSub}>
+          Teste grátis por 7 dias — sem cartão. Depois escolhe o plano que cabe no teu bolso.
+          Paga com M-Pesa ou e-Mola.
+        </p>
+
+        {/* Free trial strip */}
+        <div className={styles.trialStrip}>
+          <span className={styles.trialBadge}>🎁 TRIAL GRÁTIS</span>
+          <span className={styles.trialText}>
+            <strong>7 dias grátis</strong> com 1 container de 512MB RAM / 0.5 vCPU — sem cartão de crédito
+          </span>
+        </div>
+
+        <div className={styles.pricingGrid}>
+          {[
+            {
+              id: "starter",
+              name: "Starter",
+              mt: 150,
+              brl: 15,
+              tagline: "Pra quem está começando",
+              features: ["3 containers", "512MB RAM", "2GB Storage", "Subdomínio grátis", "Terminal Web"],
+            },
+            {
+              id: "basic",
+              name: "Basic",
+              mt: 350,
+              brl: 35,
+              tagline: "O favorito dos devs",
+              popular: true,
+              features: ["5 containers", "1GB RAM", "5GB Storage", "Domínio customizado", "Suporte prioritário"],
+            },
+            {
+              id: "pro",
+              name: "Pro",
+              mt: 700,
+              brl: 70,
+              tagline: "Para bots que não podem cair",
+              features: ["10 containers", "2GB RAM", "10GB Storage", "SSL grátis", "Suporte VIP", "Backups diários"],
+            },
+            {
+              id: "business",
+              name: "Business",
+              mt: 1500,
+              brl: 150,
+              tagline: "Para operações sérias",
+              features: ["25 containers", "4GB RAM", "25GB Storage", "SSL grátis", "Suporte 24/7", "Backups diários", "IP dedicado"],
+            },
+          ].map((plan) => (
+            <div key={plan.id} className={`${styles.planCard} ${plan.popular ? styles.planPopular : ""}`}>
+              {plan.popular && <span className={styles.planBadge}>⭐ POPULAR</span>}
+              <h3 className={styles.planName}>{plan.name}</h3>
+              <p className={styles.planTagline}>{plan.tagline}</p>
+              <div className={styles.planPrice}>
+                <span className={styles.planPriceValue}>{plan.mt}</span>
+                <span className={styles.planPriceUnit}>MT/mês</span>
+              </div>
+              <p className={styles.planPriceBrl}>≈ R$ {plan.brl}/mês</p>
+              <ul className={styles.planFeatures}>
+                {plan.features.map((f) => (
+                  <li key={f} className={styles.planFeature}>✓ {f}</li>
+                ))}
+              </ul>
+              <Link className={`${styles.planBtn} ${plan.popular ? styles.planBtnPopular : ""}`} href="/login">
+                Começar agora
+              </Link>
+            </div>
+          ))}
+        </div>
+
+        <p className={styles.pricingNote}>
+          Precisa de mais recursos ou de um plano sob medida?{" "}
+          <a href="https://api.whatsapp.com/send?phone=258862840075&text=Ola%20quero%20um%20plano%20personalizado" target="_blank" rel="noopener noreferrer">
+            Fala com a gente no WhatsApp
+          </a>.
+        </p>
       </section>
 
       {/* PAYMENT */}
@@ -110,7 +196,7 @@ export default function Home() {
       <section className={styles.bottomCta}>
         <h2>Pronto para hospedar? 🚀</h2>
         <p>Cria a tua conta e faz o primeiro deploy hoje.</p>
-        <Link className={styles.btnOrange} href="/login">Ver Planos →</Link>
+        <Link className={styles.btnOrange} href="/login">Criar conta grátis →</Link>
       </section>
 
       {/* FOOTER */}

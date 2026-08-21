@@ -480,6 +480,24 @@ const checkSubscriptions = async () => {
       console.log(`❌ ${expired} subscriptions expiradas`);
     }
 
+    // Suspensão de contas (trial free de 7 dias / plano pago sem renovação)
+    const accountService = require('./services/accountService');
+    const warned = await accountService.warnExpiringAccounts();
+    if (warned > 0) {
+      console.log(`⚠️  ${warned} aviso(s) de expiração enviados`);
+    }
+
+    const suspended = await accountService.suspendExpiredAccounts();
+    if (suspended.suspendedCount > 0) {
+      console.log(`⛔ ${suspended.suspendedCount} contas suspensas por expiração`);
+    }
+
+    // Cleanup: containers de contas suspensas há mais de 5 dias
+    const cleanup = await accountService.cleanupSuspendedAccounts();
+    if (cleanup.cleanedCount > 0) {
+      console.log(`🧹 ${cleanup.cleanedCount} conta(s) limpas (containers deletados)`);
+    }
+
     console.log('✅ Verificação de subscriptions concluída');
   } catch (error) {
     console.error('❌ Erro ao verificar subscriptions:', error);

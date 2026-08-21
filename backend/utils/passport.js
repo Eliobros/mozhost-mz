@@ -56,7 +56,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       const tempUsername = 'google_' + profile.id.substring(0, 10) + '_' + Date.now().toString(36);
       const result = await database.query(
         `INSERT INTO users (username, email, password_hash, oauth_provider, oauth_provider_id, avatar_url, email_verified, profile_completed, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
-         VALUES (?, ?, NULL, 'google', ?, ?, true, false, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+         VALUES (?, ?, NULL, 'google', ?, ?, true, false, 'free', 1, 512, 1024, 250, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
         [tempUsername, email || `${tempUsername}@oauth.temp`, profile.id, avatarUrl]
       );
 
@@ -110,7 +110,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
       const tempUsername = 'github_' + (profile.username || profile.id.toString().substring(0, 10)) + '_' + Date.now().toString(36);
       const result = await database.query(
         `INSERT INTO users (username, email, password_hash, oauth_provider, oauth_provider_id, avatar_url, email_verified, profile_completed, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
-         VALUES (?, ?, NULL, 'github', ?, ?, true, false, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+         VALUES (?, ?, NULL, 'github', ?, ?, true, false, 'free', 1, 512, 1024, 250, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
         [tempUsername, email || `${tempUsername}@oauth.temp`, profile.id.toString(), avatarUrl]
       );
 

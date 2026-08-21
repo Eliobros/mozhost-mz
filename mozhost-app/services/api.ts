@@ -140,4 +140,9 @@ export const api = {
   async verifyToken() {
     return api.get('/auth/verify');
   },
+
+  // Status da conta (suspensa ou não) — usado para exibir a tela de bloqueio
+  async getAccountStatus() {
+    return api.get('/billing/current');
+  },
 };

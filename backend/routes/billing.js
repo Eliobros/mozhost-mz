@@ -68,6 +68,10 @@ router.get('/current', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
+    const accountService = require('../services/accountService');
+    const accountStatus = await accountService.getAccountStatus(userId);
+    if (!accountStatus.found) return res.status(404).json({ error: 'Usuário não encontrado' });
+
     const users = await database.query(
       'SELECT plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends FROM users WHERE id = ?',
       [userId]
@@ -100,7 +104,11 @@ router.get('/current', authenticateToken, async (req, res) => {
         max_storage_mb: user.max_storage_mb,
         containers_used: containerCount[0].count,
         free_trial_ends: user.free_trial_ends,
-        active_subscription: activeBilling[0] || null
+        active_subscription: activeBilling[0] || null,
+        // Status da conta para a página de bloqueio
+        suspended: accountStatus.suspended,
+        suspended_at: accountStatus.suspendedAt,
+        suspension_reason: accountStatus.reason
       }
     });
   } catch (error) {
@@ -408,10 +416,10 @@ async function activatePlan(billing) {
       [expiresAt, billing.id]
     );
 
-    // Atualizar plano do usuário
+    // Atualizar plano do usuário e reativar conta (limpa suspensão)
     await database.query(
-      `UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ? WHERE id = ?`,
-      [plan.id, plan.max_containers, plan.max_ram_mb, plan.max_storage_mb, billing.user_id]
+      `UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ?, suspended_at = NULL, free_trial_ends = ? WHERE id = ?`,
+      [plan.id, plan.max_containers, plan.max_ram_mb, plan.max_storage_mb, expiresAt, billing.user_id]
     );
 
     console.log(`✅ Plano ${plan.name} ativado para usuário ${billing.user_id} até ${expiresAt.toISOString()}`);

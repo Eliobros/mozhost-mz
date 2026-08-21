@@ -43,7 +43,7 @@ const registerPushToken = async (api: any) => {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, register, verifyCode, resendCode } = useAuth();
+  const { login, register, verifyCode, resendCode, setAuthUser, refreshAccountStatus } = useAuth();
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -276,6 +276,11 @@ export default function LoginScreen() {
         setShowCompleteProfile(true);
         setSuccess(`Conectado com ${provider === 'google' ? 'Google' : 'GitHub'}! Escolha seu nome de usuário.`);
       } else {
+        // Sincroniza o AuthContext com o usuário real antes de navegar,
+        // senão o guard de rota em _layout.tsx devolve o usuário pro login
+        // (isAuthenticated continua false e o nome temporário fica no ar).
+        setAuthUser(data.user);
+        await refreshAccountStatus().catch(() => {});
         await registerPushToken(api);
         setSuccess('Login realizado com sucesso! 🎉');
         setTimeout(() => router.replace('/(tabs)'), 500);
@@ -298,6 +303,10 @@ export default function LoginScreen() {
       const data = await api.post('/auth/complete-profile', { username: oauthUsername.trim() });
       await setToken(data.token);
       await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
+      // Sincroniza o AuthContext com o usuário (nome escolhido) antes de
+      // navegar, senão o guard de rota devolve o usuário pro login.
+      setAuthUser(data.user);
+      await refreshAccountStatus().catch(() => {});
       await registerPushToken(api);
       setSuccess('Perfil completo! 🎉');
       setTimeout(() => router.replace('/(tabs)'), 500);
