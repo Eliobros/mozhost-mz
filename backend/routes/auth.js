@@ -1868,6 +1868,13 @@ router.put('/startup-commands', authMiddleware, async (req, res) => {
 
 // POST /api/auth/upgrade-plan - Upgrade do plano do usuário
 router.post('/upgrade-plan', authMiddleware, async (req, res) => {
+  // Planos são pagos e gerenciados exclusivamente por /api/billing.
+  return res.status(410).json({
+    error: 'Legacy coin plan upgrade removed',
+    message: 'O upgrade por coins foi descontinuado. Escolha e pague um plano em /billing.'
+  });
+
+  /*
   try {
     const userId = req.user.id;
     const { plan } = req.body;
@@ -1931,6 +1938,7 @@ router.post('/upgrade-plan', authMiddleware, async (req, res) => {
     console.error('Erro ao fazer upgrade:', error);
     res.status(500).json({ error: 'Erro ao processar upgrade' });
   }
+  */
 });
 
 module.exports = router;

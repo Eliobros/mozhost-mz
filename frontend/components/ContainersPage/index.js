@@ -179,45 +179,6 @@ useEffect(() => {
     }
   };
 
-  const handleRenewContainer = async (containerId) => {
-    if (!confirm('Renovar este container por mais 30 dias custará 500 coins. Continuar?')) {
-      return;
-    }
-
-    setActionLoading(prev => ({ ...prev, [containerId]: 'renewing' }));
-
-    try {
-      const token = localStorage.getItem('mozhost_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop'}/api/containers/${containerId}/renew`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 402) {
-          alert(`Coins insuficientes! Você tem ${data.have} coins e precisa de ${data.needed}.`);
-          setShowPaymentModal(true);
-          return;
-        }
-        throw new Error(data.error || data.message || 'Erro ao renovar');
-      }
-
-      alert(`✅ Container renovado! Nova expiração: ${new Date(data.expiresAt).toLocaleDateString('pt-MZ')}`);
-      setCoins(data.coins);
-      await loadContainers();
-
-    } catch (error) {
-      alert(`Erro: ${error.message}`);
-    } finally {
-      setActionLoading(prev => ({ ...prev, [containerId]: null }));
-    }
-  };
-
   const filteredContainers = containers.filter(container => {
     const matchesFilter = filter === 'all' || container.status === filter;
     const matchesSearch = container.name.toLowerCase().includes(search.toLowerCase());
@@ -416,7 +377,6 @@ useEffect(() => {
                 onAction={handleContainerAction}
                 onDelete={() => handleDeleteContainer(container)}
                 onUpgrade={handleUpgradeStorage}
-                onRenew={handleRenewContainer}
                 isNearLimit={!!storageAlerts.find(a => a.id === container.id)}
               />
             ))}

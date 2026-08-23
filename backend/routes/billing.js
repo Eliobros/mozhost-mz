@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const database = require('../models/database');
+const dockerManager = require('../utils/docker-manager');
 const authenticateToken = require('../middleware/auth');
 
 const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.duckdns.org/api/payment';
@@ -58,6 +59,8 @@ const PLANS = [
   }
 ];
 
+const PLAN_RANK = { starter: 1, basic: 2, pro: 3, business: 4 };
+
 // ===== GET /api/billing/plans =====
 router.get('/plans', (req, res) => {
   res.json({ success: true, plans: PLANS });
@@ -73,7 +76,7 @@ router.get('/current', authenticateToken, async (req, res) => {
     if (!accountStatus.found) return res.status(404).json({ error: 'Usuário não encontrado' });
 
     const users = await database.query(
-      'SELECT plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends FROM users WHERE id = ?',
+      'SELECT plan, pending_plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends FROM users WHERE id = ?',
       [userId]
     );
 
@@ -99,6 +102,7 @@ router.get('/current', authenticateToken, async (req, res) => {
       success: true,
       current: {
         plan: user.plan,
+        pending_plan: user.pending_plan,
         max_containers: user.max_containers,
         max_ram_mb: user.max_ram_mb,
         max_storage_mb: user.max_storage_mb,
@@ -407,34 +411,124 @@ async function activatePlan(billing) {
     const plan = PLANS.find(p => p.id === billing.plan_id);
     if (!plan) throw new Error('Plano não encontrado');
 
+    const users = await database.query(
+      'SELECT plan, suspended_at, pending_plan FROM users WHERE id = ?',
+      [billing.user_id]
+    );
+    const user = users[0];
+    if (!user) throw new Error('Usuário não encontrado');
+
+    const currentRank = PLAN_RANK[user.plan] || 0;
+    const targetRank = PLAN_RANK[plan.id] || 0;
+    const isActivePaidPlanChange = user.suspended_at === null &&
+      user.plan !== 'free' && user.plan !== plan.id;
+
+    if (isActivePaidPlanChange && targetRank > currentRank) {
+      // O pagamento é registrado, mas o upgrade só muda na renovação do ciclo atual.
+      const active = await database.query(
+        `SELECT expires_at FROM billing WHERE user_id = ? AND status = 'active'
+         ORDER BY expires_at DESC LIMIT 1`,
+        [billing.user_id]
+      );
+      const currentExpires = active[0]?.expires_at;
+      await database.query(
+        `UPDATE billing SET status = 'scheduled', activated_at = NOW(), expires_at = ? WHERE id = ?`,
+        [currentExpires || new Date(), billing.id]
+      );
+      await database.query('UPDATE users SET pending_plan = ? WHERE id = ?', [plan.id, billing.user_id]);
+
+      const notificationManager = require('../utils/notification-manager');
+      await notificationManager.notify(billing.user_id, {
+        type: 'success',
+        category: 'billing',
+        title: `Upgrade para ${plan.name} agendado`,
+        message: `O pagamento foi confirmado. O plano ${plan.name} será aplicado na renovação do seu ciclo atual.`
+      });
+      return;
+    }
+
+    if (isActivePaidPlanChange && targetRank < currentRank) {
+      // Downgrade aplica limites imediatamente, sem apagar containers excedentes.
+      const active = await database.query(
+        `SELECT expires_at FROM billing WHERE user_id = ? AND status = 'active'
+         ORDER BY expires_at DESC LIMIT 1`,
+        [billing.user_id]
+      );
+      const currentExpires = active[0]?.expires_at || new Date();
+      await database.query(
+        `UPDATE billing SET status = 'expired' WHERE user_id = ? AND status = 'active'`,
+        [billing.user_id]
+      );
+      await database.query(
+        `UPDATE billing SET status = 'active', activated_at = NOW(), expires_at = ? WHERE id = ?`,
+        [currentExpires, billing.id]
+      );
+      await database.query(
+        `UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ?, pending_plan = NULL WHERE id = ?`,
+        [plan.id, plan.max_containers, plan.max_ram_mb, plan.max_storage_mb, billing.user_id]
+      );
+      await database.query(
+        `UPDATE containers SET plan_blocked = CASE
+           WHEN id IN (
+             SELECT id FROM (
+               SELECT id FROM containers WHERE user_id = ? ORDER BY created_at ASC LIMIT ?
+             ) AS selected_containers
+           ) THEN false ELSE true END
+         WHERE user_id = ?`,
+        [billing.user_id, plan.max_containers, billing.user_id]
+      );
+      const blockedRunning = await database.query(
+        `SELECT id FROM containers WHERE user_id = ? AND plan_blocked = true AND status = 'running'`,
+        [billing.user_id]
+      );
+      for (const container of blockedRunning) {
+        try {
+          await dockerManager.stopContainer(container.id);
+        } catch (error) {
+          console.warn(`⚠️ Não consegui parar container excedente ${container.id}:`, error.message);
+        }
+      }
+
+      const notificationManager = require('../utils/notification-manager');
+      await notificationManager.notify(billing.user_id, {
+        type: 'warning',
+        category: 'billing',
+        title: `Downgrade para ${plan.name} aplicado`,
+        message: `Os limites do plano ${plan.name} já estão ativos. Containers excedentes foram preservados, mas não poderão ser iniciados.`
+      });
+      return;
+    }
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    // Atualizar billing
+    await database.query(
+      `UPDATE billing SET status = 'expired'
+       WHERE user_id = ? AND status = 'active' AND id <> ?`,
+      [billing.user_id, billing.id]
+    );
     await database.query(
       `UPDATE billing SET status = 'active', activated_at = NOW(), expires_at = ? WHERE id = ?`,
       [expiresAt, billing.id]
     );
-
-    // Atualizar plano do usuário e reativar conta (limpa suspensão)
     await database.query(
-      `UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ?, suspended_at = NULL, free_trial_ends = ? WHERE id = ?`,
+      `UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ?,
+       pending_plan = NULL, suspended_at = NULL, free_trial_ends = ? WHERE id = ?`,
       [plan.id, plan.max_containers, plan.max_ram_mb, plan.max_storage_mb, expiresAt, billing.user_id]
     );
+    await database.query('UPDATE containers SET plan_blocked = false WHERE user_id = ?', [billing.user_id]);
+    const accountService = require('../services/accountService');
+    await accountService.reactivateUserContainers(billing.user_id);
 
     console.log(`✅ Plano ${plan.name} ativado para usuário ${billing.user_id} até ${expiresAt.toISOString()}`);
 
-    // Notificar
-    try {
-      const notificationManager = require('../utils/notification-manager');
-      await notificationManager.createNotification(billing.user_id, {
-        type: 'success',
-        category: 'billing',
-        title: `Plano ${plan.name} ativado! 🎉`,
-        message: `Seu plano foi ativado com sucesso e expira em ${expiresAt.toLocaleDateString('pt-BR')}.`
-      });
-    } catch (e) { console.error('Erro notificação billing:', e.message); }
-
+    const notificationManager = require('../utils/notification-manager');
+    await notificationManager.notify(billing.user_id, {
+      type: 'success',
+      category: 'billing',
+      title: `Plano ${plan.name} ativado! 🎉`,
+      message: `Seu plano foi ativado com sucesso e expira em ${expiresAt.toLocaleDateString('pt-BR')}.`
+    });
   } catch (error) {
     console.error('Erro ao ativar plano:', error);
     throw error;

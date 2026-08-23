@@ -19,11 +19,10 @@ import {
   Eye,
   EyeOff,
   QrCode,
-  ExternalLink,
-  Coins
+  ExternalLink
 } from 'lucide-react';
 
-const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, onRenew, isNearLimit, stats }) => {
+const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, isNearLimit, stats }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const statusConfig = {
@@ -42,37 +41,17 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
 
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-200">
-      {/* Subscription Expiration Banner */}
+      {/* O vencimento exibido aqui é o do plano da conta. */}
       {container.subscription?.expired && (
-        <div className="px-4 py-2 bg-red-500 text-white text-sm font-medium flex items-center justify-between rounded-t-lg">
-          <div className="flex items-center">
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Expirado - Recarregue 500 coins
-          </div>
-          {onRenew && (
-            <button
-              onClick={() => onRenew(container.id)}
-              className="px-3 py-1 bg-white text-red-600 text-xs rounded-md font-medium hover:bg-red-50"
-            >
-              Renovar Agora
-            </button>
-          )}
+        <div className="px-4 py-2 bg-red-500 text-white text-sm font-medium flex items-center rounded-t-lg">
+          <AlertTriangle className="w-4 h-4 mr-2" />
+          Plano da conta expirado. Renove em Planos &amp; Pagamentos.
         </div>
       )}
       {container.subscription?.expiringSoon && !container.subscription?.expired && (
-        <div className="px-4 py-2 bg-yellow-500 text-white text-sm font-medium flex items-center justify-between rounded-t-lg">
-          <div className="flex items-center">
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Expira em {container.subscription.daysLeft} dias - Renove agora!
-          </div>
-          {onRenew && (
-            <button
-              onClick={() => onRenew(container.id)}
-              className="px-3 py-1 bg-white text-yellow-600 text-xs rounded-md font-medium hover:bg-yellow-50"
-            >
-              Renovar
-            </button>
-          )}
+        <div className="px-4 py-2 bg-yellow-500 text-white text-sm font-medium flex items-center rounded-t-lg">
+          <AlertTriangle className="w-4 h-4 mr-2" />
+          Plano da conta expira em {container.subscription.daysLeft} dias.
         </div>
       )}
 
@@ -358,7 +337,7 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
               </button>
               {container.subscription?.expired && (
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                  Renove a subscription para iniciar
+Renove o plano da conta em Planos & Pagamentos para iniciar
                 </div>
               )}
             </div>
@@ -436,17 +415,6 @@ const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade
           >
             <ExternalLink className="w-4 h-4" />
           </Link>
-
-          {/* Renew */}
-          {(container.subscription?.expired || container.subscription?.expiringSoon) && (
-            <button
-              onClick={() => onRenew && onRenew(container.id)}
-              className="p-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition-colors"
-              title="Renovar (500 coins)"
-            >
-              <Coins className="w-4 h-4" />
-            </button>
-          )}
 
           {/* Delete */}
           <button

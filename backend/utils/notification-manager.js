@@ -130,7 +130,29 @@ class NotificationManager {
         console.error('❌ Erro ao enviar Web Push:', pushError.message);
       }
 
-      // 6. Enviar via WhatsApp (se vinculado) — 🔥 fire-and-forget, NÃO bloqueia a API
+      // 6. Enviar emails somente para eventos de billing/expiração.
+      if (category === 'billing') {
+        try {
+          const users = await database.query(
+            'SELECT email, username FROM users WHERE id = ? LIMIT 1',
+            [userId]
+          );
+          if (users.length && users[0].email) {
+            const { sendEmail } = require('./email');
+            sendEmail({
+              toEmail: users[0].email,
+              toName: users[0].username,
+              subject: title,
+              htmlContent: `<p>${message}</p><p>Equipe MozHost</p>`,
+              textContent: message
+            }).catch(emailError => console.error('❌ Erro ao enviar email:', emailError.message));
+          }
+        } catch (emailError) {
+          console.error('❌ Erro ao preparar email:', emailError.message);
+        }
+      }
+
+      // 7. Enviar via WhatsApp (se vinculado) — 🔥 fire-and-forget, NÃO bloqueia a API
       try {
         const waAccounts = await database.query(
           'SELECT whatsapp_number FROM whatsapp_accounts WHERE user_id = ? AND verified = TRUE',
@@ -195,18 +217,18 @@ class NotificationManager {
   async notifySubscriptionExpiring(userId, containerName, daysLeft) {
     return await this.notify(userId, {
       type: 'warning',
-      category: 'subscription',
-      title: '⚠️ Assinatura Expirando',
-      message: `O container "${containerName}" expira em ${daysLeft} dias. Renove para continuar usando.`
+      category: 'billing',
+      title: '⚠️ Plano da conta expirando',
+      message: `O plano da sua conta expira em ${daysLeft} dias. Renove para continuar usando todos os containers.`
     });
   }
 
   async notifySubscriptionExpired(userId, containerName) {
     return await this.notify(userId, {
       type: 'error',
-      category: 'subscription',
-      title: '❌ Assinatura Expirada',
-      message: `O container "${containerName}" expirou. Recarregue 500 coins para reativar.`
+      category: 'billing',
+      title: '❌ Plano da conta expirado',
+      message: 'O plano da sua conta expirou. Todos os containers foram suspensos; renove dentro do prazo de retenção para reativá-los.'
     });
   }
 

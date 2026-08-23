@@ -50,7 +50,7 @@ const PrivacyPolicyPage = ({ onBack }) => {
             <Clock className="w-5 h-5 text-green-600 mr-3" />
             <div>
               <p className="text-sm font-medium text-green-900">Última atualização</p>
-              <p className="text-sm text-green-700">01 de Janeiro de 2025</p>
+              <p className="text-sm text-green-700">23 de Agosto de 2026</p>
             </div>
           </div>
 
@@ -282,24 +282,23 @@ const PrivacyPolicyPage = ({ onBack }) => {
                   <h4 className="font-medium text-gray-900 mb-2">📅 Períodos de Retenção</h4>
                   <div className="grid md:grid-cols-2 gap-4 text-sm">
   <div>
-    <strong>Dados da conta:</strong> Enquanto conta ativa + 1 ano
+    <strong>Dados da conta:</strong> Enquanto a conta estiver ativa e pelo período necessário para cumprir obrigações legais
   </div>
   <div>
     <strong>Logs de acesso:</strong> 2 anos
   </div>
   <div>
-    <strong>Dados de pagamento:</strong> 7 anos (obrigatório legal)
+    <strong>Dados de pagamento:</strong> 7 anos (quando exigido por lei)
   </div>
   <div>
-    <strong>Conteúdo containers:</strong> 30 dias após exclusão
+    <strong>Conteúdo de containers suspensos:</strong> 7 dias após a expiração do plano
   </div>
 </div>
 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-  <strong>⚠️ Exclusão de Conta:</strong> Ao solicitar a exclusão da sua conta, 
-  os seus dados serão mantidos por 30 dias para fins de recuperação. Após esse 
-  período, todos os dados — incluindo containers, arquivos, configurações e 
-  informações pessoais — serão permanentemente eliminados e não poderão 
-  ser recuperados.
+  <strong>⚠️ Expiração do plano:</strong> A assinatura pertence à conta do utilizador e controla todos os containers dessa conta. Quando o plano expira, todos os containers são suspensos, independentemente da data de criação de cada um. Os arquivos, configurações e dados ficam preservados por 7 dias para permitir a renovação. Se não houver renovação dentro desse prazo, esses dados serão permanentemente eliminados e não poderão ser recuperados.
+</div>
+<div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+  <strong>📧 Avisos de expiração:</strong> Enviaremos avisos quando faltarem 5, 3 e 1 dia para o fim do plano, por email e, quando disponível, por WhatsApp vinculado à conta. Durante a retenção após a suspensão, enviaremos um aviso adicional quando faltarem 2 dias para a eliminação.
 </div>
                 </div>
               </div>

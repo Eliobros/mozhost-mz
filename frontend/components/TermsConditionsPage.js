@@ -37,7 +37,7 @@ const TermsConditionsPage = ({ onBack }) => {
             <Clock className="w-5 h-5 text-blue-600 mr-3" />
             <div>
               <p className="text-sm font-medium text-blue-900">Última atualização</p>
-              <p className="text-sm text-blue-700">01 de Janeiro de 2025</p>
+              <p className="text-sm text-blue-700">23 de Agosto de 2026</p>
             </div>
           </div>
 
@@ -236,10 +236,24 @@ const TermsConditionsPage = ({ onBack }) => {
                   <ul className="text-sm text-blue-700 space-y-1">
                     <li>• Cancelamento a qualquer momento</li>
                     <li>• Serviço ativo até o fim do período pago</li>
-                    <li>• Dados mantidos por 30 dias após cancelamento</li>
-                    <li>• Containers desativados imediatamente</li>
+                    <li>• Os containers são suspensos quando o plano termina ou é cancelado</li>
+                    <li>• Os dados dos containers ficam retidos por 7 dias após a suspensão</li>
                   </ul>
                 </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded">
+                <h4 className="font-medium text-orange-900 mb-2">⏳ Expiração do Plano e Retenção dos Containers</h4>
+                <ul className="text-sm text-orange-800 space-y-2">
+                  <li>• O plano pertence à conta do utilizador e controla todos os seus containers.</li>
+                  <li>• A data de criação de cada container não cria um ciclo de cobrança ou renovação separado.</li>
+                  <li>• Quando o plano geral expira, todos os containers da conta são suspensos, independentemente da data em que foram criados.</li>
+                  <li>• Após a suspensão, os dados e arquivos dos containers são preservados por 7 dias para permitir a renovação do plano.</li>
+                  <li>• Serão enviados avisos antes da expiração, quando faltarem 5, 3 e 1 dia, por email e, quando disponível, WhatsApp vinculado à conta.</li>
+                  <li>• Durante o período de retenção, será enviado um aviso adicional quando faltarem 2 dias para a eliminação.</li>
+                  <li>• Se o plano não for renovado dentro dos 7 dias, os containers, arquivos, configurações e recursos associados serão eliminados permanentemente para liberar a infraestrutura.</li>
+                  <li>• Após a eliminação definitiva, os dados não poderão ser recuperados. O utilizador é responsável por manter cópias de segurança.</li>
+                </ul>
               </div>
             </section>
 

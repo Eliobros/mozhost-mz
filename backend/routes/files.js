@@ -7,6 +7,7 @@ const { body, validationResult } = require('express-validator');
 const AdmZip = require('adm-zip');
 const authMiddleware = require('../middleware/auth');
 const database = require('../models/database');
+const dockerManager = require('../utils/docker-manager');
 
 const router = express.Router();
 
@@ -32,6 +33,38 @@ async function getDeployFolder(containerId) {
   return '';
 }
 
+// Detecta Next.js sem executar código enviado pelo usuário.
+function detectNextJsProject(zip) {
+  const packageEntry = zip.getEntries().find((entry) => {
+    const entryName = entry.entryName.replace(/\\/g, '/').replace(/^\.\//, '');
+    return !entry.isDirectory && entryName === 'package.json';
+  });
+
+  if (!packageEntry) return false;
+
+  try {
+    const packageJson = JSON.parse(packageEntry.getData().toString('utf8'));
+    const dependencySections = [
+      packageJson.dependencies,
+      packageJson.devDependencies,
+      packageJson.peerDependencies,
+      packageJson.optionalDependencies
+    ];
+
+    return dependencySections.some((dependencies) => (
+      dependencies && typeof dependencies === 'object' && Object.prototype.hasOwnProperty.call(dependencies, 'next')
+    ));
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isBuildArtifact(entryName) {
+  const normalized = entryName.replace(/\\/g, '/').replace(/^\.\//, '');
+  return normalized === '.next' || normalized.startsWith('.next/') ||
+    normalized === 'node_modules' || normalized.startsWith('node_modules/');
+}
+
 // Upload simples para CLI (não conflita com a interface web)
 router.post('/:containerId/cli-upload', [
   body('path').notEmpty().withMessage('Path is required'),
@@ -52,6 +85,7 @@ router.post('/:containerId/cli-upload', [
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     const containerPath = getContainerPath(containerId);
     const deployFolder = await getDeployFolder(containerId);
@@ -164,6 +198,30 @@ async function verifyContainerOwnership(containerId, userId) {
   return containers.length > 0;
 }
 
+async function hasAccountAccess(userId) {
+  const users = await database.query(
+    `SELECT suspended_at, free_trial_ends,
+            (SELECT b.expires_at FROM billing b
+             WHERE b.user_id = users.id AND b.status = 'active' AND b.expires_at > NOW()
+             ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
+     FROM users WHERE id = ?`,
+    [userId]
+  );
+  if (!users.length || users[0].suspended_at) return false;
+  return !!users[0].billing_expires ||
+    (users[0].free_trial_ends && new Date(users[0].free_trial_ends) > new Date());
+}
+
+async function requireAccountAccess(userId, res) {
+  if (await hasAccountAccess(userId)) return true;
+  res.status(402).json({
+    error: 'Account suspended',
+    message: 'Sua conta está suspensa. Renove o plano para alterar os arquivos.',
+    suspended: true
+  });
+  return false;
+}
+
 // Helper para construir caminho do container
 function getContainerPath(containerId) {
   return path.join(process.env.CONTAINERS_PATH || '/root/mozhost/user-data/containers', containerId);
@@ -226,7 +284,7 @@ router.get('/:containerId', async (req, res) => {
     const { containerId } = req.params;
     const { path: subPath = '' } = req.query;
 
-    // Verificar ownership
+    // Verificar ownership. A leitura permanece disponível durante a retenção.
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -327,6 +385,7 @@ router.post('/:containerId', [
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     const containerPath = getContainerPath(containerId);
     const fullPath = path.join(containerPath, filePath);
@@ -383,6 +442,7 @@ router.put('/:containerId/*', [
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     const containerPath = getContainerPath(containerId);
     const fullPath = path.join(containerPath, filePath);
@@ -430,6 +490,7 @@ router.delete('/:containerId/*', async (req, res) => {
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     const containerPath = getContainerPath(containerId);
     const fullPath = path.join(containerPath, filePath);
@@ -487,6 +548,7 @@ router.patch('/:containerId/*', [
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     const containerPath = getContainerPath(containerId);
     const oldFullPath = path.join(containerPath, oldPath);
@@ -533,6 +595,7 @@ router.post('/:containerId/upload-zip',
       if (!await verifyContainerOwnership(containerId, req.user.userId)) {
         return res.status(404).json({ error: 'Container not found' });
       }
+      if (!await requireAccountAccess(req.user.userId, res)) return;
 
       if (!req.file) {
         return res.status(400).json({ error: 'No ZIP file uploaded' });
@@ -541,6 +604,20 @@ router.post('/:containerId/upload-zip',
       // Validar que é ZIP
       if (!req.file.originalname.endsWith('.zip')) {
         return res.status(400).json({ error: 'File must be a ZIP archive' });
+      }
+
+      // Ler o manifesto antes de escolher a pasta de destino. Isso permite
+      // transformar automaticamente um container static em Next.js quando o
+      // deploy é feito pelo CLI.
+      const zip = new AdmZip(req.file.buffer);
+      const isNextJs = detectNextJsProject(zip);
+      const containerInfo = await database.query(
+        'SELECT type FROM containers WHERE id = ? AND user_id = ?',
+        [containerId, req.user.userId]
+      );
+
+      if (isNextJs && containerInfo[0]?.type === 'static') {
+        await dockerManager.promoteStaticToNextJs(containerId);
       }
 
       const containerPath = getContainerPath(containerId);
@@ -559,19 +636,24 @@ router.post('/:containerId/upload-zip',
 
       await fs.ensureDir(extractPath);
 
-      // Extrair ZIP
-      const zip = new AdmZip(req.file.buffer);
       const zipEntries = zip.getEntries();
 
       const extractedFiles = [];
       const skippedFiles = [];
 
       for (const entry of zipEntries) {
-        const entryPath = path.join(extractPath, entry.entryName);
+        const entryName = entry.entryName.replace(/\\/g, '/').replace(/^\.\//, '');
+
+        if (isBuildArtifact(entryName)) {
+          skippedFiles.push({ name: entryName, reason: 'Build artifact or dependency directory' });
+          continue;
+        }
+
+        const entryPath = path.join(extractPath, entryName);
 
         // Path traversal protection
         if (!entryPath.startsWith(extractPath)) {
-          skippedFiles.push({ name: entry.entryName, reason: 'Invalid path' });
+          skippedFiles.push({ name: entryName, reason: 'Invalid path' });
           continue;
         }
 
@@ -606,7 +688,9 @@ router.post('/:containerId/upload-zip',
         skipped: skippedFiles.length,
         files: extractedFiles,
         skippedFiles: skippedFiles,
-        totalSize: req.file.size
+        totalSize: req.file.size,
+        framework: isNextJs ? 'nextjs' : null,
+        runtimePromoted: isNextJs && containerInfo[0]?.type === 'static'
       });
 
     } catch (error) {
@@ -635,6 +719,7 @@ router.post('/:containerId/upload', genericUpload.array('files', 50), async (req
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
@@ -724,6 +809,7 @@ router.post('/:containerId/upload-folder', genericUpload.array('files', 50), asy
     if (!await verifyContainerOwnership(containerId, req.user.userId)) {
       return res.status(404).json({ error: 'Container not found' });
     }
+    if (!await requireAccountAccess(req.user.userId, res)) return;
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
@@ -802,7 +888,7 @@ router.post('/:containerId/upload-folder', genericUpload.array('files', 50), asy
   }
 });
 
-// Download de arquivo
+// Download de arquivo: permitido durante os 7 dias de retenção.
 router.get('/:containerId/download/*', async (req, res) => {
   try {
     const { containerId } = req.params;

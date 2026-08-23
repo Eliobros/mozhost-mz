@@ -108,7 +108,7 @@ const CreateContainerModal = ({
 >
   <div className="text-2xl mb-2">🌐</div>
   <div className="font-medium text-sm">Site</div>
-  <div className="text-xs text-gray-500 mt-1">HTML, CSS, JS</div>
+  <div className="text-xs text-gray-500 mt-1">HTML, CSS, JS ou Next.js</div>
 </button>
             </div>
 

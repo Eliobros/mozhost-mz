@@ -33,7 +33,6 @@ const authenticateToken = require('./middleware/auth');
 const domainsRoutes = require('./routes/domains');
 const monitoringRoutes = require('./routes/monitoring');
 const notificationRoutes = require('./routes/notifications');
-const subscriptionService = require('./services/subscriptionService');
 const databasesRoutes = require('./routes/databases');
 const emailRoutes = require('./routes/emails');
 const billingRoutes = require('./routes/billing');
@@ -466,48 +465,38 @@ process.on('SIGINT', async () => {
 // Start the server
 startServer();
 
-// Job para verificar subscriptions
-const checkSubscriptions = async () => {
+// Job do ciclo de vida: o billing da conta é a única autoridade.
+const checkAccountLifecycle = async () => {
   try {
-    console.log('🔍 Verificando subscriptions...');
-    const expiring = await subscriptionService.checkExpiringSubscriptions();
-    if (expiring > 0) {
-      console.log(`⚠️  ${expiring} subscriptions expirando em breve`);
-    }
-
-    const expired = await subscriptionService.expireSubscriptions();
-    if (expired > 0) {
-      console.log(`❌ ${expired} subscriptions expiradas`);
-    }
-
-    // Suspensão de contas (trial free de 7 dias / plano pago sem renovação)
+    console.log('🔍 Verificando ciclo de vida das contas...');
     const accountService = require('./services/accountService');
+
+    const scheduled = await accountService.processScheduledPlanChanges();
+    if (scheduled > 0) console.log(`✅ ${scheduled} mudança(s) de plano aplicadas na renovação`);
+
     const warned = await accountService.warnExpiringAccounts();
-    if (warned > 0) {
-      console.log(`⚠️  ${warned} aviso(s) de expiração enviados`);
-    }
+    if (warned > 0) console.log(`⚠️ ${warned} aviso(s) de billing enviados`);
 
     const suspended = await accountService.suspendExpiredAccounts();
     if (suspended.suspendedCount > 0) {
-      console.log(`⛔ ${suspended.suspendedCount} contas suspensas por expiração`);
+      console.log(`⛔ ${suspended.suspendedCount} conta(s) suspensas por expiração`);
     }
 
-    // Cleanup: containers de contas suspensas há mais de 5 dias
     const cleanup = await accountService.cleanupSuspendedAccounts();
     if (cleanup.cleanedCount > 0) {
       console.log(`🧹 ${cleanup.cleanedCount} conta(s) limpas (containers deletados)`);
     }
 
-    console.log('✅ Verificação de subscriptions concluída');
+    console.log('✅ Verificação do ciclo de vida concluída');
   } catch (error) {
-    console.error('❌ Erro ao verificar subscriptions:', error);
+    console.error('❌ Erro ao verificar ciclo de vida:', error);
   }
 };
 
 setTimeout(() => {
-  checkSubscriptions();
+  checkAccountLifecycle();
 }, 10000);
 
 setInterval(() => {
-  checkSubscriptions();
+  checkAccountLifecycle();
 }, 60 * 60 * 1000);

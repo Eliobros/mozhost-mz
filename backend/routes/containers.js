@@ -30,7 +30,16 @@ router.get('/', async (req, res) => {
       };
     }));
 
-    const userInfo = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
+    const userInfo = await database.query(
+      `SELECT u.max_storage_mb, u.coins, u.suspended_at, u.free_trial_ends,
+              (SELECT b.expires_at FROM billing b
+               WHERE b.user_id = u.id AND b.status = 'active' AND b.expires_at > NOW()
+               ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
+       FROM users u WHERE u.id = ?`,
+      [req.user.userId]
+    );
+    const accountHasAccess = userInfo.length > 0 && !userInfo[0].suspended_at &&
+      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date()));
     const maxMB = userInfo.length ? userInfo[0].max_storage_mb : 1024;
     const storageAlerts = containers
       .filter(c => (c.storage_used_mb || 0) >= Math.floor(maxMB * 0.9))
@@ -109,6 +118,24 @@ router.post('/:id/upgrade-storage', [
     );
     if (!containers.length) {
       return res.status(404).json({ error: 'Container not found' });
+    }
+
+    const account = await database.query(
+      `SELECT suspended_at, free_trial_ends,
+              (SELECT b.expires_at FROM billing b
+               WHERE b.user_id = users.id AND b.status = 'active' AND b.expires_at > NOW()
+               ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
+       FROM users WHERE id = ?`,
+      [req.user.userId]
+    );
+    const accountHasAccess = account.length > 0 && !account[0].suspended_at &&
+      (account[0].billing_expires || (account[0].free_trial_ends && new Date(account[0].free_trial_ends) > new Date()));
+    if (!accountHasAccess) {
+      return res.status(402).json({
+        error: 'Account suspended',
+        message: 'Renove o plano da conta para alterar o armazenamento.',
+        suspended: true
+      });
     }
 
     const priceCoins = Number(addMb);
@@ -219,12 +246,18 @@ router.post('/', [
     );
 
     const userInfo = await database.query(
-      'SELECT max_containers, coins, plan, suspended_at FROM users WHERE id = ?',
+      `SELECT u.max_containers, u.coins, u.plan, u.suspended_at, u.free_trial_ends,
+              (SELECT b.expires_at FROM billing b
+               WHERE b.user_id = u.id AND b.status = 'active' AND b.expires_at > NOW()
+               ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
+       FROM users u WHERE u.id = ?`,
       [req.user.userId]
     );
 
-    // Conta suspensa (trial free expirado ou plano pago sem renovação)
-    if (userInfo[0].suspended_at) {
+    // O billing/trial da conta é a única autoridade para criar containers.
+    const accountHasAccess = userInfo.length > 0 && !userInfo[0].suspended_at &&
+      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date()));
+    if (!accountHasAccess) {
       return res.status(402).json({
         error: 'Account suspended',
         message: 'Sua conta está suspensa. Renove seu plano para criar containers.',
@@ -258,7 +291,7 @@ router.post('/', [
   environment: environment || {}
 });
 
-    const subscription = await subscriptionService.createSubscription(req.user.userId, containerData.id, 0);
+    const subscription = await subscriptionService.getSubscriptionStatus(containerData.id);
 
     const responseData = {
       message: 'Container created successfully',
@@ -272,8 +305,10 @@ router.post('/', [
         dockerId: containerData.dockerId
       },
       subscription: {
+        scope: 'account',
         expiresAt: subscription.expiresAt,
-        daysLeft: 30
+        daysLeft: subscription.daysLeft,
+        expired: subscription.expired
       }
     };
 
@@ -295,7 +330,7 @@ router.post('/:id/start', async (req, res) => {
     const { id } = req.params;
 
     const containers = await database.query(
-      'SELECT id, name, status FROM containers WHERE id = ? AND user_id = ?',
+      'SELECT id, name, status, plan_blocked FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
     );
 
@@ -317,14 +352,21 @@ router.post('/:id/start', async (req, res) => {
       [req.user.userId]
     );
     const acc = users.length ? users[0] : null;
-    const hasActiveBilling = acc && acc.billing_expires;
-    const trialExpired = acc && acc.free_trial_ends && new Date(acc.free_trial_ends) <= new Date();
+    const accountHasAccess = acc && !acc.suspended_at &&
+      (acc.billing_expires || (acc.free_trial_ends && new Date(acc.free_trial_ends) > new Date()));
 
-    if (acc && (acc.suspended_at || (!hasActiveBilling && trialExpired))) {
+    if (!accountHasAccess) {
       return res.status(402).json({
         error: 'Account suspended',
-        message: 'Sua conta está suspensa. Renove seu plano para reativar seus containers.',
+        message: 'Sua conta está suspensa. Renove o plano para reativar seus containers.',
         suspended: true
+      });
+    }
+    if (container.plan_blocked) {
+      return res.status(403).json({
+        error: 'Container blocked by plan',
+        message: 'Este container foi preservado, mas excede o limite do plano atual. Faça upgrade para iniciá-lo.',
+        planBlocked: true
       });
     }
 
@@ -360,7 +402,7 @@ router.post('/:id/stop', async (req, res) => {
     const { id } = req.params;
 
     const containers = await database.query(
-      'SELECT id, name, status FROM containers WHERE id = ? AND user_id = ?',
+      'SELECT id, name, status, plan_blocked FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
     );
 
@@ -404,7 +446,7 @@ router.post('/:id/restart', async (req, res) => {
     const { id } = req.params;
 
     const containers = await database.query(
-      'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
+      'SELECT id, name, plan_blocked FROM containers WHERE id = ? AND user_id = ?',
       [id, req.user.userId]
     );
 
@@ -415,6 +457,31 @@ router.post('/:id/restart', async (req, res) => {
     }
 
     const container = containers[0];
+
+    const accountAccess = await database.query(
+      `SELECT u.suspended_at, u.free_trial_ends,
+              (SELECT b.expires_at FROM billing b
+               WHERE b.user_id = u.id AND b.status = 'active' AND b.expires_at > NOW()
+               ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
+       FROM users u WHERE u.id = ?`,
+      [req.user.userId]
+    );
+    const accountHasAccess = accountAccess.length > 0 && !accountAccess[0].suspended_at &&
+      (accountAccess[0].billing_expires || (accountAccess[0].free_trial_ends && new Date(accountAccess[0].free_trial_ends) > new Date()));
+    if (!accountHasAccess) {
+      return res.status(402).json({
+        error: 'Account suspended',
+        message: 'Sua conta está suspensa. Renove o plano para reativar seus containers.',
+        suspended: true
+      });
+    }
+    if (container.plan_blocked) {
+      return res.status(403).json({
+        error: 'Container blocked by plan',
+        message: 'Este container excede o limite do plano atual. Faça upgrade para iniciá-lo.',
+        planBlocked: true
+      });
+    }
 
     // Verificar se container Docker existe
     const containerData = await database.query(
@@ -624,58 +691,12 @@ router.patch('/:id', [
   }
 });
 
-// Renovar subscription do container
-router.post('/:id/renew', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const RENEW_COST = 500;
-
-    const containers = await database.query(
-      'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
-      [id, req.user.userId]
-    );
-
-    if (containers.length === 0) {
-      return res.status(404).json({ error: 'Container não encontrado' });
-    }
-
-    const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-    const coins = users.length ? users[0].coins : 0;
-
-    if (coins < RENEW_COST) {
-      return res.status(402).json({
-        error: 'Coins insuficientes',
-        message: `Você precisa de ${RENEW_COST} coins para renovar.`,
-        needed: RENEW_COST,
-        have: coins
-      });
-    }
-
-    await database.query('UPDATE users SET coins = coins - ? WHERE id = ?', [RENEW_COST, req.user.userId]);
-
-    const result = await subscriptionService.renewSubscription(req.user.userId, id, RENEW_COST);
-
-    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-
-    // ✨ NOVO: Notificar renovação
-    await notificationManager.notify(req.user.userId, {
-      type: 'success',
-      category: 'subscription',
-      title: '✅ Assinatura Renovada',
-      message: `Container "${containers[0].name}" renovado por mais 30 dias! Expira em: ${new Date(result.expiresAt).toLocaleDateString('pt-BR')}`
+// A renovação é feita no plano da conta (/api/billing), nunca em um container.
+router.post('/:id/renew', (req, res) => {
+    return res.status(410).json({
+      error: 'Container renewal removed',
+      message: 'Containers não possuem renovação individual. Renove o plano da conta em /billing.'
     });
-
-    res.json({
-      success: true,
-      message: 'Container renovado por mais 30 dias!',
-      expiresAt: result.expiresAt,
-      coins: updated[0].coins
-    });
-
-  } catch (error) {
-    console.error('Erro ao renovar container:', error);
-    res.status(500).json({ error: 'Falha ao renovar container' });
-  }
 });
 
 module.exports = router;

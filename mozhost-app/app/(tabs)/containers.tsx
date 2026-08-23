@@ -50,8 +50,6 @@ type ContainerStats = {
   };
 };
 
-const RENEW_COST = 500;
-
 export default function ContainersScreen() {
   const router = useRouter();
   const [containers, setContainers] = useState<Container[]>([]);
@@ -153,40 +151,6 @@ export default function ContainersScreen() {
       setActionLoading((prev) => ({ ...prev, [id]: '' }));
     }
   };
-
-  const handleRenew = (container: Container) => {
-    Alert.alert(
-      'Renovar Container',
-      `Renovar "${container.name}" por mais 30 dias custará ${RENEW_COST} coins. Continuar?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Renovar',
-          onPress: async () => {
-            setActionLoading((prev) => ({ ...prev, [container.id]: 'renewing' }));
-            try {
-              const data = await api.post(`/containers/${container.id}/renew`);
-              setCoins(data.coins);
-              await loadContainers();
-              Alert.alert(
-                '✅ Container renovado!',
-                `Nova expiração: ${new Date(data.expiresAt).toLocaleDateString('pt-MZ')}`
-              );
-            } catch (err: any) {
-              if (err.status === 402) {
-                insufficientCoinsAlert(err.needed, err.have);
-              } else {
-                Alert.alert('Erro', err.message || err.error || 'Falha ao renovar container');
-              }
-            } finally {
-              setActionLoading((prev) => ({ ...prev, [container.id]: '' }));
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleUpgradeStorage = (container: Container) => {
     setUpgradeTarget(container);
     setAddMb('');
@@ -393,35 +357,17 @@ export default function ContainersScreen() {
                 {sub?.expired && (
                   <View style={styles.subExpired}>
                     <Ionicons name="alert-circle" size={16} color="#fff" />
-                    <Text style={styles.subExpiredText}>Expirado — Recarregue {RENEW_COST} coins</Text>
-                    <TouchableOpacity
-                      style={styles.subRenewBtn}
-                      onPress={() => handleRenew(container)}
-                      disabled={actionLoading[container.id] === 'renewing'}>
-                      {actionLoading[container.id] === 'renewing' ? (
-                        <ActivityIndicator size="small" color="#ef4444" />
-                      ) : (
-                        <Text style={styles.subRenewBtnText}>Renovar</Text>
-                      )}
-                    </TouchableOpacity>
+                    <Text style={styles.subExpiredText}>Plano da conta expirado — renove em Planos & Pagamentos</Text>
+
                   </View>
                 )}
                 {sub?.expiringSoon && !sub?.expired && (
                   <View style={styles.subExpiring}>
                     <Ionicons name="time" size={16} color="#fff" />
                     <Text style={styles.subExpiringText}>
-                      Expira em {sub.daysLeft} {sub.daysLeft === 1 ? 'dia' : 'dias'} — Renove agora!
+                      Plano da conta expira em {sub.daysLeft} {sub.daysLeft === 1 ? 'dia' : 'dias'} — renove em Planos & Pagamentos.
                     </Text>
-                    <TouchableOpacity
-                      style={styles.subRenewBtnYellow}
-                      onPress={() => handleRenew(container)}
-                      disabled={actionLoading[container.id] === 'renewing'}>
-                      {actionLoading[container.id] === 'renewing' ? (
-                        <ActivityIndicator size="small" color="#b45309" />
-                      ) : (
-                        <Text style={styles.subRenewBtnYellowText}>Renovar</Text>
-                      )}
-                    </TouchableOpacity>
+
                   </View>
                 )}
 
@@ -583,22 +529,6 @@ export default function ContainersScreen() {
                     <Ionicons name="hardware-chip" size={16} color={Colors.primary} />
                     <Text style={[styles.actionChipText, { color: Colors.primary }]}>Storage</Text>
                   </TouchableOpacity>
-
-                  {sub?.expired || sub?.expiringSoon ? (
-                    <TouchableOpacity
-                      style={[styles.actionChip, { backgroundColor: '#fef9c3' }]}
-                      onPress={() => handleRenew(container)}
-                      disabled={actionLoading[container.id] === 'renewing'}>
-                      {actionLoading[container.id] === 'renewing' ? (
-                        <ActivityIndicator size="small" color={Colors.coins} />
-                      ) : (
-                        <>
-                          <Ionicons name="refresh-circle" size={16} color={Colors.coins} />
-                          <Text style={[styles.actionChipText, { color: '#a16207' }]}>Renovar</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  ) : null}
 
                   <TouchableOpacity
                     style={[styles.actionChip, { backgroundColor: '#fee2e2' }]}

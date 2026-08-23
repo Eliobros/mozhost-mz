@@ -89,6 +89,12 @@ class Database {
         console.log('✅ Added suspended_at column');
       } catch (e) {}
 
+      // Upgrade de plano fica pendente até a renovação do ciclo atual.
+      try {
+        await this.query(`ALTER TABLE users ADD COLUMN pending_plan VARCHAR(50) NULL`);
+        console.log('✅ Added pending_plan column');
+      } catch (e) {}
+
       // Ampliar ENUM de planos (starter/business eram usados pelo billing mas não cabiam no ENUM)
       try {
         await this.query(`ALTER TABLE users MODIFY COLUMN plan ENUM('free', 'starter', 'basic', 'pro', 'business') DEFAULT 'free'`);
@@ -134,7 +140,7 @@ class Database {
             id VARCHAR(36) PRIMARY KEY,
             user_id INT NOT NULL,
             name VARCHAR(100) NOT NULL,
-            type ENUM('nodejs', 'python') NOT NULL,
+            type ENUM('nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'bot-telegram', 'bot-discord', 'static') NOT NULL,
             status ENUM('stopped', 'running', 'error', 'building') DEFAULT 'stopped',
             docker_container_id VARCHAR(100),
             port INT,
@@ -143,6 +149,8 @@ class Database {
             memory_limit_mb INT DEFAULT 512,
             storage_used_mb INT DEFAULT 0,
             auto_restart BOOLEAN DEFAULT true,
+            plan_blocked BOOLEAN DEFAULT false,
+            suspended_by_billing BOOLEAN DEFAULT false,
             environment TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -151,6 +159,16 @@ class Database {
             INDEX idx_container_status (status)
           )
         `);
+
+        try {
+          await this.query(`
+            ALTER TABLE containers
+            MODIFY COLUMN type ENUM('nodejs', 'python', 'php', 'api', 'bot-baileys', 'bot-wwebjs', 'bot-telegram', 'bot-discord', 'static') NOT NULL
+          `);
+          console.log('✅ ENUM type da tabela containers atualizado');
+        } catch (alterError) {
+          console.log('ℹ️  ENUM type já estava correto ou tabela é nova');
+        }
 
         try {
           await this.query(`
@@ -165,6 +183,16 @@ class Database {
         console.error('⚠️  Erro ao configurar tabela containers:', containerError.message);
         throw containerError;
       }
+
+      try {
+        await this.query(`ALTER TABLE containers ADD COLUMN plan_blocked BOOLEAN DEFAULT false`);
+        console.log('✅ Added containers.plan_blocked column');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE containers ADD COLUMN suspended_by_billing BOOLEAN DEFAULT false`);
+        console.log('✅ Added containers.suspended_by_billing column');
+      } catch (e) {}
 
       // Tabela de logs
       await this.query(`
@@ -323,7 +351,7 @@ console.log('✅ Email tables initialized successfully');
           method ENUM('mpesa', 'emola', 'mercadopago') NOT NULL,
           reference_code VARCHAR(100) UNIQUE,
           transaction_id VARCHAR(100),
-          status ENUM('pending', 'processing', 'active', 'expired', 'failed', 'cancelled') DEFAULT 'pending',
+          status ENUM('pending', 'processing', 'active', 'scheduled', 'expired', 'failed', 'cancelled') DEFAULT 'pending',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           activated_at TIMESTAMP NULL,
           expires_at TIMESTAMP NULL,
@@ -333,6 +361,13 @@ console.log('✅ Email tables initialized successfully');
           INDEX idx_billing_ref (reference_code)
         )
       `);
+
+      try {
+        await this.query(`ALTER TABLE billing MODIFY COLUMN status ENUM('pending', 'processing', 'active', 'scheduled', 'expired', 'failed', 'cancelled') DEFAULT 'pending'`);
+        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'manual') NOT NULL`);
+      } catch (e) {
+        console.warn('⚠️ Não foi possível atualizar colunas legadas de billing:', e.message);
+      }
 
       console.log('✅ Billing table initialized successfully');
 

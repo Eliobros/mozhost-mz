@@ -16,7 +16,8 @@ const notificationManager = require('./notification-manager');
 class DockerManager {
   constructor() {
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
-    this.userDataPath = process.env.USER_DATA_PATH || '/root/mozhost/user-data';
+    this.userDataPath = process.env.USER_DATA_PATH ||
+      (process.env.CONTAINERS_PATH ? path.dirname(process.env.CONTAINERS_PATH) : '/root/mozhost/user-data');
     this.containersPath = path.join(this.userDataPath, 'containers');
 
     this.basePort = 4000;
@@ -387,11 +388,19 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
         : userCommands[0].startup_command_nodejs;
       
       if (userCmd && userCmd.trim()) {
-        // Manter os prefixos de instalação de dependências do sistema
-        const systemDeps = imageConfig.cmd[2].split('&&').filter(c => c.trim().startsWith('apk ') || c.trim().startsWith('cd ')).map(c => c.trim());
-        const cdCmd = `cd /app/code`;
-        const fullCmd = [...systemDeps.filter(c => !c.startsWith('cd')), cdCmd, userCmd.trim()].join(' && ');
-        imageConfig.cmd = ['sh', '-c', fullCmd];
+        if (type === 'python') {
+          const systemDeps = imageConfig.cmd[2].split('&&').filter(c => c.trim().startsWith('cd ')).map(c => c.trim());
+          imageConfig.cmd = ['sh', '-c', [...systemDeps, userCmd.trim()].join(' && ')];
+        } else {
+          // Mantém o comando personalizado para projetos comuns, mas sempre
+          // prioriza o fluxo build/start quando o package.json é Next.js.
+          const systemDependencies = imageConfig.cmd[2].split(' && cd /app/code && ')[0];
+          imageConfig.cmd = [
+            'sh',
+            '-c',
+            this.getNodeStartupCommand(systemDependencies, userCmd.trim())
+          ];
+        }
       }
     }
 
@@ -429,8 +438,7 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
 
   await this.fileManager.createInitialFiles(containerPath, type);
 
-
- // No final de createNodePythonContainer antes do return:
+  // No final de createNodePythonContainer antes do return:
 try {
   await this.nginxManager.createSiteNginxConfig(containerId, domain, port);
 } catch (error) {
@@ -445,6 +453,82 @@ try {
     path: containerPath,
     status: 'stopped'
   };
+}
+
+/**
+ * Converte um container estático em uma aplicação Next.js/Node.js.
+ * O CLI pode criar um container static antes de saber o conteúdo do projeto;
+ * neste caso a promoção acontece quando o ZIP de deploy contém Next.js.
+ */
+async promoteStaticToNextJs(containerId) {
+  const rows = await database.query(
+    'SELECT * FROM containers WHERE id = ? AND type = ?',
+    [containerId, 'static']
+  );
+
+  if (!rows.length) {
+    return { promoted: false, wasRunning: false };
+  }
+
+  const containerInfo = rows[0];
+  const containerPath = path.join(this.containersPath, containerId);
+  const oldContainer = this.docker.getContainer(containerInfo.docker_container_id);
+  const wasRunning = containerInfo.status === 'running';
+
+  // Tentar parar sempre, porque o status no banco pode estar defasado.
+  try { await oldContainer.stop(); } catch (_error) { /* já parado ou removido */ }
+  try { await oldContainer.remove(); } catch (_error) { /* já removido */ }
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // O container static possui apenas um HTML inicial. Removê-lo evita que
+  // arquivos antigos sejam misturados com o projeto Next.js no novo runtime.
+  await fs.remove(path.join(containerPath, 'html'));
+
+  let environment = {};
+  try {
+    const parsed = containerInfo.environment ? JSON.parse(containerInfo.environment) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      environment = parsed;
+    }
+  } catch (_error) {}
+
+  const imageConfig = this.getImageConfig('nodejs');
+  const containerConfig = {
+    Image: imageConfig.image,
+    name: `mozhost_${containerId}`,
+    ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
+    HostConfig: {
+      PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: containerInfo.port.toString() }] },
+      Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
+      CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
+      CpuPeriod: 100000,
+      Binds: [`${containerPath}:/app/code:rw`],
+      NetworkMode: 'bridge',
+      RestartPolicy: { Name: 'unless-stopped' }
+    },
+    Env: [
+      'NODE_ENV=production',
+      `PORT=${imageConfig.internalPort}`,
+      ...Object.entries(environment).map(([key, value]) => `${key}=${value}`)
+    ],
+    WorkingDir: '/app',
+    Cmd: imageConfig.cmd
+  };
+
+  const newContainer = await this.docker.createContainer(containerConfig);
+  await database.query(
+    'UPDATE containers SET type = ?, docker_container_id = ?, status = ?, updated_at = NOW() WHERE id = ?',
+    ['nodejs', newContainer.id, 'stopped', containerId]
+  );
+
+  try {
+    await this.nginxManager.createSiteNginxConfig(containerId, containerInfo.domain, containerInfo.port);
+  } catch (error) {
+    console.warn('⚠️ Aviso ao atualizar Nginx para Next.js:', error.message);
+  }
+
+  console.log(`✅ Container ${containerId} promovido de static para Next.js`);
+  return { promoted: true, wasRunning };
 }
 
 async createStaticContainer(userId, containerId, containerPath, port, name, type, domain) {
@@ -874,52 +958,63 @@ server {
     throw new Error('No available ports');
   }
 
-  getImageConfig(type) {
-  const configs = {
-    nodejs: {
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
-    },
-    api: {
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
-    },
-    'bot-baileys': {
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ && cd /app/code && npm install && npm start']
-    },
-    'bot-wwebjs': { 
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ chromium nss freetype harfbuzz ca-certificates ttf-freefont && cd /app/code && npm install && npm start']
-    },
-    'bot-telegram': {
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git && cd /app/code && npm install && npm start']
-    },
-    'bot-discord': {
-      image: 'node:20-alpine',
-      internalPort: 3000,
-      cmd: ['sh', '-c', 'apk add --no-cache git python3 make g++ && cd /app/code && npm install && npm start']
-    },
-    python: {
-      image: 'python:3.11-alpine',
-      internalPort: 8000,
-      cmd: ['sh', '-c', 'cd /app/code && pip install -r requirements.txt && python main.py']
-    },
-    static: {
-      image: 'nginx:alpine',
-      internalPort: 80,
-      cmd: ['nginx', '-g', 'daemon off;']
-}
-  };
+  getNodeStartupCommand(systemDependencies, fallbackCommand = 'npm install && npm start') {
+    const isNextProject = "node -e \"const p=require('./package.json'); process.exit(Boolean(p.dependencies?.next || p.devDependencies?.next || p.peerDependencies?.next || p.optionalDependencies?.next) ? 0 : 1)\" 2>/dev/null";
+    return `${systemDependencies} && cd /app/code && if ${isNextProject}; then npm install --include=dev && npm run build && npm start; else ${fallbackCommand}; fi`;
+  }
 
-  return configs[type] || configs.nodejs;
-}
+  getImageConfig(type) {
+    const nodeCommand = (systemDependencies, fallbackCommand) => [
+      'sh',
+      '-c',
+      this.getNodeStartupCommand(systemDependencies, fallbackCommand)
+    ];
+
+    const configs = {
+      nodejs: {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git', 'npm install && npm start')
+      },
+      api: {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git', 'npm install && npm start')
+      },
+      'bot-baileys': {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git python3 make g++', 'npm install && npm start')
+      },
+      'bot-wwebjs': {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git python3 make g++ chromium nss freetype harfbuzz ca-certificates ttf-freefont', 'npm install && npm start')
+      },
+      'bot-telegram': {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git', 'npm install && npm start')
+      },
+      'bot-discord': {
+        image: 'node:20-alpine',
+        internalPort: 3000,
+        cmd: nodeCommand('apk add --no-cache git python3 make g++', 'npm install && npm start')
+      },
+      python: {
+        image: 'python:3.11-alpine',
+        internalPort: 8000,
+        cmd: ['sh', '-c', 'cd /app/code && pip install -r requirements.txt && python main.py']
+      },
+      static: {
+        image: 'nginx:alpine',
+        internalPort: 80,
+        cmd: ['nginx', '-g', 'daemon off;']
+      }
+    };
+
+    return configs[type] || configs.nodejs;
+  }
 
   async getContainerStats(containerId) {
     try {

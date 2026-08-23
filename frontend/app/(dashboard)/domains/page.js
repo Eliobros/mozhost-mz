@@ -364,7 +364,7 @@ const [transferProcessing, setTransferProcessing] = useState(false);
       const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
       const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
         method: 'POST',
-        headers: { 'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
+        headers: { 'X-API-Key': `${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           valor: Math.ceil(parseFloat(cost) * exchangeRate).toString(),
           numero_celular: payPhone,
@@ -584,7 +584,7 @@ const submitTransferIn = async () => {
       const endpoint = payMethod === 'mpesa' ? 'mpesa' : 'emola';
       const alaudaRes = await fetch(`${ALAUDA_API_URL}/api/payment/${endpoint}`, {
         method: 'POST',
-        headers: { 'Authorization': `ApiKey ${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
+        headers: { 'X-API-Key': `${process.env.NEXT_PUBLIC_ALAUDA_API_KEY || ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           valor: Math.ceil(realCost * exchangeRate).toString(),
           numero_celular: payPhone,
