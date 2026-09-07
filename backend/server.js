@@ -89,6 +89,7 @@ app.use(helmet({
 
 app.use(cors({
   origin: (origin, callback) => {
+    console.log('🔍 [HTTP] Origin recebido:', JSON.stringify(origin));
     if (!origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }

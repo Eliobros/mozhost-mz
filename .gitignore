@@ -22,7 +22,7 @@ backend/dist/
 .next/
 out/
 build/
-
+mozhost-app/mozhost-key.json
 # Logs
 *.log
 npm-debug.log*
