@@ -25,8 +25,10 @@ const Overview = ({ status, onBuyClick }) => {
           <div>
             <p className="text-sm text-gray-500">Saldo de Requisições</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
-              {status.balance?.requests_remaining ?? 0}
-            </p>
+  {status.balance?.requests_remaining >= 999999999
+    ? '∞ Ilimitado'
+    : (status.balance?.requests_remaining ?? 0).toLocaleString('pt-MZ')}
+</p>
           </div>
           <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
             <Zap className="w-6 h-6 text-blue-600" />
