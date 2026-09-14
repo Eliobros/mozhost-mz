@@ -383,7 +383,7 @@ const GitHubTab = () => {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({
-          container_id: parseInt(selectedContainer),
+          container_id: selectedContainer,
           repo_url: selectedRepo.url,
           repo_name: selectedRepo.full_name,
           branch: selectedBranch
