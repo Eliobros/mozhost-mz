@@ -83,7 +83,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
     { name: 'Editor',        href: '/files',      icon: FileText,      current: currentPage === 'files' },
     // { name: 'Terminal',   href: '/terminal',   icon: Terminal,      current: currentPage === 'terminal' },
     // { name: 'Monitoramento', href: '/monitoring', icon: Activity,   current: currentPage === 'monitoring' },
-    { name: 'Connections',   href: '/whatsapp',   icon: Link2,         current: currentPage === 'whatsapp' },
+    { name: 'Connections',   href: '/connections',   icon: Link2,         current: currentPage === 'connections' },
     { name: 'Suporte',       href: '/support',    icon: MessageCircle, current: currentPage === 'suporte' },
     { name: 'Perfil',        href: '/profile',    icon: User,          current: currentPage === 'profile' },
     { name: 'Configurações', href: '/settings',   icon: Settings,      current: currentPage === 'settings' },
