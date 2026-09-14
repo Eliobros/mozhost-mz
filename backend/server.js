@@ -281,6 +281,9 @@ const passkeysRouter = require('./routes/passkeys');
 app.use('/api/passkeys', passkeysRouter);
 app.use('/api/email-forwarding', emailForwarding);
 
+// 🟢 Proxy Alauda API (downloads, lyrics, clima etc para containers dos usuários)
+app.use('/api/alauda', require('./routes/alauda'));
+
 // 🟢 Webhook oficial do WhatsApp (Cloud API / Meta)
 // Fora do /api para não sofrer rate limit. URLs:
 //   GET  https://api.mozhost.shop/webhook/whatsapp  (verificação da Meta)

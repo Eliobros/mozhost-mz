@@ -21,7 +21,8 @@ import {
   Bell,
   Search,
   Database,
-  Link2
+  Link2,
+  Zap
 } from 'lucide-react';
 import NotificationsSystem from './NotificationsSystem';
 import MozhostChat from './MozhostChat';
@@ -84,6 +85,7 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
     // { name: 'Terminal',   href: '/terminal',   icon: Terminal,      current: currentPage === 'terminal' },
     // { name: 'Monitoramento', href: '/monitoring', icon: Activity,   current: currentPage === 'monitoring' },
     { name: 'Connections',   href: '/connections',   icon: Link2,         current: currentPage === 'connections' },
+    { name: 'API',           href: '/api',        icon: Zap,           current: currentPage === 'api' },
     { name: 'Suporte',       href: '/support',    icon: MessageCircle, current: currentPage === 'suporte' },
     { name: 'Perfil',        href: '/profile',    icon: User,          current: currentPage === 'profile' },
     { name: 'Configurações', href: '/settings',   icon: Settings,      current: currentPage === 'settings' },
