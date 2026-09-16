@@ -213,7 +213,6 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
   // Quando muda método de pagamento, reseta amount
   const handleMethodChange = (methodId) => {
     setPaymentMethod(methodId);
-    setAmount('');
     setError('');
   };
 
@@ -235,6 +234,12 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
 
   const handlePayment = async () => {
     setError('');
+
+    if (!paymentMethod) {
+      setError('Escolha um método de pagamento');
+      setStep('method');
+      return;
+    }
 
     if (selectedMethodData?.requiresPhone && !phoneNumber) {
       setError('Número de telefone é obrigatório');
@@ -476,6 +481,54 @@ const handleMercadoPagoPayment = async (token, userId) => {
         </div>
 
         <div className="p-6">
+          {/* STEP 1b: METHOD - Seleção de método (quando o valor já vem definido) */}
+          {step === 'method' && !paymentMethod && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center">
+                <span className="text-sm text-blue-900 font-medium">{description}</span>
+                <span className="text-lg font-bold text-blue-700">{amount} MT</span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Método de pagamento
+                </label>
+                <div className="space-y-2">
+                  {paymentMethods.map((method) => (
+                    <button
+                      key={method.id}
+                      onClick={() => handleMethodChange(method.id)}
+                      className={`w-full p-3 border-2 rounded-lg text-left flex items-center justify-between transition-all ${
+                        paymentMethod === method.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <span className="text-2xl mr-3">{method.icon}</span>
+                        <div>
+                          <div className="font-medium">{method.name}</div>
+                          <div className="text-xs text-gray-500">{method.description}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">
+                          {currencies[method.currency].flag}
+                        </div>
+                        <div className="text-xs font-medium text-gray-700">
+                          {currencies[method.currency].symbol}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {error && (
+                <div className="flex items-center text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* STEP 1: AMOUNT - Escolher método e valor */}
           {step === 'amount' && (
             <div className="space-y-4">

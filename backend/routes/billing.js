@@ -184,7 +184,7 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           },
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
             }
           }
@@ -227,7 +227,7 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           cardData,
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
             }
           }
@@ -270,7 +270,7 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           },
           {
             headers: {
-              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
             }
           }
@@ -350,7 +350,7 @@ router.post('/webhook/:method', async (req, res) => {
           try {
             const statusRes = await axios.get(
               `${ALAUDA_API_URL}/mercadopago/status/${data.id}`,
-              { headers: { 'Authorization': `ApiKey ${ALAUDA_API_KEY}` } }
+              { headers: { 'X-API-Key': ALAUDA_API_KEY } }
             );
             const mpStatus = statusRes.data.data?.payment?.status;
             if (mpStatus === 'approved') {
