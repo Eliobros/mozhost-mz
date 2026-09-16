@@ -101,10 +101,20 @@ class Database {
         console.log('✅ users.plan ENUM atualizado (free, starter, basic, pro, business)');
       } catch (e) {}
 
-      // Permitir método 'manual' no billing (migração de cliente feita por script)
+      // Ampliar ENUMs de métodos de pagamento (visa_mastercard/paymoz eram rejeitados)
       try {
-        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'manual') NOT NULL`);
-        console.log('✅ billing.method ENUM atualizado (inclui manual)');
+        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz', 'manual') NOT NULL`);
+        console.log('✅ billing.method ENUM atualizado (inclui visa_mastercard, paymoz, manual)');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE payments MODIFY COLUMN payment_method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz') NOT NULL`);
+        console.log('✅ payments.payment_method ENUM atualizado');
+      } catch (e) {}
+
+      try {
+        await this.query(`ALTER TABLE domain_payments MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz') NOT NULL`);
+        console.log('✅ domain_payments.method ENUM atualizado');
       } catch (e) {}
 
       // OAuth columns
@@ -261,7 +271,7 @@ class Database {
           id INT PRIMARY KEY AUTO_INCREMENT,
           user_id INT NOT NULL,
           amount DECIMAL(10,2) NOT NULL,
-          payment_method ENUM('mpesa', 'emola') NOT NULL,
+          payment_method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz') NOT NULL,
           phone_number VARCHAR(20),
           coins_to_add INT NOT NULL,
           status ENUM('pending', 'completed', 'failed', 'expired') DEFAULT 'pending',
@@ -348,7 +358,7 @@ console.log('✅ Email tables initialized successfully');
           plan_id VARCHAR(50) NOT NULL,
           amount DECIMAL(10,2) NOT NULL,
           currency VARCHAR(5) DEFAULT 'MZN',
-          method ENUM('mpesa', 'emola', 'mercadopago') NOT NULL,
+          method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz') NOT NULL,
           reference_code VARCHAR(100) UNIQUE,
           transaction_id VARCHAR(100),
           status ENUM('pending', 'processing', 'active', 'scheduled', 'expired', 'failed', 'cancelled') DEFAULT 'pending',
@@ -364,7 +374,7 @@ console.log('✅ Email tables initialized successfully');
 
       try {
         await this.query(`ALTER TABLE billing MODIFY COLUMN status ENUM('pending', 'processing', 'active', 'scheduled', 'expired', 'failed', 'cancelled') DEFAULT 'pending'`);
-        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'manual') NOT NULL`);
+        await this.query(`ALTER TABLE billing MODIFY COLUMN method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz', 'manual') NOT NULL`);
       } catch (e) {
         console.warn('⚠️ Não foi possível atualizar colunas legadas de billing:', e.message);
       }
@@ -381,7 +391,7 @@ console.log('✅ Email tables initialized successfully');
           price_usd DECIMAL(10,2) NOT NULL,
           amount DECIMAL(10,2) NOT NULL,
           currency VARCHAR(5) DEFAULT 'MZN',
-          method ENUM('mpesa', 'emola', 'mercadopago') NOT NULL,
+          method ENUM('mpesa', 'emola', 'mercadopago', 'visa_mastercard', 'paymoz') NOT NULL,
           phone VARCHAR(20),
           years INT DEFAULT 1,
           reference_code VARCHAR(100) UNIQUE,
