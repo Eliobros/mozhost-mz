@@ -52,21 +52,33 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
   useEffect(() => {
     if (step !== 'processing' || !billingId) return;
 
+    let attempts = 0;
     const token = localStorage.getItem('mozhost_token');
     const interval = setInterval(async () => {
+      attempts++;
       try {
         const res = await fetch(`${API_URL}/api/billing/${billingId}/status`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
+        const status = data.billing?.status;
 
-        if (data.billing?.status === 'active' || data.billing?.status === 'scheduled') {
+        if (status === 'active' || status === 'scheduled') {
           clearInterval(interval);
           setStep('success');
           if (onSuccess) onSuccess();
-        } else if (['failed', 'expired', 'cancelled'].includes(data.billing?.status)) {
+        } else if (status === 'failed') {
           clearInterval(interval);
-          setError('Pagamento não foi concluído. Tenta novamente.');
+          setError(getFriendlyError('Payment failed'));
+          setStep('error');
+        } else if (['expired', 'cancelled'].includes(status)) {
+          clearInterval(interval);
+          setError(getFriendlyError('not found'));
+          setStep('error');
+        } else if (attempts >= 60) {
+          // ~3 minutos sem confirmação: orienta o usuário em vez de rodar eternamente
+          clearInterval(interval);
+          setError('Não recebemos a confirmação do pagamento em 3 minutos. Se você concluiu o pagamento, o plano será ativado automaticamente em alguns minutos — verifique em Planos & Pagamentos.');
           setStep('error');
         }
       } catch (err) {
@@ -822,8 +834,12 @@ const handleMercadoPagoPayment = async (token, userId) => {
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-10 h-10 text-red-600" />
               </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Erro no pagamento</h4>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">Pagamento não concluído</h4>
               <p className="text-sm text-gray-600 mb-4">{error}</p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800 mb-4 text-left">
+                Causas comuns: saldo insuficiente no celular, PIN errado ou tempo
+                esgotado. Confira o saldo e tenta de novo.
+              </div>
               <div className="space-y-2">
                 <button
                   onClick={() => { setStep('method'); setError(''); }}

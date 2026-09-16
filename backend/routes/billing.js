@@ -363,13 +363,19 @@ router.post('/webhook/:method', async (req, res) => {
       }
     } else if (method === 'paymoz') {
       const { transaction_id, status: paymentStatus } = req.body;
-      if (transaction_id && paymentStatus === 'completed') {
+      if (transaction_id) {
         const billings = await database.query(
           'SELECT id, user_id, plan_id FROM billing WHERE transaction_id = ? AND status IN ("pending", "processing")',
           [transaction_id]
         );
         if (billings.length > 0) {
-          await activatePlan(billings[0]);
+          if (paymentStatus === 'completed') {
+            await activatePlan(billings[0]);
+          } else if (['failed', 'cancelled', 'expired', 'rejected'].includes(paymentStatus)) {
+            // Falhou (ex: saldo insuficiente) — não deixa o billing preso pra sempre.
+            await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billings[0].id]);
+            console.log(`❌ Billing ${billings[0].id} marcado como failed (paymoz: ${paymentStatus})`);
+          }
         }
       }
     }
@@ -391,8 +397,31 @@ router.get('/:id/status', authenticateToken, async (req, res) => {
     );
 
     if (!billings.length) return res.status(404).json({ error: 'Billing não encontrado' });
+    const billing = billings[0];
 
-    res.json({ success: true, billing: billings[0] });
+    // Ainda aguardando? Consulta a Alauda/ZumboPay ativamente pra não depender
+    // só do webhook (que pode não chegar). Sucesso e falha (ex: saldo
+    // insuficiente) são detectados aqui.
+    if (['pending', 'processing'].includes(billing.status) && billing.transaction_id) {
+      try {
+        const statusRes = await axios.get(
+          `${ALAUDA_API_URL}/debitopay/status/${billing.transaction_id}`,
+          { headers: { 'X-API-Key': ALAUDA_API_KEY }, timeout: 5000 }
+        );
+        const payStatus = statusRes.data?.data?.payment?.status;
+        if (payStatus === 'completed') {
+          await activatePlan(billing);
+          billing.status = 'active';
+        } else if (['failed', 'expired', 'cancelled', 'rejected'].includes(payStatus)) {
+          await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billing.id]);
+          billing.status = 'failed';
+        }
+      } catch (e) {
+        // Alauda indisponível ou status não encontrado — mantém o status local.
+      }
+    }
+
+    res.json({ success: true, billing });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao verificar status' });
   }
