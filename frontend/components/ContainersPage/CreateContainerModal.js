@@ -6,7 +6,6 @@ const CreateContainerModal = ({
   setForm,
   onSubmit,
   onClose,
-  coins,
   isCreating = false
 }) => {
   // Bots que exigem token (Telegram / Discord)
@@ -34,7 +33,6 @@ const CreateContainerModal = ({
           <div className="text-sm">
             <div className="inline-flex items-center bg-blue-50 border border-blue-200 text-blue-800 rounded-md px-3 py-1">
               <Coins className="w-4 h-4 mr-2" />
-              Saldo de coins: <span className="font-semibold ml-1">{coins}</span>
             </div>
             <p className="mt-2 text-xs text-gray-600">
               A criação é limitada pelo <span className="font-semibold">seu plano</span> (quantidade de containers).

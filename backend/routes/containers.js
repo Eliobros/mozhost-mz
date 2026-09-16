@@ -11,6 +11,8 @@ const notificationManager = require('../utils/notification-manager');
 
 const router = express.Router();
 
+const { isOwner } = require('../utils/owner');
+
 router.use(authMiddleware);
 
 // Listar containers do usuário
@@ -38,8 +40,8 @@ router.get('/', async (req, res) => {
        FROM users u WHERE u.id = ?`,
       [req.user.userId]
     );
-    const accountHasAccess = userInfo.length > 0 && !userInfo[0].suspended_at &&
-      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date()));
+    const accountHasAccess = isOwner(req.user.userId) || (userInfo.length > 0 && !userInfo[0].suspended_at &&
+      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date())));
     const maxMB = userInfo.length ? userInfo[0].max_storage_mb : 1024;
     const storageAlerts = containers
       .filter(c => (c.storage_used_mb || 0) >= Math.floor(maxMB * 0.9))
@@ -99,74 +101,9 @@ router.get('/stats/all', async (req, res) => {
 });
 
 
-// Upgrade de armazenamento usando coins
-router.post('/:id/upgrade-storage', [
-  body('addMb').isInt({ min: 100, max: 10240 }).withMessage('addMb deve ser entre 100 e 10240')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
-    }
-
-    const { id } = req.params;
-    const { addMb } = req.body;
-
-    const containers = await database.query(
-      'SELECT id, name FROM containers WHERE id = ? AND user_id = ?',
-      [id, req.user.userId]
-    );
-    if (!containers.length) {
-      return res.status(404).json({ error: 'Container not found' });
-    }
-
-    const account = await database.query(
-      `SELECT suspended_at, free_trial_ends,
-              (SELECT b.expires_at FROM billing b
-               WHERE b.user_id = users.id AND b.status = 'active' AND b.expires_at > NOW()
-               ORDER BY b.expires_at DESC LIMIT 1) AS billing_expires
-       FROM users WHERE id = ?`,
-      [req.user.userId]
-    );
-    const accountHasAccess = account.length > 0 && !account[0].suspended_at &&
-      (account[0].billing_expires || (account[0].free_trial_ends && new Date(account[0].free_trial_ends) > new Date()));
-    if (!accountHasAccess) {
-      return res.status(402).json({
-        error: 'Account suspended',
-        message: 'Renove o plano da conta para alterar o armazenamento.',
-        suspended: true
-      });
-    }
-
-    const priceCoins = Number(addMb);
-    const users = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-    const coins = users.length ? users[0].coins : 0;
-    if (coins < priceCoins) {
-      return res.status(402).json({ error: 'Insufficient coins', needed: priceCoins, have: coins });
-    }
-
-    await database.query('UPDATE users SET coins = coins - ?, max_storage_mb = max_storage_mb + ? WHERE id = ?', [priceCoins, addMb, req.user.userId]);
-
-    const updated = await database.query('SELECT max_storage_mb, coins FROM users WHERE id = ?', [req.user.userId]);
-
-    // ✨ NOVO: Notificar upgrade de storage
-    await notificationManager.notify(req.user.userId, {
-      type: 'success',
-      category: 'container',
-      title: '📦 Storage Atualizado',
-      message: `${addMb}MB adicionados ao container "${containers[0].name}". Total: ${updated[0].max_storage_mb}MB`
-    });
-
-    res.json({
-      message: 'Armazenamento atualizado com sucesso',
-      maxStorageMb: updated[0].max_storage_mb,
-      coins: updated[0].coins
-    });
-  } catch (error) {
-    console.error('Upgrade storage error:', error);
-    res.status(500).json({ error: 'Failed to upgrade storage' });
-  }
-});
+// Nota: upgrade de armazenamento por coins foi removido — o armazenamento é
+// definido pelo plano escolhido (billing). Para mais espaço, o usuário faz
+// upgrade do plano em /api/billing.
 
 // Obter detalhes de um container específico
 router.get('/:id', async (req, res) => {
@@ -255,8 +192,8 @@ router.post('/', [
     );
 
     // O billing/trial da conta é a única autoridade para criar containers.
-    const accountHasAccess = userInfo.length > 0 && !userInfo[0].suspended_at &&
-      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date()));
+    const accountHasAccess = isOwner(req.user.userId) || (userInfo.length > 0 && !userInfo[0].suspended_at &&
+      (userInfo[0].billing_expires || (userInfo[0].free_trial_ends && new Date(userInfo[0].free_trial_ends) > new Date())));
     if (!accountHasAccess) {
       return res.status(402).json({
         error: 'Account suspended',
@@ -352,8 +289,8 @@ router.post('/:id/start', async (req, res) => {
       [req.user.userId]
     );
     const acc = users.length ? users[0] : null;
-    const accountHasAccess = acc && !acc.suspended_at &&
-      (acc.billing_expires || (acc.free_trial_ends && new Date(acc.free_trial_ends) > new Date()));
+    const accountHasAccess = isOwner(req.user.userId) || (acc && !acc.suspended_at &&
+      (acc.billing_expires || (acc.free_trial_ends && new Date(acc.free_trial_ends) > new Date())));
 
     if (!accountHasAccess) {
       return res.status(402).json({
@@ -466,8 +403,8 @@ router.post('/:id/restart', async (req, res) => {
        FROM users u WHERE u.id = ?`,
       [req.user.userId]
     );
-    const accountHasAccess = accountAccess.length > 0 && !accountAccess[0].suspended_at &&
-      (accountAccess[0].billing_expires || (accountAccess[0].free_trial_ends && new Date(accountAccess[0].free_trial_ends) > new Date()));
+    const accountHasAccess = isOwner(req.user.userId) || (accountAccess.length > 0 && !accountAccess[0].suspended_at &&
+      (accountAccess[0].billing_expires || (accountAccess[0].free_trial_ends && new Date(accountAccess[0].free_trial_ends) > new Date())));
     if (!accountHasAccess) {
       return res.status(402).json({
         error: 'Account suspended',

@@ -113,7 +113,7 @@ if (existingUser.length > 0) {
     // a criação de container agora é limitada pelo plano, não por coins.
     const result = await database.query(
       `INSERT INTO users (username, email, password_hash, phone, country_code, preferred_verification_method, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
-       VALUES (?, ?, ?, ?, ?, ?, 'free', 1, 512, 1024, 250, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
+       VALUES (?, ?, ?, ?, ?, ?, 'free', 1, 512, 1024, 0, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
       [username, email, passwordHash, phone || null, countryCode || null, preferredVerificationMethod || 'email']
     );
 
@@ -216,7 +216,7 @@ if (existingUser.length > 0) {
         maxContainers: 1,
         maxRamMb: 512,
         maxStorageMb: 1024,
-        coins: 250,
+        coins: 0,
         emailVerified: preferredVerificationMethod === 'email' ? false : null,
         whatsappVerified: preferredVerificationMethod === 'whatsapp' ? false : null,
         smsVerified: preferredVerificationMethod === 'sms' ? false : null,
@@ -274,10 +274,6 @@ router.get('/google/callback', (req, res, next) => {
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
 
-      if (!user.verification_bonus_awarded) {
-        await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
-      }
-
       const needsProfile = !user.profile_completed;
 
       if (mobileRedirectUri) {
@@ -328,10 +324,6 @@ router.get('/github/callback', (req, res, next) => {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
-
-      if (!user.verification_bonus_awarded) {
-        await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
-      }
 
       const needsProfile = !user.profile_completed;
 
@@ -486,15 +478,10 @@ router.post('/oauth-login', async (req, res) => {
       const tempUsername = `${provider}_${providerId.substring(0, 10)}_${Date.now().toString(36)}`;
       const result = await database.query(
         `INSERT INTO users (username, email, password_hash, oauth_provider, oauth_provider_id, avatar_url, email_verified, profile_completed, plan, max_containers, max_ram_mb, max_storage_mb, coins, free_trial_ends)
-         VALUES (?, ?, NULL, ?, ?, ?, true, false, 'free', 2, 0, 0, 250, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+         VALUES (?, ?, NULL, ?, ?, ?, true, false, 'free', 2, 0, 0, 0, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
         [tempUsername, email || `${tempUsername}@oauth.temp`, provider, providerId, avatarUrl]
       );
       user = (await database.query('SELECT * FROM users WHERE id = ?', [result.insertId]))[0];
-    }
-
-    // Bonus
-    if (!user.verification_bonus_awarded) {
-      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [user.id]);
     }
 
     const token = jwt.sign(
@@ -733,29 +720,6 @@ module.exports = router;
 const expressAdmin = require('express');
 const adminRouter = expressAdmin.Router();
 
-adminRouter.post('/coins/add', async (req, res) => {
-  try {
-    const { username, amount, password } = req.body;
-    if (!username || !amount || !password) {
-      return res.status(400).json({ error: 'username, amount e password são obrigatórios' });
-    }
-    if (password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
-      return res.status(401).json({ error: 'Senha de administrador inválida' });
-    }
-    const users = await database.query('SELECT id FROM users WHERE username = ?', [username]);
-    if (!users.length) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-    const amt = Number(amount) || 0;
-    await database.query('UPDATE users SET coins = coins + ? WHERE id = ?', [amt, users[0].id]);
-    const updated = await database.query('SELECT id, username, coins FROM users WHERE id = ?', [users[0].id]);
-    res.json({ message: 'Coins adicionadas com sucesso', user: updated[0] });
-  } catch (error) {
-    console.error('Admin add coins error:', error);
-    res.status(500).json({ error: 'Falha ao adicionar coins' });
-  }
-});
-
 module.exports.adminRouter = adminRouter;
 
 // Email verification endpoints
@@ -779,14 +743,8 @@ router.post('/verify-email', [
     // Marcar verificado
     await database.query('UPDATE users SET email_verified = true, email_verification_code = NULL, email_verification_expires = NULL WHERE id = ?', [req.user.userId]);
 
-    // Bônus de 350 coins uma única vez
-    let bonusGranted = false;
-    if (!row.verification_bonus_awarded) {
-      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [req.user.userId]);
-      bonusGranted = true;
-    }
-    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-    res.json({ message: 'Email verified successfully', bonusGranted, coins: updated[0].coins });
+    // Bônus de coins removido — o plano é a única moeda agora.
+    res.json({ message: 'Email verified successfully' });
   } catch (e) {
     console.error('verify-email error:', e);
     res.status(500).json({ error: 'Failed to verify email' });
@@ -816,14 +774,8 @@ router.post('/verify-whatsapp', [
     // Marcar WhatsApp verificado
     await database.query('UPDATE users SET whatsapp_verified = true, whatsapp_verification_code = NULL, whatsapp_verification_expires = NULL WHERE id = ?', [req.user.userId]);
 
-    // Bônus de 350 coins uma única vez
-    let bonusGranted = false;
-    if (!row.verification_bonus_awarded) {
-      await database.query('UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', [req.user.userId]);
-      bonusGranted = true;
-    }
-    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-    res.json({ message: 'WhatsApp verified successfully', bonusGranted, coins: updated[0].coins });
+    // Bônus de coins removido — o plano é a única moeda agora.
+    res.json({ message: 'WhatsApp verified successfully' });
   } catch (e) {
     console.error('verify-whatsapp error:', e);
     res.status(500).json({ error: 'Failed to verify WhatsApp' });
@@ -860,18 +812,8 @@ router.post('/verify-sms', [
       [req.user.userId]
     );
 
-    // Bônus de 350 coins uma única vez
-    let bonusGranted = false;
-    if (!row.verification_bonus_awarded) {
-      await database.query(
-        'UPDATE users SET coins = coins + 350, verification_bonus_awarded = true WHERE id = ?', 
-        [req.user.userId]
-      );
-      bonusGranted = true;
-    }
-    
-    const updated = await database.query('SELECT coins FROM users WHERE id = ?', [req.user.userId]);
-    res.json({ message: 'SMS verified successfully', bonusGranted, coins: updated[0].coins });
+    // Bônus de coins removido — o plano é a única moeda agora.
+    res.json({ message: 'SMS verified successfully' });
   } catch (e) {
     console.error('verify-sms error:', e);
     res.status(500).json({ error: 'Failed to verify SMS' });
@@ -1551,54 +1493,6 @@ adminRouter.patch('/users/:id/status', async (req, res) => {
   }
 });
 
-// POST /api/admin/coins/remove - Remover coins
-adminRouter.post('/coins/remove', async (req, res) => {
-  try {
-    const { username, amount, password } = req.body;
-    
-    if (!username || !amount || !password) {
-      return res.status(400).json({ error: 'username, amount e password são obrigatórios' });
-    }
-    
-    if (password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
-      return res.status(401).json({ error: 'Senha de administrador inválida' });
-    }
-
-    const users = await database.query('SELECT id, coins FROM users WHERE username = ?', [username]);
-    if (!users.length) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-
-    const amt = Number(amount) || 0;
-    const currentCoins = parseFloat(users[0].coins);
-    
-    if (currentCoins < amt) {
-      return res.status(400).json({ 
-        error: 'Coins insuficientes',
-        message: `Usuário possui apenas ${currentCoins} coins`
-      });
-    }
-
-    await database.query(
-      'UPDATE users SET coins = coins - ? WHERE id = ?',
-      [amt, users[0].id]
-    );
-
-    const updated = await database.query(
-      'SELECT id, username, coins FROM users WHERE id = ?',
-      [users[0].id]
-    );
-
-    res.json({
-      message: 'Coins removidas com sucesso',
-      user: updated[0]
-    });
-  } catch (error) {
-    console.error('Admin remove coins error:', error);
-    res.status(500).json({ error: 'Falha ao remover coins' });
-  }
-});
-
 // DELETE /api/admin/users/:id - Deletar usuário (cuidado!)
 adminRouter.delete('/users/:id', async (req, res) => {
   try {
@@ -1866,79 +1760,13 @@ router.put('/startup-commands', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/auth/upgrade-plan - Upgrade do plano do usuário
-router.post('/upgrade-plan', authMiddleware, async (req, res) => {
-  // Planos são pagos e gerenciados exclusivamente por /api/billing.
+// POST /api/auth/upgrade-plan - Removido: planos são pagos e gerenciados
+// exclusivamente por /api/billing (sem coins).
+router.post('/upgrade-plan', authMiddleware, (req, res) => {
   return res.status(410).json({
     error: 'Legacy coin plan upgrade removed',
     message: 'O upgrade por coins foi descontinuado. Escolha e pague um plano em /billing.'
   });
-
-  /*
-  try {
-    const userId = req.user.id;
-    const { plan } = req.body;
-
-    const validPlans = {
-      basic: { cost: 2000, maxContainers: 5, maxRamMb: 1024, maxStorageMb: 2048 },
-      pro: { cost: 5000, maxContainers: 10, maxRamMb: 2048, maxStorageMb: 5120 }
-    };
-
-    if (!validPlans[plan]) {
-      return res.status(400).json({ error: 'Plano inválido', message: 'Escolha basic ou pro' });
-    }
-
-    const planConfig = validPlans[plan];
-
-    // Verificar coins do usuário
-    const users = await database.query('SELECT coins, plan FROM users WHERE id = ?', [userId]);
-    if (!users.length) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-
-    const currentCoins = users[0].coins || 0;
-    const currentPlan = users[0].plan;
-
-    // Não permitir downgrade
-    const planOrder = { free: 0, basic: 1, pro: 2 };
-    if ((planOrder[plan] || 0) <= (planOrder[currentPlan] || 0)) {
-      return res.status(400).json({ 
-        error: 'Plano inválido', 
-        message: `Você já está no plano ${currentPlan.toUpperCase()} ou superior` 
-      });
-    }
-
-    if (currentCoins < planConfig.cost) {
-      return res.status(402).json({
-        error: 'Coins insuficientes',
-        message: `Você precisa de ${planConfig.cost} coins. Tem ${currentCoins}.`,
-        needed: planConfig.cost,
-        have: currentCoins
-      });
-    }
-
-    // Aplicar upgrade
-    await database.query(
-      'UPDATE users SET plan = ?, coins = coins - ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ? WHERE id = ?',
-      [plan, planConfig.cost, planConfig.maxContainers, planConfig.maxRamMb, planConfig.maxStorageMb, userId]
-    );
-
-    const updated = await database.query('SELECT coins, plan, max_containers, max_ram_mb, max_storage_mb FROM users WHERE id = ?', [userId]);
-
-    res.json({
-      message: `Upgrade para ${plan.toUpperCase()} realizado com sucesso!`,
-      plan: updated[0].plan,
-      coins: updated[0].coins,
-      maxContainers: updated[0].max_containers,
-      maxRamMb: updated[0].max_ram_mb,
-      maxStorageMb: updated[0].max_storage_mb
-    });
-
-  } catch (error) {
-    console.error('Erro ao fazer upgrade:', error);
-    res.status(500).json({ error: 'Erro ao processar upgrade' });
-  }
-  */
 });
 
 module.exports = router;

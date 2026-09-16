@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Download, Loader, Coins, CheckCircle, Clock, XCircle, RefreshCcw } from "lucide-react";
+import { Download, Loader, Receipt, CheckCircle, Clock, XCircle, RefreshCcw } from "lucide-react";
 
 const ALAUDA_API_URL = "https://alauda-api.mozhost.shop";
 
@@ -120,7 +120,7 @@ export default function PaymentsHistoryPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Histórico de Pagamentos</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Consulta as tuas compras de coins e baixa os comprovantes a qualquer momento.
+            Consulta as tuas compras de planos e baixa os comprovantes a qualquer momento.
           </p>
         </div>
         <button
@@ -147,12 +147,12 @@ export default function PaymentsHistoryPage() {
 
       {!loading && !error && payments.length === 0 && (
         <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
-          <Coins className="w-14 h-14 mx-auto mb-4 text-gray-300" />
+          <Receipt className="w-14 h-14 mx-auto mb-4 text-gray-300" />
           <h3 className="text-base font-medium text-gray-700 mb-1">
             Ainda não tens pagamentos
           </h3>
           <p className="text-sm text-gray-500">
-            As tuas compras de coins vão aparecer aqui.
+            As tuas compras de planos vão aparecer aqui.
           </p>
         </div>
       )}
@@ -180,8 +180,8 @@ export default function PaymentsHistoryPage() {
                     </span>
                     <span className="text-gray-300">•</span>
                     <span className="text-sm text-gray-600 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5 text-yellow-500" />
-                      {p.credits_to_add} coins
+                      <Receipt className="w-3.5 h-3.5 text-gray-400" />
+                      {PROVIDER_LABELS[p.provider] || p.provider}
                     </span>
                   </div>
                   <div className="text-xs text-gray-500 mt-1">

@@ -219,7 +219,7 @@ export default function Home() {
           <div className={styles.footerCol}>
             <h4>Recursos</h4>
             <Link href="/docs">📚 Documentação</Link>
-            <Link href="/coins">🪙 Comprar Coins</Link>
+            <Link href="/billing">💳 Planos</Link>
             <Link href="/cli">⚡ CLI MozHost</Link>
             <Link href="/contato">📞 Contacto</Link>
             <Link href="/suporte">🎧 Suporte</Link>

@@ -301,9 +301,8 @@ setTimeout(() => {
       });
       const data = await resp.json();
       if (resp.ok) {
-        const bonus = data.bonusGranted ? ` (+350 coins)` : '';
         const methodName = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'Email';
-        setSuccess(`${methodName} verificado com sucesso${bonus}! Redirecionando...`);
+        setSuccess(`${methodName} verificado com sucesso! Redirecionando...`);
         setTimeout(() => {
           window.location.href = '/dashboard';
          // window.location.reload();

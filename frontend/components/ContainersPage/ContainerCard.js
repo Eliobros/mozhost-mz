@@ -22,7 +22,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-const ContainerCard = ({ container, actionLoading, onAction, onDelete, onUpgrade, isNearLimit, stats }) => {
+const ContainerCard = ({ container, actionLoading, onAction, onDelete, isNearLimit, stats }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const statusConfig = {
@@ -387,14 +387,6 @@ Renove o plano da conta em Planos & Pagamentos para iniciar
             </button>
           )}
 
-          {/* Upgrade */}
-          <button
-            onClick={() => onUpgrade(container.id)}
-            className="p-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-            title="Upgrade de armazenamento"
-          >
-            <HardDrive className="w-4 h-4" />
-          </button>
 
           {/* QR Code - só para bots */}
           {(container.type?.toLowerCase() === 'bot-baileys' || container.type?.toLowerCase() === 'bot-wwebjs') && (

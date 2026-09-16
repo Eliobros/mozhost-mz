@@ -27,12 +27,9 @@ import {
   Crown,
   Zap,
   Star,
-  Coins,
   Gift,
   Tag
 } from 'lucide-react';
-
-import PaymentModal from './ContainersPage/PaymentModal';
 
 const ProfilePage = () => {
   const router = useRouter();
@@ -68,8 +65,6 @@ const ProfilePage = () => {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [coins, setCoins] = useState(0);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const [couponCode, setCouponCode] = useState('');
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
@@ -113,7 +108,6 @@ const ProfilePage = () => {
       if (response.ok) {
         const data = await response.json();
         const containers = data.containers;
-        setCoins(data.coins || 0);
 
         setStats({
           totalContainers: containers.length,
@@ -166,9 +160,8 @@ const ProfilePage = () => {
       if (response.ok) {
         setCouponMessage({
           type: 'success',
-          text: `🎉 ${data.message} Novo saldo: ${data.newBalance} coins`
+          text: `🎉 ${data.message}`
         });
-        setCoins(data.newBalance);
         setCouponCode('');
         setTimeout(() => setCouponMessage({ type: '', text: '' }), 5000);
       } else {
@@ -476,22 +469,6 @@ const ProfilePage = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Estatísticas da Conta</h3>
               </div>
               <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Coins className="w-5 h-5 text-yellow-600 mr-2" />
-                    <span className="text-sm font-semibold text-gray-700">Coins</span>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="text-lg font-bold text-gray-900 mr-3">{coins}</span>
-                    <button
-                      onClick={() => setShowPaymentModal(true)}
-                      className="inline-flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
-                    >
-                      <Coins className="w-4 h-4 mr-1" /> Comprar
-                    </button>
-                  </div>
-                </div>
-
                 {/* Resgatar Cupom */}
                 <div className="pt-4 border-t border-gray-200">
                   <div className="flex items-center mb-3">
@@ -536,7 +513,7 @@ const ProfilePage = () => {
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Digite o código do cupom para ganhar coins grátis!</p>
+                  <p className="text-xs text-gray-500 mt-2">Digite o código do cupom promocional.</p>
                 </div>
 
                 <div className="pt-2 border-t border-gray-200"></div>
@@ -630,17 +607,6 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <PaymentModal
-          onClose={() => setShowPaymentModal(false)}
-          onSuccess={(coinsAdded) => {
-            setShowPaymentModal(false);
-            setCoins(prev => prev + coinsAdded);
-            alert(`✅ ${coinsAdded} coins adicionadas!`);
-          }}
-        />
-      )}
     </>
   );
 };

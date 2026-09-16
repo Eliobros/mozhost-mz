@@ -11,6 +11,8 @@ const dockerManager = require('../utils/docker-manager');
 
 const router = express.Router();
 
+const { isOwner } = require('../utils/owner');
+
 // Aplicar middleware de auth
 router.use(authMiddleware);
 
@@ -207,6 +209,8 @@ async function hasAccountAccess(userId) {
      FROM users WHERE id = ?`,
     [userId]
   );
+  // 👑 Dono da plataforma: acesso sempre liberado
+  if (isOwner(userId)) return true;
   if (!users.length || users[0].suspended_at) return false;
   return !!users[0].billing_expires ||
     (users[0].free_trial_ends && new Date(users[0].free_trial_ends) > new Date());

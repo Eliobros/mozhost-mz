@@ -178,6 +178,14 @@ router.patch('/admin/coupons/:id/deactivate', authenticateAdmin, async (req, res
 
 // Resgatar cupom
 router.post('/coupons/redeem', authMiddleware, async (req, res) => {
+  // Coins descontinuados: o plano é a única moeda. Cupons de coins não são
+  // mais resgatáveis.
+  return res.status(410).json({
+    success: false,
+    message: 'Cupons de coins foram descontinuados. Agora tudo depende do plano escolhido.'
+  });
+
+  /*
   let connection;
   
   try {
@@ -292,6 +300,7 @@ router.post('/coupons/redeem', authMiddleware, async (req, res) => {
   } finally {
     if (connection) connection.release();
   }
+  */
 });
 
 module.exports = router;

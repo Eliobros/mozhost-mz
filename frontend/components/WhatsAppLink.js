@@ -175,8 +175,8 @@ const WhatsAppLink = () => {
               <h3 className="font-semibold text-blue-900 mb-3">📱 Comandos Disponíveis:</h3>
               <div className="space-y-2 text-sm text-blue-800">
                 <div><code className="bg-white px-2 py-1 rounded">!vincular</code> - Verificar vinculação</div>
-                <div><code className="bg-white px-2 py-1 rounded">!saldo</code> - Ver seus coins</div>
-                <div><code className="bg-white px-2 py-1 rounded">!pagamento</code> - Comprar coins</div>
+                <div><code className="bg-white px-2 py-1 rounded">!plano</code> - Ver detalhes do plano</div>
+                <div><code className="bg-white px-2 py-1 rounded">!faturas</code> - Ver últimos pagamentos</div>
                 <div><code className="bg-white px-2 py-1 rounded">!containers</code> - Listar containers</div>
                 <div><code className="bg-white px-2 py-1 rounded">!menu</code> - Ver todos os comandos</div>
               </div>
@@ -300,9 +300,9 @@ const WhatsAppLink = () => {
                     <CheckCircle className="w-5 h-5 text-green-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Compras Rápidas</h3>
+                    <h3 className="font-semibold text-gray-900 mb-1">Gestão Rápida</h3>
                     <p className="text-sm text-gray-600">
-                      Compre coins sem sair do WhatsApp
+                      Gerencie sua conta sem sair do WhatsApp
                     </p>
                   </div>
                 </div>

@@ -7,7 +7,7 @@ const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
 const authenticateToken = require('../middleware/auth');
 
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.duckdns.org/api/payment';
+const ALAUDA_API_URL = process.env.ALAUDA_API_URL_PAYMENT || 'https://alauda-api.duckdns.org/api/payment';
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ===== PLANOS =====
@@ -125,14 +125,14 @@ router.get('/current', authenticateToken, async (req, res) => {
 router.post('/subscribe', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { planId, method, phone } = req.body;
+    const { planId, method, phone, email } = req.body;
 
     if (!planId || !method) {
       return res.status(400).json({ error: 'Plano e método de pagamento são obrigatórios' });
     }
 
-    if (!['mpesa', 'emola', 'mercadopago'].includes(method)) {
-      return res.status(400).json({ error: 'Método de pagamento inválido. Use: mpesa, emola ou mercadopago' });
+    if (!['mpesa', 'emola', 'mercadopago', 'visa_mastercard'].includes(method)) {
+      return res.status(400).json({ error: 'Método de pagamento inválido. Use: mpesa, emola, mercadopago ou visa_mastercard' });
     }
 
     const plan = PLANS.find(p => p.id === planId);
@@ -209,6 +209,47 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           await database.query(
             'UPDATE billing SET transaction_id = ?, status = "processing" WHERE id = ?',
             [alaudaData.payment.transaction_id, billingId]
+          );
+        }
+
+      } else if (method === 'visa_mastercard') {
+        // Checkout ZumboPay (via Alauda) — mesmo payload de /api/payment/create.
+        const cardData = {
+          valor: amount.toString(),
+          customer_email: email || user.email,
+          customer_name: user.username || (email || user.email),
+          usuario_id: userId.toString(),
+          return_url: `${process.env.FRONTEND_URL || 'https://mozhost.shop'}/billing?status=success`
+        };
+
+        const alaudaRes = await axios.post(
+          `${ALAUDA_API_URL}/visa_mastercard`,
+          cardData,
+          {
+            headers: {
+              'Authorization': `ApiKey ${ALAUDA_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const alaudaData = alaudaRes.data.data || alaudaRes.data;
+        paymentUrl = alaudaData.payment?.checkout_url;
+
+        if (!paymentUrl) {
+          throw new Error('ZumboPay não retornou checkout_url');
+        }
+
+        paymentDetails = {
+          provider: 'Visa/Mastercard (ZumboPay)',
+          url: paymentUrl
+        };
+
+        if (alaudaData.payment?.payment_id) {
+          // O webhook paymoz confirma pelo transaction_id guardado aqui.
+          await database.query(
+            'UPDATE billing SET transaction_id = ?, status = "processing" WHERE id = ?',
+            [alaudaData.payment.payment_id, billingId]
           );
         }
 

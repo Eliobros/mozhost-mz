@@ -13,14 +13,13 @@ export type FaqEntry = {
 };
 
 export const FAQ_DATA: FaqEntry[] = [
-  { q: 'Quanto custa criar um container?', a: 'Criar um container custa 500 coins. Você pode comprar coins via M-Pesa (50 MT = 500 coins), e-Mola (50 MT = 500 coins) ou MercadoPago (R$ 5 = 500 coins).' },
-  { q: 'Como compro coins na MozHost?', a: 'Acesse seu perfil, role até "Comprar Coins" e escolha M-Pesa, e-Mola (Moçambique) ou MercadoPago (Brasil). Coins são creditados em até 5 minutos.' },
-  { q: 'Os coins expiram?', a: 'Não. Os coins não têm prazo de validade — você usa quando quiser.' },
-  { q: 'Posso pedir reembolso?', a: 'Sim, em até 7 dias após a compra, desde que os coins não tenham sido utilizados. Contacte o suporte por email mozhost@topaziocoin.online ou WhatsApp +258 86 284 0075.' },
-  { q: 'Quanto custa um database por dia?', a: 'Cada database custa 5 coins por dia (~150 coins/mês).' },
-  { q: 'Existe plano mensal na MozHost?', a: 'Trabalhamos com coins pré-pagos. Mais flexível: paga só pelo que usar.' },
+  { q: 'Quanto custa criar um container?', a: 'A criação de containers está incluída no seu plano. Escolha o plano em Planos & Pagamentos (M-Pesa, e-Mola ou cartão) e crie containers até o limite do plano.' },
+  { q: 'Como funcionam os planos na MozHost?', a: 'Trabalhamos com planos mensais: Starter, Basic, Pro e Business. Cada plano inclui uma quantidade de containers, RAM e armazenamento. Faça upgrade quando precisar de mais recursos.' },
+  { q: 'O que acontece se o meu plano expirar?', a: 'Você recebe avisos 5, 3 e 1 dia antes. Após a expiração, os containers são suspensos e os dados preservados por 7 dias para renovação.' },
+  { q: 'Posso pedir reembolso?', a: 'Sim, em até 7 dias após a compra. Contacte o suporte por email mozhost@topaziocoin.online ou WhatsApp +258 86 284 0075.' },
+  { q: 'Posso criar bancos de dados?', a: 'Sim, MySQL, MariaDB, PostgreSQL, MongoDB e Redis estão disponíveis conforme o seu plano.' },
   { q: 'Quais tipos de containers posso criar?', a: 'Node.js (JavaScript/TypeScript), Python (Flask) e PHP (com MySQL e phpMyAdmin). Go e Spring Boot em breve.' },
-  { q: 'Posso ter mais de um container?', a: 'Sim, desde que tenha coins suficientes. Cada container custa 500 coins.' },
+  { q: 'Posso ter mais de um container?', a: 'Sim, o limite depende do plano escolhido: Starter (3), Basic (5), Pro (10) e Business (25).', },
   { q: 'Como faço deploy do meu código?', a: 'Pelo editor web integrado (recomendado para iniciantes) ou via CLI com `mozhost deploy` (recomendado para projectos maiores).' },
   { q: 'Meu container parou sozinho — o que fazer?', a: 'Verifique os logs do container para identificar o erro. Contacte o suporte se precisar de ajuda.' },
   { q: 'Quais bancos de dados a MozHost suporta?', a: 'MySQL, MariaDB, PostgreSQL, MongoDB e Redis.' },

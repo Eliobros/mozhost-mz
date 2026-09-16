@@ -9,13 +9,11 @@ import {
   Play,
   Square,
   AlertCircle,
-  CheckCircle,
-  Coins
+  CheckCircle
 } from 'lucide-react';
 import ContainerCard from './ContainerCard';
 import CreateContainerModal from './CreateContainerModal';
-import PaymentModal from './PaymentModal';
-import { loadContainers as fetchContainers, upgradeStorage, performContainerAction, createContainer, deleteContainer } from './containerService';
+import { loadContainers as fetchContainers, performContainerAction, createContainer, deleteContainer } from './containerService';
 
 const ContainersPage = () => {
   const [containers, setContainers] = useState([]);
@@ -32,8 +30,6 @@ const ContainersPage = () => {
 });
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [coins, setCoins] = useState(0);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [storageAlerts, setStorageAlerts] = useState([]);
   const [statsMap, setStatsMap] = useState({});
   const searchParams = useSearchParams();
@@ -58,7 +54,7 @@ useEffect(() => {
     router.replace('/containers');
 
     if (status === 'success') {
-      // Recarrega containers/coins pra refletir o saldo atualizado
+      // Recarrega containers pra refletir o plano atualizado
       loadContainers();
     }
   }
@@ -70,7 +66,6 @@ useEffect(() => {
     try {
       const data = await fetchContainers();
       setContainers(data.containers);
-      setCoins(data.coins || 0);
       setStorageAlerts(Array.isArray(data.storageAlerts) ? data.storageAlerts : []);
     } catch (error) {
       console.error('Erro ao carregar containers:', error);
@@ -96,24 +91,6 @@ useEffect(() => {
   }
 };
 
-
-  const handleUpgradeStorage = async (containerId) => {
-    const input = prompt('Adicionar quanto de armazenamento? (em MB, mínimo 100)');
-    if (!input) return;
-    const addMb = parseInt(input, 10);
-    if (isNaN(addMb) || addMb < 100) {
-      alert('Valor inválido. Informe um número em MB (>= 100).');
-      return;
-    }
-
-    try {
-      const data = await upgradeStorage(containerId, addMb);
-      alert(`Armazenamento atualizado! Novo limite: ${data.maxStorageMb} MB. Coins restantes: ${data.coins}.`);
-      await loadContainers();
-    } catch (error) {
-      alert(`Falha no upgrade: ${error.message}`);
-    }
-  };
 
   const handleContainerAction = async (containerId, action) => {
     setActionLoading(prev => ({ ...prev, [containerId]: action }));
@@ -213,16 +190,9 @@ useEffect(() => {
           <div>
             <h1 className="text-2xl font-bold leading-7 text-gray-900">Containers</h1>
             <p className="mt-1 text-sm text-gray-500">Gerencie todos os seus containers em um só lugar</p>
-            <div className="mt-2 inline-flex items-center text-sm text-gray-700 bg-yellow-50 border border-yellow-200 rounded-md px-3 py-1">
-              <Coins className="w-4 h-4 text-yellow-600 mr-2" />
-              <span className="font-semibold">Coins:</span>
-              <span className="ml-1">{coins}</span>
-              <button
-                onClick={() => setShowPaymentModal(true)}
-                className="ml-3 inline-flex items-center px-2 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-xs font-medium"
-              >
-                <Coins className="w-3 h-3 mr-1" /> Comprar coins
-              </button>
+            <div className="mt-2 inline-flex items-center text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-1">
+              <CheckCircle className="w-4 h-4 text-blue-600 mr-2" />
+              <span>Precisa de mais armazenamento? Faça upgrade do plano em <a href="/billing" className="font-semibold text-blue-700 hover:underline">Planos</a>.</span>
             </div>
           </div>
           <button
@@ -238,7 +208,7 @@ useEffect(() => {
   <div className="bg-green-50 border border-green-200 text-green-800 rounded-md p-4 flex items-center justify-between">
     <div className="flex items-center">
       <CheckCircle className="w-5 h-5 mr-2" />
-      Pagamento confirmado! Suas coins já foram creditadas.
+      Pagamento confirmado! Seu plano já está ativo.
     </div>
     <button onClick={() => setPaymentResultStatus(null)} className="text-green-600 hover:text-green-800">✕</button>
   </div>
@@ -376,7 +346,6 @@ useEffect(() => {
                 actionLoading={actionLoading[container.id]}
                 onAction={handleContainerAction}
                 onDelete={() => handleDeleteContainer(container)}
-                onUpgrade={handleUpgradeStorage}
                 isNearLimit={!!storageAlerts.find(a => a.id === container.id)}
               />
             ))}
@@ -388,7 +357,6 @@ useEffect(() => {
           <CreateContainerModal
             form={createForm}
             setForm={setCreateForm}
-            coins={coins}
             isCreating={isCreating} // ← PASSA A PROP
             onSubmit={handleCreateContainer}
             onClose={() => {
@@ -405,17 +373,6 @@ useEffect(() => {
           />
         )}
 
-        {/* Payment Modal */}
-        {showPaymentModal && (
-          <PaymentModal
-            onClose={() => setShowPaymentModal(false)}
-            onSuccess={(coinsAdded) => {
-              setShowPaymentModal(false);
-              loadContainers();
-              
-            }}
-          />
-        )}
       </div>
     </div>
   );

@@ -26,7 +26,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState(null);
-  const [coins, setCoins] = useState(0);
   const [storageAlerts, setStorageAlerts] = useState([]);
 
   useEffect(() => {
@@ -46,7 +45,6 @@ const Dashboard = () => {
         if (response.ok) {
           const data = await response.json();
           setUser(data.user);
-          setCoins(data.user.coins || 0);
           return;
         }
       }
@@ -81,7 +79,6 @@ const Dashboard = () => {
       if (containersRes.ok) {
         const data = await containersRes.json();
         setContainers(data.containers);
-        setCoins(data.coins || 0);
         setStorageAlerts(Array.isArray(data.storageAlerts) ? data.storageAlerts : []);
 
         const running = data.containers.filter(c => c.status === 'running').length;
@@ -197,7 +194,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <WelcomeHeader user={user} coins={coins} uptime={stats.uptime} />
+      <WelcomeHeader user={user} uptime={stats.uptime} />
 
       {user?.plan === 'free' && (
         <UpgradeBanner user={user} containers={containers} />

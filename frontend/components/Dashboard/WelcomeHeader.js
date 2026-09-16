@@ -2,7 +2,7 @@
 import React from 'react';
 import { Activity } from 'lucide-react';
 
-const WelcomeHeader = ({ user, coins, uptime }) => {
+const WelcomeHeader = ({ user, uptime }) => {
   return (
     <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-lg shadow-lg p-6 text-white">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -13,17 +13,6 @@ const WelcomeHeader = ({ user, coins, uptime }) => {
           <p className="mt-2 text-blue-100">
             Aqui está um resumo da sua conta MozHost
           </p>
-          <div className="mt-3 inline-flex items-center bg-yellow-100 text-yellow-900 px-3 py-1 rounded-md">
-            <span className="text-sm font-semibold">Coins: {coins}</span>
-            <a
-              href="https://api.whatsapp.com/send?phone=258862840075&text=Ola+quero+comprar+coins"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-3 text-sm underline"
-            >
-              Comprar coins
-            </a>
-          </div>
         </div>
         <div className="mt-4 sm:mt-0">
           <div className="flex items-center bg-white/10 backdrop-blur rounded-lg px-4 py-2">

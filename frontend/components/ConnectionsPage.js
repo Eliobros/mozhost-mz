@@ -161,8 +161,8 @@ const WhatsAppTab = () => {
           <div className="grid grid-cols-2 gap-2 text-sm text-blue-800">
             {[
               ['!vincular', 'Verificar vinculação'],
-              ['!saldo', 'Ver seus coins'],
-              ['!pagamento', 'Comprar coins'],
+              ['!plano', 'Ver detalhes do plano'],
+              ['!faturas', 'Ver últimos pagamentos'],
               ['!containers', 'Listar containers'],
               ['!menu', 'Todos os comandos']
             ].map(([cmd, desc]) => (
@@ -692,12 +692,28 @@ const GitHubTab = () => {
 const ConnectionsPage = () => {
   // Read tab from URL hash or query
   const [activeTab, setActiveTab] = useState('whatsapp');
+  const [githubAlert, setGithubAlert] = useState(null);
 
   useEffect(() => {
-    // Check for github=success from OAuth redirect
+    // Check for github=success|error from OAuth redirect
     const params = new URLSearchParams(window.location.search);
-    if (params.get('github') === 'success') {
+    const githubStatus = params.get('github');
+    if (githubStatus === 'success' || githubStatus === 'error') {
       setActiveTab('github');
+      if (githubStatus === 'success') {
+        setGithubAlert({ type: 'success', text: 'GitHub conectado com sucesso! 🎉' });
+      } else {
+        const reason = params.get('reason');
+        const messages = {
+          missing_code: 'GitHub não devolveu o código de autorização. Tente novamente.',
+          invalid_state: 'Sessão de conexão expirada. Clique em "Conectar com GitHub" novamente.',
+          no_token: 'Não foi possível obter o token do GitHub. Tente novamente.',
+          server_error: 'Erro interno ao conectar o GitHub. Tente novamente.'
+        };
+        setGithubAlert({ type: 'error', text: messages[reason] || 'Falha ao conectar o GitHub. Tente novamente.' });
+      }
+      // Limpa a query da URL para o alerta não reaparecer ao recarregar
+      window.history.replaceState({}, '', '/connections#github');
     }
     // Check hash
     const hash = window.location.hash.replace('#', '');
@@ -720,6 +736,27 @@ const ConnectionsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* GitHub OAuth feedback */}
+      {githubAlert && (
+        <div className={`mb-6 rounded-xl border p-4 flex items-start justify-between ${
+          githubAlert.type === 'success'
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-start">
+            {githubAlert.type === 'success'
+              ? <CheckCircle className="w-5 h-5 text-green-600 mr-3 flex-shrink-0 mt-0.5" />
+              : <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />}
+            <p className={`text-sm ${githubAlert.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+              {githubAlert.text}
+            </p>
+          </div>
+          <button onClick={() => setGithubAlert(null)} className="text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-6 bg-gray-100 p-1.5 rounded-xl">

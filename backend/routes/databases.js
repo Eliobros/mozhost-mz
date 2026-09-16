@@ -59,15 +59,7 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid database type' });
     }
 
-    const userInfo = await database.query(
-      'SELECT coins FROM users WHERE id = ?',
-      [req.user.userId]
-    );
-
-    if (userInfo[0].coins < 5) {
-      return res.status(400).json({ error: 'Insufficient coins' });
-    }
-
+    // Coins removidos: criar database faz parte do plano escolhido.
     const result = await databaseManager.createDatabase(req.user.userId, {
       name,
       type,

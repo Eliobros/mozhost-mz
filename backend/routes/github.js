@@ -70,30 +70,53 @@ function cloneToHost(repoUrlWithToken, branch, containerId) {
 
 router.get('/auth', auth, (req, res) => {
   const userId = req.user.userId || req.user.id;
+  // Fluxo de CONEXÃO (aba Connections): usa callback próprio para voltar
+  // para /connections. O login usa o callback do passport em auth.js.
+  const callbackUrl = process.env.GITHUB_CONNECT_CALLBACK_URL
+    || `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/github/callback`;
   const state = Buffer.from(JSON.stringify({ userId, source: 'web' })).toString('base64');
-  const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo,admin:repo_hook&state=${state}&redirect_uri=${GITHUB_CALLBACK_URL}`;
+  // encodeURIComponent: base64 pode conter '+' e '/', que corrompem na query;
+  // o redirect_uri também precisa estar encoded.
+  const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo%20admin:repo_hook&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(callbackUrl)}`;
   res.json({ success: true, url });
 });
 
 router.get('/callback', async (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
+  // Sempre devolve o usuário para /connections (sucesso ou erro).
+  // Nunca devolvemos JSON/500 aqui: o usuário vem do browser do GitHub.
+  const redirectTo = (status, reason) => {
+    const params = new URLSearchParams({ github: status });
+    if (reason) params.set('reason', reason);
+    return res.redirect(`${frontendUrl}/connections?${params.toString()}`);
+  };
+
   try {
     const { code, state } = req.query;
-    if (!code) return res.status(400).json({ error: 'Code não fornecido' });
+    if (!code) return redirectTo('error', 'missing_code');
 
-    const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+    let stateData = {};
+    try {
+      stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+    } catch (e) { /* state inválido */ }
     const { userId } = stateData;
+    if (!userId) return redirectTo('error', 'invalid_state');
+
+    // Deve ser o mesmo redirect_uri enviado no passo /auth
+    const callbackUrl = process.env.GITHUB_CONNECT_CALLBACK_URL
+      || `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/github/callback`;
 
     const tokenRes = await axios.post('https://github.com/login/oauth/access_token', {
       client_id: GITHUB_CLIENT_ID,
       client_secret: GITHUB_CLIENT_SECRET,
       code,
-      redirect_uri: GITHUB_CALLBACK_URL
+      redirect_uri: callbackUrl
     }, {
       headers: { Accept: 'application/json' }
     });
 
     const { access_token } = tokenRes.data;
-    if (!access_token) return res.status(400).json({ error: 'Falha ao obter token' });
+    if (!access_token) return redirectTo('error', 'no_token');
 
     const githubUser = await githubRequest('/user', access_token);
 
@@ -113,12 +136,11 @@ router.get('/callback', async (req, res) => {
 
     console.log(`✅ GitHub conectado: user ${userId} → @${githubUser.login}`);
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
-    res.redirect(`${frontendUrl}/connections?github=success`);
+    return redirectTo('success');
 
   } catch (error) {
     console.error('Erro callback GitHub:', error);
-    res.status(500).json({ error: 'Erro ao conectar GitHub' });
+    return redirectTo('error', 'server_error');
   }
 });
 
@@ -128,7 +150,7 @@ router.post('/device/start', auth, async (req, res) => {
   try {
     const response = await axios.post('https://github.com/login/device/code', {
       client_id: GITHUB_CLIENT_ID,
-      scope: 'repo,admin:repo_hook'
+      scope: 'repo admin:repo_hook'
     }, {
       headers: { Accept: 'application/json' }
     });

@@ -232,11 +232,6 @@ const DashboardLayout = ({ children, currentPage = 'dashboard' }) => {
                     </Link>
                   </li>
                   <li>
-                    <Link href="/coins" className="text-gray-400 hover:text-white transition">
-                      🪙 Comprar Coins
-                    </Link>
-                  </li>
-                  <li>
                     <Link href="/docs/cli" className="text-gray-400 hover:text-white transition">
                       ⚡ CLI MozHost
                     </Link>

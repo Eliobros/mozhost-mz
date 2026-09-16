@@ -11,6 +11,8 @@ import {
 
 const API = 'https://api.mozhost.shop';
 
+import PaymentModal from '@/components/ContainersPage/PaymentModal';
+
 const hdrs = () => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mozhost_token') : '';
   return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -117,6 +119,8 @@ function BillingContent() {
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  // Modal genérico de pagamento (cartão etc.) em modo billing
+  const [cardPayPlan, setCardPayPlan] = useState(null);
   const [paying, setPaying] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
   const [pollingId, setPollingId] = useState(null);
@@ -506,7 +510,7 @@ function BillingContent() {
                     {[
                       { id: 'mpesa', name: 'M-Pesa', desc: '84/85', color: 'green' },
                       { id: 'emola', name: 'e-Mola', desc: '86/87', color: 'blue' },
-                      { id: 'mercadopago', name: 'MercadoPago', desc: 'Cartão', color: 'cyan' }
+                      { id: 'card', name: 'Cartão', desc: 'Visa/Master', color: 'cyan' }
                     ].map(m => (
                       <button key={m.id} onClick={() => setPaymentMethod(m.id)}
                         className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all text-center ${
@@ -551,11 +555,11 @@ function BillingContent() {
                   </div>
                 )}
 
-                {paymentMethod === 'mercadopago' && (
+                {paymentMethod === 'card' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-5">
                     <p className="text-xs text-blue-700 flex items-start gap-2">
                       <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                      <span>Você será redirecionado para o MercadoPago para completar o pagamento com cartão de crédito/débito ou PIX.</span>
+                      <span>Ao confirmar, abre o checkout seguro para pagar com cartão de crédito/débito (Visa/Mastercard).</span>
                     </p>
                   </div>
                 )}
@@ -571,6 +575,14 @@ function BillingContent() {
                 </div>
 
                 {/* Submit */}
+                {paymentMethod === 'card' ? (
+                  <button
+                    onClick={() => setCardPayPlan(selectedPlan)}
+                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-4 rounded-xl font-bold text-base hover:from-cyan-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <><CreditCard className="w-5 h-5" /> Continuar com Cartão — {selectedPlan.price_mt} MT</>
+                  </button>
+                ) : (
                 <button
                   onClick={handleSubscribe}
                   disabled={paying || ((paymentMethod === 'mpesa' || paymentMethod === 'emola') && (phone.length !== 9 || !!phoneError))}
@@ -582,9 +594,27 @@ function BillingContent() {
                     <><CreditCard className="w-5 h-5" /> Pagar {selectedPlan.price_mt} MT</>
                   )}
                 </button>
+                )}
               </div>
             </div>
           </div>
+        )}
+
+        {/* ======= MODAL DE PAGAMENTO GENÉRICO (cartão → checkout ZumboPay, modo billing) ======= */}
+        {cardPayPlan && (
+          <PaymentModal
+            amount={cardPayPlan.price_mt}
+            description={`Plano ${cardPayPlan.name} — mensal`}
+            planId={cardPayPlan.id}
+            planName={cardPayPlan.name}
+            onClose={() => setCardPayPlan(null)}
+            onSuccess={() => {
+              setCardPayPlan(null);
+              setSelectedPlan(null);
+              showToast('🎉 Pagamento confirmado! Plano ativado!');
+              loadData();
+            }}
+          />
         )}
 
         {/* ======= PAYMENT RESULT MODAL ======= */}

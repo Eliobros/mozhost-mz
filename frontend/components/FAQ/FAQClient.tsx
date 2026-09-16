@@ -148,8 +148,8 @@ export default function FAQClient() {
 
       <div className="mt-8 pt-6 border-t border-gray-200">
         <div className="flex justify-between items-center">
-          <Link href="/docs/comprar-coins" className="text-blue-600 hover:text-blue-800 flex items-center">
-            ← Comprar Coins
+          <Link href="/docs/precos" className="text-blue-600 hover:text-blue-800 flex items-center">
+            ← Planos e Preços
           </Link>
           <Link href="/docs/suporte" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium">
             Próximo: Suporte →

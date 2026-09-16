@@ -3,6 +3,7 @@
 const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
 const notificationManager = require('../utils/notification-manager');
+const { OWNER_ID } = require('../utils/owner');
 
 const FREE_TRIAL_DAYS = Number(process.env.FREE_TRIAL_DAYS) || 7;
 const SUSPENDED_CLEANUP_DAYS = Math.max(7, Number(process.env.SUSPENDED_CLEANUP_DAYS) || 7);
@@ -13,6 +14,9 @@ const PLAN_LIMITS = {
   pro: { max_containers: 10, max_ram_mb: 2048, max_storage_mb: 10240 },
   business: { max_containers: 25, max_ram_mb: 4096, max_storage_mb: 25600 }
 };
+
+// 👑 Dono da plataforma — fica fora do ciclo de billing: não recebe avisos
+// de expiração e nunca é suspenso (mesma convenção de alaudaService.js).
 
 function daysUntil(date) {
   return Math.ceil((new Date(date).getTime() - Date.now()) / DAY_MS);
@@ -40,8 +44,10 @@ class AccountService {
     const trialActive = user.plan === 'free' && user.free_trial_ends &&
       new Date(user.free_trial_ends) > new Date();
     const expiresAt = billing?.expires_at || (trialActive ? user.free_trial_ends : null);
-    const suspended = !!user.suspended_at;
-    const hasAccess = !suspended && !!expiresAt;
+    // 👑 Dono: acesso permanente, nunca tratado como suspenso/expirado
+    const isOwner = user.id === OWNER_ID;
+    const suspended = isOwner ? false : !!user.suspended_at;
+    const hasAccess = isOwner ? true : !suspended && !!expiresAt;
 
     return {
       found: true,
@@ -89,6 +95,9 @@ class AccountService {
 
     let sent = 0;
     for (const user of expiring) {
+      // 👑 Dono não recebe avisos de expiração
+      if (user.id === OWNER_ID) continue;
+
       const daysLeft = daysUntil(user.expires_at);
       if (![5, 3, 1].includes(daysLeft)) continue;
 
@@ -218,6 +227,7 @@ class AccountService {
       `SELECT u.id, u.username, u.plan
        FROM users u
        WHERE u.suspended_at IS NULL
+         AND u.id <> ?
          AND (
            (u.plan = 'free' AND u.free_trial_ends IS NOT NULL AND u.free_trial_ends <= NOW())
            OR
@@ -225,7 +235,8 @@ class AccountService {
              SELECT 1 FROM billing b
              WHERE b.user_id = u.id AND b.status = 'active' AND b.expires_at > NOW()
            ))
-         )`
+         )`,
+      [OWNER_ID]
     );
 
     let suspendedCount = 0;

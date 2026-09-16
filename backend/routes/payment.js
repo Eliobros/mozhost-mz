@@ -11,59 +11,16 @@ const database = require('../models/database');
 const authenticateToken = require('../middleware/auth');
 
 // Configurações da Alauda API
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.duckdns.org/api/payment';
+const ALAUDA_API_URL = process.env.ALAUDA_API_URL_PAYMENT || 'https://alauda-api.duckdns.org/api/payment';
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ============================================
-// GET /api/payment/packages - Listar pacotes disponíveis
+// GET /api/payment/packages - DESCONTINUADO (loja de coins removida)
 // ============================================
 router.get('/packages', (req, res) => {
-  const packages = [
-    {
-      id: 1,
-      coins: 500,
-      price: 50,
-      description: '1GB RAM + 1GB Storage',
-      recommended: false
-    },
-    {
-      id: 2,
-      coins: 1000,
-      price: 95,
-      description: '2GB RAM + 2GB Storage',
-      discount: '5% OFF',
-      recommended: true
-    },
-    {
-      id: 3,
-      coins: 2000,
-      price: 180,
-      description: '4GB RAM + 4GB Storage',
-      discount: '10% OFF',
-      recommended: false
-    },
-    {
-      id: 4,
-      coins: 5000,
-      price: 400,
-      description: '8GB RAM + 8GB Storage',
-      discount: '20% OFF',
-      recommended: false
-    },
-    {
-      id: 5,
-      coins: 10000,
-      price: 750,
-      description: '16GB RAM + 16GB Storage',
-      discount: '25% OFF',
-      recommended: false
-    }
-  ];
-
-  res.json({ 
-    success: true, 
-    packages,
-    currency: 'MT'
+  res.status(410).json({
+    success: false,
+    message: 'A loja de coins foi descontinuada. Escolha um plano em /billing — o armazenamento vem incluído no plano.'
   });
 });
 
@@ -365,15 +322,9 @@ async function processPaymentApproval(payment) {
       [payment.id]
     );
 
-    // Adicionar coins ao usuário
-    await database.query(
-      'UPDATE users SET coins = coins + ? WHERE id = ?',
-      [payment.coins, payment.user_id]
-    );
-
-    console.log(`✅ Pagamento ${payment.id} confirmado! ${payment.coins} coins adicionados ao usuário ${payment.user_id}`);
-
-    // TODO: Enviar notificação ao usuário via WhatsApp
+    // Coins descontinuados: o pagamento só é registrado. A liberação de
+    // recursos é feita pelo ciclo de billing do plano.
+    console.log(`✅ Pagamento ${payment.id} confirmado (usuario ${payment.user_id})`);
 
   } catch (error) {
     console.error('Erro ao processar aprovação:', error);
@@ -408,8 +359,7 @@ router.post('/manual-confirm', authenticateToken, async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Pagamento confirmado',
-      coinsAdded: payments[0].coins
+      message: 'Pagamento confirmado'
     });
 
   } catch (error) {
@@ -631,44 +581,13 @@ if (payment.container_name) {
 });
 
 // ============================================
-// POST /api/payment/internal/credit-coins - Crédito interno via Alauda
+// POST /api/payment/internal/credit-coins - DESCONTINUADO
 // ============================================
 router.post('/internal/credit-coins', async (req, res) => {
-  try {
-    const key = req.headers['x-internal-key']
-    
-    if (!key || key !== process.env.INTERNAL_SECRET_KEY) {
-      return res.status(401).json({ error: 'Não autorizado' })
-    }
-
-    const { userId, coins } = req.body
-
-    if (!userId || !coins) {
-      return res.status(400).json({ error: 'userId e coins são obrigatórios' })
-    }
-
-    // Credita coins ao utilizador
-    await database.query(
-      'UPDATE users SET coins = coins + ? WHERE id = ?',
-      [coins, userId]
-    )
-
-    // Regista o pagamento como completed
-    await database.query(
-      `UPDATE payments SET status = 'completed', completed_at = NOW() 
-       WHERE user_id = ? AND status = 'pending' 
-       ORDER BY created_at DESC LIMIT 1`,
-      [userId]
-    )
-
-    console.log(`✅ ${coins} coins creditados ao utilizador ${userId} via Alauda`)
-
-    res.json({ success: true, userId, coins })
-
-  } catch (error) {
-    console.error('❌ Erro ao creditar coins:', error)
-    res.status(500).json({ error: 'Erro ao creditar coins' })
-  }
-})
+  res.status(410).json({
+    success: false,
+    message: 'Crédito de coins descontinuado. O plano é a única moeda agora.'
+  });
+});
 
 module.exports = router;

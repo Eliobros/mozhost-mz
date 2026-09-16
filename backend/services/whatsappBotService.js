@@ -61,10 +61,7 @@ class WhatsAppBotService {
         case '!help':
           await this.handleMenu(sock, from);
           break;
-        case '!saldo':
-          await this.handleSaldo(sock, from, phoneNumber);
-          break;
-        case '!containers':
+
         case '!status':
           await this.handleContainers(sock, from, phoneNumber);
           break;
@@ -102,7 +99,7 @@ class WhatsAppBotService {
    */
   async getLinkedUser(phoneNumber) {
     const rows = await database.query(
-      `SELECT wa.user_id, u.username, u.email, u.coins, u.plan, u.max_containers
+      `SELECT wa.user_id, u.username, u.email, u.plan, u.max_containers
        FROM whatsapp_accounts wa
        JOIN users u ON wa.user_id = u.id
        WHERE wa.whatsapp_number = ? AND wa.verified = TRUE`,
@@ -173,7 +170,6 @@ class WhatsAppBotService {
             `!vincular - Gerar código de vinculação\n` +
             `!desvincular - Remover vinculação\n\n` +
             `*Conta:*\n` +
-            `!saldo - Ver seus coins\n` +
             `!plano - Ver detalhes do plano\n\n` +
             `*Containers:*\n` +
             `!containers - Listar containers\n` +
@@ -186,19 +182,6 @@ class WhatsAppBotService {
             `*Suporte:*\n` +
             `!suporte - Falar com suporte\n` +
             `!menu - Ver este menu`
-    });
-  }
-
-  async handleSaldo(sock, from, phoneNumber) {
-    const user = await this.getLinkedUser(phoneNumber);
-    if (!user) return this.sendNotLinked(sock, from);
-
-    await sock.sendMessage(from, {
-      text: `💰 *Saldo de Coins*\n\n` +
-            `👤 ${user.username}\n` +
-            `🪙 Coins: *${user.coins}*\n\n` +
-            `Acesse o painel para comprar mais coins:\n` +
-            `🔗 https://mozhost.shop`
     });
   }
 
@@ -259,7 +242,6 @@ class WhatsAppBotService {
       text: `💳 *Seu Plano*\n\n` +
             `👤 ${user.username}\n` +
             `📦 Plano: *${user.plan}*\n` +
-            `🪙 Coins: *${user.coins}*\n` +
             `📦 Containers: ${containers[0].count}/${user.max_containers}` +
             subsText
     });
@@ -270,7 +252,7 @@ class WhatsAppBotService {
     if (!user) return this.sendNotLinked(sock, from);
 
     const payments = await database.query(
-      `SELECT amount, payment_method, status, coins_to_add, created_at
+      `SELECT amount, payment_method, status, created_at
        FROM payments
        WHERE user_id = ?
        ORDER BY created_at DESC LIMIT 5`,
@@ -279,7 +261,7 @@ class WhatsAppBotService {
 
     if (payments.length === 0) {
       await sock.sendMessage(from, {
-        text: `💳 *Pagamentos*\n\nNenhum pagamento encontrado.\n\nAcesse o painel para comprar coins:\n🔗 https://mozhost.shop`
+        text: `💳 *Pagamentos*\n\nNenhum pagamento encontrado.\n\nGerencie seu plano em:\n🔗 https://mozhost.shop`
       });
       return;
     }
@@ -287,7 +269,7 @@ class WhatsAppBotService {
     const statusEmoji = { completed: '✅', pending: '⏳', failed: '❌', expired: '⌛' };
     const paymentList = payments.map(p => {
       const date = new Date(p.created_at).toLocaleDateString('pt-MZ');
-      return `${statusEmoji[p.status] || '❓'} ${p.amount} MT (${p.payment_method})\n   ${p.coins_to_add} coins - ${date}`;
+      return `${statusEmoji[p.status] || '❓'} ${p.amount} MT (${p.payment_method}) - ${date}`;
     }).join('\n\n');
 
     await sock.sendMessage(from, {

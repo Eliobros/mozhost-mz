@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect} from 'react';
-import { X, Coins, Smartphone, Loader, CheckCircle, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { X, CreditCard, Smartphone, Loader, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 
 
 const getFriendlyError = (message) => {
@@ -25,10 +25,10 @@ const getFriendlyError = (message) => {
   return key ? errors[key] : 'Erro ao processar pagamento. Tenta novamente.';
 };
 
-const PaymentModal = ({ onClose, onSuccess }) => {
+const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description = 'Pagamento MozHost', purpose = 'payment', planId, planName }) => {
   const [paymentId, setPaymentId] = useState(null);
-  const [step, setStep] = useState('amount');
-  const [amount, setAmount] = useState('');
+  const [step, setStep] = useState(initialAmount ? 'method' : 'amount');
+  const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : '');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -36,10 +36,48 @@ const PaymentModal = ({ onClose, onSuccess }) => {
   const [error, setError] = useState('');
   const [paymentResult, setPaymentResult] = useState(null);
   const [mercadoPagoUrl, setMercadoPagoUrl] = useState('');
+  // Modo billing: o pagamento ativa um plano via /api/billing/subscribe + polling
+  const [billingId, setBillingId] = useState(null);
+  const billingMode = typeof planId !== 'undefined' && planId !== undefined && planId !== null;
+  const billingRef = useRef(null);
+  // Sincroniza refs com props (evita stale closure no polling)
+  useEffect(() => { billingRef.current = billingId; }, [billingId]);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mozhost.shop';
   const ALAUDA_API_URL = 'https://alauda-api.mozhost.shop';
+  // Para onde voltar depois de pagar (ex: /billing); padrão: página atual.
+  const returnTo = (typeof window !== 'undefined' && window.location.pathname) || '/';
   
+  // Polling em modo billing: verifica o status do billing criado
+  useEffect(() => {
+    if (step !== 'processing' || !billingId) return;
+
+    const token = localStorage.getItem('mozhost_token');
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/billing/${billingId}/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (data.billing?.status === 'active' || data.billing?.status === 'scheduled') {
+          clearInterval(interval);
+          setStep('success');
+          if (onSuccess) onSuccess();
+        } else if (['failed', 'expired', 'cancelled'].includes(data.billing?.status)) {
+          clearInterval(interval);
+          setError('Pagamento não foi concluído. Tenta novamente.');
+          setStep('error');
+        }
+      } catch (err) {
+        console.error('Erro ao verificar status do billing:', err);
+      }
+    }, 3000);
+
+    const timeout = setTimeout(() => clearInterval(interval), 300000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [step, billingId]);
+
   useEffect(() => {
   if (step !== 'processing' || !paymentId) return;
 
@@ -82,14 +120,12 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     MZN: {
       symbol: 'MT',
       name: 'Metical Moçambicano',
-      coinsPerUnit: 10,
       minDeposit: 10,
       flag: '🇲🇿'
     },
     BRL: {
       symbol: 'R$',
       name: 'Real Brasileiro',
-      coinsPerUnit: 100,
       minDeposit: 10,
       flag: '🇧🇷'
     }
@@ -153,45 +189,8 @@ const PaymentModal = ({ onClose, onSuccess }) => {
     return currencies[currentCurrency];
   }, [currentCurrency]);
 
-  // Pacotes dependem da moeda
-  const packages = useMemo(() => {
-    if (currentCurrency === 'BRL') {
-      return [
-        { amount: 10, coins: 500, popular: false },
-        { amount: 20, coins: 1100, popular: true, bonus: '+100 bonus' },
-        { amount: 30, coins: 2300, popular: false, bonus: '+300 bonus' },
-        { amount: 60, coins: 6000, popular: false, bonus: '+1000 bonus' }
-      ];
-    } else {
-      return [
-        { amount: 100, coins: 500, popular: false },
-        { amount: 150, coins: 1100, popular: true, bonus: '+100 bonus' },
-        { amount: 200, coins: 2300, popular: false, bonus: '+300 bonus' },
-        { amount: 500, coins: 6000, popular: false, bonus: '+1000 bonus' }
-      ];
-    }
-  }, [currentCurrency]);
-
-  // Calcula coins
-  const getCoinsFromAmount = (value) => {
-    const numValue = parseFloat(value);
-    if (!numValue || isNaN(numValue)) return 0;
-
-    const baseCoins = numValue * currencyConfig.coinsPerUnit;
-
-    let bonus = 0;
-    if (currentCurrency === 'MZN') {
-      if (numValue >= 500) bonus = 1000;
-      else if (numValue >= 200) bonus = 300;
-      else if (numValue >= 100) bonus = 100;
-    } else if (currentCurrency === 'BRL') {
-      if (numValue >= 50) bonus = 1000;
-      else if (numValue >= 20) bonus = 300;
-      else if (numValue >= 10) bonus = 100;
-    }
-
-    return baseCoins + bonus;
-  };
+  // Pacotes removidos: quem chama o modal define o valor (ex: preço do plano).
+  // Sem valor inicial, o usuário digita o valor personalizado.
 
   // Valida valor
   const validateAmount = () => {
@@ -203,12 +202,6 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       return false;
     }
     return true;
-  };
-
-  const handlePackageSelect = (pkg) => {
-    setAmount(pkg.amount.toString());
-    setError('');
-    setStep('method');
   };
 
   const handleCustomAmount = () => {
@@ -266,6 +259,38 @@ const PaymentModal = ({ onClose, onSuccess }) => {
       const userData = JSON.parse(localStorage.getItem('mozhost_user') || '{}');
       const userId = userData.id;
 
+      if (billingMode) {
+        // Modo billing: cria a cobrança do plano via /api/billing/subscribe
+        // (mpesa/emola direto; visa_mastercard → checkout ZumboPay;
+        // mercadopago → checkout MercadoPago) e faz polling do billing.
+        const res = await fetch(`${API_URL}/api/billing/subscribe`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planId,
+            method: paymentMethod,
+            phone: selectedMethodData?.requiresPhone ? `258${phoneNumber}` : undefined,
+            email: selectedMethodData?.requiresEmail ? email : undefined
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erro ao iniciar pagamento do plano');
+        }
+        setBillingId(data.billing_id);
+        billingRef.current = data.billing_id;
+        if (data.payment_url) {
+          // Métodos com checkout externo (ZumboPay/MercadoPago): abre o link
+          setMercadoPagoUrl(data.payment_url);
+          setStep('mercadopago');
+          setLoading(false);
+          return;
+        }
+        setStep('processing'); // polling do billing abaixo
+        setLoading(false);
+        return;
+      }
+
       if (paymentMethod === 'mercadopago') {
         await handleMercadoPagoPayment(token, userId);
       } else if (paymentMethod === 'visa_mastercard') {
@@ -292,12 +317,12 @@ const handleMercadoPagoPayment = async (token, userId) => {
       body: JSON.stringify({
         email: email,
         amount: parseFloat(amount),
-        description: `Compra de ${getCoinsFromAmount(amount)} coins - MozHost`,
+        description: `${description} - MozHost`,
         usuario_id: userId?.toString() || 'guest',
         back_urls: {
-          success: `${window.location.origin}/containers?payment=success`,
-          failure: `${window.location.origin}/containers?payment=failed`,
-          pending: `${window.location.origin}/containers?payment=pending`
+          success: `${window.location.origin}${returnTo}?payment=success`,
+          failure: `${window.location.origin}${returnTo}?payment=failed`,
+          pending: `${window.location.origin}${returnTo}?payment=pending`
         }
       })
     });
@@ -319,7 +344,8 @@ const handleMercadoPagoPayment = async (token, userId) => {
       body: JSON.stringify({
         amount: parseFloat(amount),
         currency: 'BRL',
-        coins: getCoinsFromAmount(amount),
+        description,
+        purpose,
         paymentMethod: 'mercadopago',
         phoneNumber: null,
         external_payment_id: paymentData.id || paymentData.external_reference,
@@ -342,10 +368,11 @@ const handleMercadoPagoPayment = async (token, userId) => {
     body: JSON.stringify({
       userId: userData.id,
       method: 'visa_mastercard',
-      coins: getCoinsFromAmount(amount),
       amount: parseFloat(amount),
+      description,
+      purpose,
       email: email,
-      returnUrl: `${window.location.origin}/containers?payment=result`
+      returnUrl: `${window.location.origin}${returnTo}?payment=result`
     })
   });
 
@@ -396,7 +423,7 @@ const handleMercadoPagoPayment = async (token, userId) => {
   }
 
   // M-Pesa/Emola: sucesso direto, sem checkout externo.
-  // Coins são creditados via webhook quando a Débito Pay confirmar.
+  // Confirmação chega via polling/webhook quando a Débito Pay processar.
   setPaymentId(data.data?.payment?.payment_id);
   setStep('processing');
   setLoading(false);
@@ -436,7 +463,7 @@ const handleMercadoPagoPayment = async (token, userId) => {
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <div>
-            <h3 className="text-lg font-medium text-gray-900">Comprar Coins</h3>
+            <h3 className="text-lg font-medium text-gray-900">{description}</h3>
             {paymentMethod && (
               <p className="text-xs text-gray-500 mt-1">
                 {currencyConfig.flag} Pagando em {currencyConfig.name}
@@ -456,7 +483,7 @@ const handleMercadoPagoPayment = async (token, userId) => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
-                      <Coins className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <CreditCard className="w-5 h-5 text-blue-600 mt-0.5" />
                     </div>
                     <div className="ml-3">
                       <h4 className="text-sm font-medium text-blue-900">
@@ -505,40 +532,6 @@ const handleMercadoPagoPayment = async (token, userId) => {
 
               {paymentMethod && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Escolha um pacote
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {packages.map((pkg) => (
-                        <button
-                          key={pkg.amount}
-                          onClick={() => handlePackageSelect(pkg)}
-                          className={`relative p-4 border-2 rounded-lg text-left hover:border-blue-500 transition-all ${
-                            pkg.popular ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                          }`}
-                        >
-                          {pkg.popular && (
-                            <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
-                              Popular
-                            </span>
-                          )}
-                          <div className="text-2xl font-bold text-gray-900">
-                            {currencyConfig.symbol} {pkg.amount}
-                          </div>
-                          <div className="text-xs text-gray-500">{currencyConfig.name}</div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            <Coins className="inline w-4 h-4 text-yellow-500 mr-1" />
-                            {pkg.coins} coins
-                          </div>
-                          {pkg.bonus && (
-                            <div className="text-xs text-green-600 font-medium mt-1">{pkg.bonus}</div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-gray-300"></div>
@@ -567,11 +560,10 @@ const handleMercadoPagoPayment = async (token, userId) => {
                       />
                     </div>
                     {amount && parseFloat(amount) >= currencyConfig.minDeposit && (
-                      <div className="mt-2 p-2 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded">
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-sm font-medium text-gray-900">
-                          <Coins className="inline w-4 h-4 text-yellow-600 mr-1" />
-                          Você receberá: <span className="text-lg font-bold text-yellow-600">
-                            {getCoinsFromAmount(amount)} coins
+                          Total a pagar: <span className="text-lg font-bold text-blue-600">
+                            {currencyConfig.symbol} {amount}
                           </span>
                         </p>
                       </div>
@@ -615,7 +607,7 @@ const handleMercadoPagoPayment = async (token, userId) => {
               <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
                 <div className="font-medium text-blue-900">Resumo:</div>
                 <div className="text-blue-700 mt-1">
-                  {currencyConfig.symbol} {amount} = <span className="font-bold">{getCoinsFromAmount(amount)} coins</span>
+                  {description}: <span className="font-bold">{currencyConfig.symbol} {amount}</span>
                 </div>
                 <div className="text-xs text-blue-600 mt-1">
                   {currencyConfig.flag} {currencyConfig.name}
@@ -731,7 +723,7 @@ const handleMercadoPagoPayment = async (token, userId) => {
       Pagar com {selectedMethodData?.name}
     </a>
     <p className="text-xs text-gray-500">
-      Após o pagamento, as coins serão creditadas automaticamente.
+      Após o pagamento, a confirmação é automática.
     </p>
     <button
       onClick={onClose}
@@ -750,11 +742,10 @@ const handleMercadoPagoPayment = async (token, userId) => {
     </div>
     <h4 className="text-lg font-medium text-gray-900 mb-2">Pagamento confirmado!</h4>
     <p className="text-sm text-gray-600 mb-4">
-      {getCoinsFromAmount(amount)} coins foram adicionados à sua conta
+      {description} pago com sucesso ({currencyConfig.symbol} {amount})
     </p>
     <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800 mb-4">
-      <Coins className="inline w-4 h-4 mr-1" />
-      Você já pode criar seus containers!
+      Obrigado pela preferência!
     </div>
     
     {/* BOTÃO DE DOWNLOAD DO RECIBO */}

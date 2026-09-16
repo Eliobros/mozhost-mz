@@ -2,7 +2,7 @@
 
 // components/DatabasePage.js
 import React, { useState, useEffect } from 'react';
-import { Database, Copy, ExternalLink, Trash2, Check, AlertCircle, Eye, EyeOff, Plus, RefreshCw, Coins, Link2, Terminal } from 'lucide-react';
+import { Database, Copy, ExternalLink, Trash2, Check, AlertCircle, Eye, EyeOff, Plus, RefreshCw, Link2, Terminal } from 'lucide-react';
 
 const DatabasePage = () => {
   const [databases, setDatabases] = useState([]);
@@ -15,10 +15,6 @@ const DatabasePage = () => {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [containers, setContainers] = useState([]);
   const [selectedContainer, setSelectedContainer] = useState('');
-  const [userCoins, setUserCoins] = useState(null);
-
-  // Custo em coins — deve bater com backend/config/constants.js DATABASE_COST_COINS
-  const DB_COST_COINS = 5;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -59,8 +55,6 @@ const DatabasePage = () => {
     }
   };
 
-  const insufficientCoins = userCoins !== null && userCoins < DB_COST_COINS;
-
   const loadDatabases = async () => {
     try {
       setError(null);
@@ -96,8 +90,6 @@ const DatabasePage = () => {
   };
 
   // Carrega containers do usuário para o select de vínculo.
-  // O saldo de coins será exibido automaticamente se o backend expuser /api/auth/me;
-  // caso contrário o card mostra só o custo (sem mentir sobre o saldo).
   const loadAuxData = async () => {
     try {
       const token = localStorage.getItem('mozhost_token');
@@ -111,14 +103,6 @@ const DatabasePage = () => {
         setContainers(cData.containers || cData || []);
       }
 
-      // Tenta buscar saldo sem bloquear a UI se falhar
-      const uRes = await fetch('https://api.mozhost.shop/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).catch(() => null);
-      if (uRes && uRes.ok) {
-        const uData = await uRes.json();
-        setUserCoins(uData.coins ?? uData.user?.coins ?? null);
-      }
     } catch (_) { /* silencioso - é apenas preview */ }
   };
 
@@ -368,30 +352,14 @@ const DatabasePage = () => {
               </p>
             </div>
 
-            {/* Cost preview */}
-            <div className={`rounded-lg p-3 flex items-center justify-between border ${
-              insufficientCoins ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
-            }`}>
-              <div className="flex items-center gap-2">
-                <Coins className={`w-4 h-4 ${insufficientCoins ? 'text-red-600' : 'text-amber-600'}`} />
-                <span className={`text-sm font-medium ${insufficientCoins ? 'text-red-700' : 'text-amber-700'}`}>
-                  Custo: {DB_COST_COINS} coins
-                </span>
-              </div>
-              <span className={`text-xs ${insufficientCoins ? 'text-red-600' : 'text-amber-600'}`}>
-                Saldo: {userCoins !== null ? `${userCoins} coins` : '…'}
-                {insufficientCoins && ' (insuficiente)'}
-              </span>
-            </div>
-
             {/* Botões */}
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={creating || insufficientCoins}
+                disabled={creating}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
               >
-                {creating ? 'Criando...' : insufficientCoins ? 'Saldo insuficiente' : '✨ Criar Database'}
+                {creating ? 'Criando...' : '✨ Criar Database'}
               </button>
               <button
                 type="button"
