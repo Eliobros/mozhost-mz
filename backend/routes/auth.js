@@ -1454,6 +1454,74 @@ adminRouter.patch('/users/:id/plan', async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:id/renew - Renovar/ativar plano pago manualmente (billing + limites + reativa conta)
+adminRouter.post('/users/:id/renew', async (req, res) => {
+  try {
+    const { password, plan, days, amount } = req.body;
+    const { id } = req.params;
+
+    if (!password || password !== (process.env.ADMIN_PASSWORD || 'Cadeira33@')) {
+      return res.status(401).json({ error: 'Senha de administrador inválida' });
+    }
+
+    if (!plan || !['starter', 'basic', 'pro', 'business'].includes(plan)) {
+      return res.status(400).json({ error: 'Plano inválido. Use: starter, basic, pro ou business' });
+    }
+
+    const durationDays = Math.min(Math.max(parseInt(days, 10) || 30, 1), 365);
+    const paidAmount = amount === undefined || amount === null || String(amount).trim() === '' ? 0 : Number(amount);
+    if (Number.isNaN(paidAmount) || paidAmount < 0) {
+      return res.status(400).json({ error: 'Valor inválido' });
+    }
+
+    const users = await database.query('SELECT id, username, email, suspended_at FROM users WHERE id = ?', [id]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    const user = users[0];
+
+    // Limites por plano (mesmos do migrateUserToPlan.js)
+    const planLimits = {
+      starter: { maxContainers: 3, maxRamMb: 512, maxStorageMb: 2048 },
+      basic: { maxContainers: 5, maxRamMb: 1024, maxStorageMb: 5120 },
+      pro: { maxContainers: 10, maxRamMb: 2048, maxStorageMb: 10240 },
+      business: { maxContainers: 25, maxRamMb: 4096, maxStorageMb: 25600 }
+    };
+    const limits = planLimits[plan];
+
+    // Expira cobranças ativas anteriores
+    await database.query(
+      "UPDATE billing SET status = 'expired' WHERE user_id = ? AND status = 'active'",
+      [id]
+    );
+
+    const referenceCode = `MAN${Date.now()}`;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + durationDays);
+
+    await database.query(
+      `INSERT INTO billing (user_id, plan_id, amount, currency, method, reference_code, status, activated_at, expires_at, created_at)
+       VALUES (?, ?, ?, 'MZN', 'manual', ?, 'active', NOW(), ?, NOW())`,
+      [id, plan, paidAmount, referenceCode, expiresAt]
+    );
+
+    await database.query(
+      'UPDATE users SET plan = ?, max_containers = ?, max_ram_mb = ?, max_storage_mb = ?, suspended_at = NULL WHERE id = ?',
+      [plan, limits.maxContainers, limits.maxRamMb, limits.maxStorageMb, id]
+    );
+
+    console.log(`✅ [ADMIN] Plano ${plan} renovado para ${user.username} até ${expiresAt.toISOString()} (${durationDays} dias, MZN ${paidAmount})`);
+
+    res.json({
+      message: `Plano ${plan.toUpperCase()} ativado para ${user.username} até ${expiresAt.toLocaleDateString('pt-BR')} (${durationDays} dias)`,
+      user: { id: Number(id), username: user.username, plan, expires_at: expiresAt }
+    });
+  } catch (error) {
+    console.error('Admin renew plan error:', error);
+    res.status(500).json({ error: 'Falha ao renovar plano' });
+  }
+});
+
 // PATCH /api/admin/users/:id/status - Ativar/desativar usuário
 adminRouter.patch('/users/:id/status', async (req, res) => {
   try {

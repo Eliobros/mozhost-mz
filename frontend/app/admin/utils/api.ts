@@ -74,6 +74,18 @@ export const adminAPI = {
     return data;
   },
 
+  // Renovar/ativar plano pago manualmente (cria billing + aplica limites + reativa conta)
+  async renewPlan(userId: number, plan: string, days: number, amount: string, password: string) {
+    const res = await fetch(`${API_BASE}/users/${userId}/renew`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan, days, amount, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao renovar plano');
+    return data;
+  },
+
   async toggleStatus(userId: number, isActive: boolean, password: string) {
     const res = await fetch(`${API_BASE}/users/${userId}/status`, {
       method: 'PATCH',

@@ -40,6 +40,7 @@ export const Users: React.FC<UsersProps> = ({ password, onOpenModal }) => {
     <div className="flex flex-wrap gap-1.5">
       <button onClick={() => onOpenModal({ type: 'addCoins', user: u, password })} className="text-xs bg-green-500 text-white px-2 py-1.5 rounded hover:bg-green-600 font-medium">➕ Coins</button>
       <button onClick={() => onOpenModal({ type: 'removeCoins', user: u, password })} className="text-xs bg-red-500 text-white px-2 py-1.5 rounded hover:bg-red-600 font-medium">➖ Coins</button>
+      <button onClick={() => onOpenModal({ type: 'renewPlan', user: u, password })} className="text-xs bg-indigo-600 text-white px-2 py-1.5 rounded hover:bg-indigo-700 font-medium">🔄 Renovar</button>
       <button onClick={() => onOpenModal({ type: 'changePlan', user: u, password })} className="text-xs bg-blue-500 text-white px-2 py-1.5 rounded hover:bg-blue-600 font-medium">📊 Plano</button>
       <button onClick={() => onOpenModal({ type: 'toggleStatus', user: u, password })} className="text-xs bg-yellow-500 text-white px-2 py-1.5 rounded hover:bg-yellow-600 font-medium">🔄</button>
     </div>

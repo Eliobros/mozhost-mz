@@ -15,10 +15,13 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
 
   const [formData, setFormData] = useState({
     username: modal.user?.username || '',
-    amount: '',
     password: modal.password || '',
-    plan: modal.user?.plan || 'free',
+    plan: modal.type === 'renewPlan'
+      ? (['starter', 'basic', 'pro', 'business'].includes(modal.user?.plan) ? modal.user.plan : 'basic')
+      : (modal.user?.plan || 'free'),
     isActive: modal.user?.isActive ?? true,
+    days: '30',
+    amount: '',
     useDropdown: true
   });
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +46,11 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
         alert(`✅ ${data.message}`);
         onSuccess();
         onClose();
+      } else if (modal.type === 'renewPlan') {
+        const data = await adminAPI.renewPlan(modal.user.id, formData.plan, Number(formData.days) || 30, formData.amount, formData.password);
+        alert(`✅ ${data.message}`);
+        onSuccess();
+        onClose();
       } else if (modal.type === 'toggleStatus') {
         const data = await adminAPI.toggleStatus(modal.user.id, formData.isActive, formData.password);
         alert(`✅ ${data.message}`);
@@ -61,6 +69,7 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
       case 'addCoins': return '💰 Adicionar Coins';
       case 'removeCoins': return '⚠️ Remover Coins';
       case 'changePlan': return '📊 Mudar Plano';
+      case 'renewPlan': return '🔄 Renovar Plano';
       case 'toggleStatus': return '🔄 Alterar Status';
       default: return 'Modal';
     }
@@ -71,6 +80,7 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
       case 'addCoins': return 'bg-green-600 hover:bg-green-700';
       case 'removeCoins': return 'bg-red-600 hover:bg-red-700';
       case 'changePlan': return 'bg-blue-600 hover:bg-blue-700';
+      case 'renewPlan': return 'bg-indigo-600 hover:bg-indigo-700';
       case 'toggleStatus': return 'bg-yellow-600 hover:bg-yellow-700';
       default: return 'bg-gray-600 hover:bg-gray-700';
     }
@@ -202,6 +212,85 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
             </>
           )}
 
+          {/* Renew Plan Form */}
+          {modal.type === 'renewPlan' && (
+            <>
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Usuário: <strong className="text-gray-800">{modal.user.username}</strong></p>
+                <p className="text-sm text-gray-600 mt-1">Plano atual: <strong className="text-gray-800">{modal.user.plan.toUpperCase()}</strong></p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-3 text-gray-700">Plano</label>
+                <div className="space-y-2">
+                  {[
+                    { value: 'starter', label: 'STARTER', desc: '3 containers, 512MB RAM — 150 MT/mês' },
+                    { value: 'basic', label: 'BASIC', desc: '5 containers, 1GB RAM — 350 MT/mês' },
+                    { value: 'pro', label: 'PRO', desc: '10 containers, 2GB RAM — 700 MT/mês' },
+                    { value: 'business', label: 'BUSINESS', desc: '25 containers, 4GB RAM — 1500 MT/mês' }
+                  ].map(plan => (
+                    <label
+                      key={plan.value}
+                      className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                    >
+                      <input
+                        type="radio"
+                        name="renewPlan"
+                        value={plan.value}
+                        checked={formData.plan === plan.value}
+                        onChange={(e) => setFormData({...formData, plan: e.target.value})}
+                        className="w-4 h-4"
+                      />
+                      <div>
+                        <div className="font-semibold text-gray-800">{plan.label}</div>
+                        <div className="text-xs text-gray-500">{plan.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">Dias</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={formData.days}
+                    onChange={(e) => setFormData({...formData, days: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">Valor pago (MZN)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ex: 350"
+                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Senha Admin</label>
+                <input
+                  type="password"
+                  placeholder="Digite a senha"
+                  className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  required
+                />
+              </div>
+            </>
+          )}
+
           {/* Toggle Status Form */}
           {modal.type === 'toggleStatus' && (
             <>
@@ -255,6 +344,7 @@ export const Modal: React.FC<ModalProps> = ({ modal, onClose, onSuccess }) => {
                modal.type === 'addCoins' ? '✅ Adicionar' :
                modal.type === 'removeCoins' ? '⚠️ Remover' :
                modal.type === 'changePlan' ? '📊 Atualizar' :
+               modal.type === 'renewPlan' ? '🔄 Renovar' :
                '🔄 Alterar'}
             </button>
           </div>
