@@ -313,7 +313,44 @@ router.post('/:id/start', async (req, res) => {
       });
     }
 
-    await dockerManager.startContainer(id);
+    try {
+      await dockerManager.startContainer(id);
+    } catch (startError) {
+      // Container Docker perdido (ex: migração de VPS, limpeza do Docker, crash)?
+      // Recuperação automática: recria a partir da config no banco + arquivos do
+      // usuário (que sobrevivem à migração). Só recria se o container Docker
+      // realmente não existir mais — outros erros seguem o fluxo normal de erro.
+      const missingDockerContainer = /no such container|not found|doesn't exist|não existe/i.test(
+        `${startError.message} ${startError.statusCode || ''} ${startError.reason || ''}`
+      );
+      if (!missingDockerContainer) {
+        throw startError;
+      }
+
+      try {
+        const result = await dockerManager.recreateContainer(id);
+        await notificationManager.notify(req.user.userId, {
+          type: 'info',
+          category: 'container',
+          title: '🛠️ Container Recuperado',
+          message: `Container "${container.name}" foi recriado automaticamente a partir dos seus arquivos.`
+        });
+        return res.json({
+          message: result.reason || 'Container foi recriado automaticamente e está pronto para uso.',
+          recreated: true,
+          container: {
+            id: container.id,
+            name: container.name,
+            status: 'running'
+          }
+        });
+      } catch (recreateError) {
+        return res.status(500).json({
+          error: 'Container Docker não encontrado',
+          message: `O container não existe mais e a recuperação automática falhou: ${recreateError.message}`
+        });
+      }
+    }
 
     res.json({
       message: 'Container started successfully',
@@ -433,7 +470,8 @@ router.post('/:id/restart', async (req, res) => {
       } catch (inspectError) {
         return res.status(500).json({
           error: 'Container Docker não encontrado',
-          message: `O container Docker "${containerData[0].docker_container_id}" não existe mais. Pode ser necessário recriar o container.`
+          message: `O container Docker "${containerData[0].docker_container_id}" não existe mais. Use a opção "Recriar" ou clique em Iniciar para recuperá-lo automaticamente sem perder arquivos.`,
+          missingDockerContainer: true
         });
       }
     }
@@ -467,6 +505,46 @@ router.post('/:id/restart', async (req, res) => {
     console.error('Error restarting container:', error);
     res.status(500).json({
       error: 'Failed to restart container',
+      message: error.message
+    });
+  }
+});
+
+// Recriar container Docker perdido (ex: após migração de VPS)
+// Os arquivos (user-data) e a config no banco sobrevivem; só o processo Docker morre.
+router.post('/:id/recreate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const containers = await database.query(
+      'SELECT id, name, plan_blocked FROM containers WHERE id = ? AND user_id = ?',
+      [id, req.user.userId]
+    );
+
+    if (containers.length === 0) {
+      return res.status(404).json({
+        error: 'Container not found'
+      });
+    }
+
+    const result = await dockerManager.recreateContainer(id);
+
+    await notificationManager.notify(req.user.userId, {
+      type: 'info',
+      category: 'container',
+      title: '🛠️ Container Recriado',
+      message: `Container "${containers[0].name}" foi recriado com sucesso a partir dos seus arquivos.`
+    });
+
+    res.json({
+      message: result.reason || 'Container recriado com sucesso',
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Error recreating container:', error);
+    res.status(500).json({
+      error: 'Failed to recreate container',
       message: error.message
     });
   }

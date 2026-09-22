@@ -11,7 +11,9 @@ const database = require('../models/database');
 const authenticateToken = require('../middleware/auth');
 
 // Configurações da Alauda API
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL_PAYMENT || 'https://alauda-api.duckdns.org/api/payment';
+// A env correta é ALAUDA_API_URL (https://alauda-api.mozhost.shop/api/payment);
+// o antigo ALAUDA_API_URL_PAYMENT/duckdns.org apontava pra VPS anterior.
+const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.mozhost.shop/api/payment';
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ============================================

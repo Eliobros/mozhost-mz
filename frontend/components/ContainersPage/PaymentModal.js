@@ -38,6 +38,7 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
   const [mercadoPagoUrl, setMercadoPagoUrl] = useState('');
   // Modo billing: o pagamento ativa um plano via /api/billing/subscribe + polling
   const [billingId, setBillingId] = useState(null);
+  const [billingInfo, setBillingInfo] = useState(null);
   const billingMode = typeof planId !== 'undefined' && planId !== undefined && planId !== null;
   const billingRef = useRef(null);
   // Sincroniza refs com props (evita stale closure no polling)
@@ -296,6 +297,13 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
         }
         setBillingId(data.billing_id);
         billingRef.current = data.billing_id;
+        setBillingInfo({
+          reference: data.payment_details?.zp_reference || data.payment_details?.transaction_id || data.reference_code,
+          phone: data.payment_details?.phone,
+          provider: data.payment_details?.provider,
+          amount: data.amount,
+          currency: data.currency
+        });
         if (data.payment_url) {
           // Métodos com checkout externo (ZumboPay/MercadoPago): abre o link
           setMercadoPagoUrl(data.payment_url);
@@ -752,8 +760,28 @@ const handleMercadoPagoPayment = async (token, userId) => {
               <Loader className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
               <h4 className="text-lg font-medium text-gray-900 mb-2">Aguarde...</h4>
               <p className="text-sm text-gray-600 mb-4">
-                Processando pagamento via {selectedMethodData?.name}
+                Processando pagamento via {billingInfo?.provider || selectedMethodData?.name}
               </p>
+              {billingMode && billingInfo && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900 mb-4">
+                  <div className="flex justify-between mb-1">
+                    <span>Valor:</span>
+                    <span className="font-bold">{billingInfo.currency === 'BRL' ? 'R$' : ''} {billingInfo.amount} {billingInfo.currency === 'MZN' ? 'MT' : ''}</span>
+                  </div>
+                  {billingInfo.phone && (
+                    <div className="flex justify-between mb-1">
+                      <span>Número:</span>
+                      <span className="font-mono">{billingInfo.phone}</span>
+                    </div>
+                  )}
+                  {billingInfo.reference && (
+                    <div className="flex justify-between">
+                      <span>Referência:</span>
+                      <span className="font-mono text-xs">{billingInfo.reference}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {selectedMethodData?.requiresPhone && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-sm text-yellow-800">
                   <Smartphone className="inline w-5 h-5 mr-2" />

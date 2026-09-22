@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import ContainerCard from './ContainerCard';
 import CreateContainerModal from './CreateContainerModal';
-import { loadContainers as fetchContainers, performContainerAction, createContainer, deleteContainer } from './containerService';
+import { loadContainers as fetchContainers, performContainerAction, createContainer, deleteContainer, recreateContainer } from './containerService';
 
 const ContainersPage = () => {
   const [containers, setContainers] = useState([]);
@@ -96,7 +96,12 @@ useEffect(() => {
     setActionLoading(prev => ({ ...prev, [containerId]: action }));
 
     try {
-      await performContainerAction(containerId, action);
+      if (action === 'recreate') {
+        const result = await recreateContainer(containerId);
+        alert(result.message || 'Container recriado com sucesso!');
+      } else {
+        await performContainerAction(containerId, action);
+      }
       await loadContainers();
     } catch (error) {
       alert(`Erro: ${error.message}`);

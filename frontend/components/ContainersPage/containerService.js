@@ -84,6 +84,26 @@ export const createContainer = async (containerData) => {
   }
 };
 
+export const recreateContainer = async (containerId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/containers/${containerId}/recreate`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || data.error || 'Falha ao recriar container');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erro ao recriar container:', error);
+    throw error;
+  }
+};
+
 export const deleteContainer = async (containerId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/containers/${containerId}`, {

@@ -751,6 +751,185 @@ server {
     console.log(`✅ Variáveis de ambiente aplicadas ao container ${containerId}`);
   }
 
+  /**
+   * Recria/recupera o container Docker a partir da config no banco + arquivos do usuário.
+   *
+   * Cenário: migração de VPS. O container Docker é efêmero (morre com a máquina),
+   * mas os arquivos (user-data) e o registro no banco sobrevivem. Este método:
+   *   1. Se o container Docker já existe e está rodando → nada a fazer.
+   *   2. Se existe pelo nome determinístico (mozhost_<id>) mas o ID do banco está
+   *      defasado → adota (atualiza docker_container_id no banco).
+   *   3. PHP → `docker compose up -d` na pasta restaurada recria a stack inteira
+   *      (php + mysql + phpmyadmin) com os MESMOS volumes, portas e credenciais.
+   *   4. Node/Python/Static → recria o container com a mesma imagem/porta/env/volume
+   *      e atualiza docker_container_id no banco. Os arquivos do usuário nunca são tocados.
+   */
+  async recreateContainer(containerId) {
+    const rows = await database.query('SELECT * FROM containers WHERE id = ?', [containerId]);
+    if (!rows.length) {
+      throw new Error('Container not found');
+    }
+    const c = rows[0];
+    const containerPath = path.join(this.containersPath, containerId);
+
+    // Os arquivos do usuário precisam existir (backup user-data restaurado)
+    if (!(await fs.pathExists(containerPath))) {
+      throw new Error(`Pasta de arquivos ${containerPath} não encontrada. Restaura o backup da pasta user-data antes de recriar.`);
+    }
+
+    // 1. Container já existe pelo ID salvo? Só garante o estado certo.
+    if (c.docker_container_id) {
+      try {
+        const info = await this.docker.getContainer(c.docker_container_id).inspect();
+        if (info.State?.Running) {
+          await this._setStatus(containerId, 'running');
+          return { recreated: false, reason: 'Container Docker já existe e está rodando.' };
+        }
+        if (c.type !== 'php') {
+          // Existe mas parado: iniciar já resolve
+          await this.docker.getContainer(c.docker_container_id).start();
+          await this._setStatus(containerId, 'running');
+          return { recreated: false, reason: 'Container existia (parado) e foi iniciado.' };
+        }
+        // PHP parado: cai no compose up abaixo, que sobe a stack inteira
+      } catch (_e) { /* não existe pelo ID salvo; segue */ }
+    }
+
+    // 2. Existe pelo nome determinístico? Adota e atualiza o ID no banco (só node/static,
+    //    pois no PHP o docker_container_id já É o nome determinístico).
+    if (c.type !== 'php') {
+      try {
+        const byName = await this.docker.getContainer(`mozhost_${containerId}`).inspect();
+        await database.query(
+          'UPDATE containers SET docker_container_id = ?, updated_at = NOW() WHERE id = ?',
+          [byName.Id, containerId]
+        );
+        if (!byName.State?.Running) {
+          await this.docker.getContainer(byName.Id).start();
+        }
+        await this._setStatus(containerId, 'running');
+        return { recreated: false, adopted: true, reason: 'Container encontrado pelo nome; ID atualizado no banco e container iniciado.' };
+      } catch (_e) { /* não existe; recria */ }
+    }
+
+    // 3. PHP: o docker-compose.yml restaurado na pasta tem tudo (volumes, portas,
+    //    credenciais). `up -d` é idempotente e recria o que faltar.
+    if (c.type === 'php') {
+      const composePath = path.join(containerPath, 'docker-compose.yml');
+      if (!(await fs.pathExists(composePath))) {
+        throw new Error('docker-compose.yml não encontrado na pasta do container. Restaura o backup user-data completo (com docker-compose.yml) antes de recriar.');
+      }
+      await this.composeManager.startCompose(containerPath);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await this.composeManager.enableApacheModRewrite(containerId);
+      try {
+        await this.nginxManager.createNginxConfig(containerId, c.pma_domain, c.pma_port);
+      } catch (error) {
+        console.warn('⚠️ Aviso ao recriar Nginx config (PHP):', error.message);
+      }
+      await database.query(
+        'UPDATE containers SET status = "running", updated_at = NOW() WHERE id = ?',
+        [containerId]
+      );
+      console.log(`✅ Stack PHP recriada para o container ${containerId}`);
+      return { recreated: true, type: 'php', reason: 'Stack PHP (php + mysql + phpmyadmin) recriada com sucesso.' };
+    }
+
+    // 4. Node/Python/Static: recria o container do zero com a config do banco
+    if (!c.port) {
+      throw new Error('Container sem porta registrada no banco; não é possível recriar automaticamente.');
+    }
+    const port = c.port;
+
+    let environment = {};
+    try {
+      const parsed = c.environment ? JSON.parse(c.environment) : {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        environment = parsed;
+      }
+    } catch (_e) {}
+
+    let containerConfig;
+    if (c.type === 'static') {
+      const htmlPath = path.join(containerPath, 'html');
+      await fs.ensureDir(htmlPath);
+      const nginxConfPath = path.join(containerPath, 'nginx.conf');
+      if (!(await fs.pathExists(nginxConfPath))) {
+        const nginxConf = `\nserver {\n  listen 80;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}`;
+        await fs.writeFile(nginxConfPath, nginxConf);
+      }
+      containerConfig = {
+        Image: 'nginx:alpine',
+        name: `mozhost_${containerId}`,
+        ExposedPorts: { '80/tcp': {} },
+        HostConfig: {
+          PortBindings: { '80/tcp': [{ HostPort: port.toString() }] },
+          Binds: [
+            `${htmlPath}:/usr/share/nginx/html:rw`,
+            `${nginxConfPath}:/etc/nginx/conf.d/default.conf:ro`
+          ],
+          RestartPolicy: { Name: 'unless-stopped' },
+          NetworkMode: 'bridge'
+        }
+      };
+    } else {
+      const imageConfig = this.getImageConfig(c.type);
+      containerConfig = {
+        Image: imageConfig.image,
+        name: `mozhost_${containerId}`,
+        ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
+        HostConfig: {
+          PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+          Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
+          CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
+          CpuPeriod: 100000,
+          RestartPolicy: { Name: 'unless-stopped' },
+          Binds: [`${containerPath}:/app/code:rw`],
+          NetworkMode: 'bridge'
+        },
+        Env: [
+          `NODE_ENV=production`,
+          `PORT=${imageConfig.internalPort}`,
+          ...Object.entries(environment).map(([k, v]) => `${k}=${v}`)
+        ],
+        WorkingDir: '/app',
+        Cmd: imageConfig.cmd
+      };
+    }
+
+    const wasRunning = c.status === 'running' || c.status === 'error';
+    const container = await this.docker.createContainer(containerConfig);
+
+    await database.query(
+      'UPDATE containers SET docker_container_id = ?, port = ?, status = ?, updated_at = NOW() WHERE id = ?',
+      [container.id, port, wasRunning ? 'running' : 'stopped', containerId]
+    );
+
+    if (wasRunning) {
+      try {
+        await container.start();
+      } catch (error) {
+        await this._setStatus(containerId, 'error');
+        throw new Error(`Container recriado, mas falhou ao iniciar: ${error.message}`);
+      }
+    }
+
+    try {
+      await this.nginxManager.createSiteNginxConfig(containerId, c.domain, port);
+    } catch (error) {
+      console.warn('⚠️ Aviso ao recriar Nginx config:', error.message);
+    }
+
+    console.log(`✅ Container ${containerId} (${c.type}) recriado a partir da config do banco`);
+    return {
+      recreated: true,
+      type: c.type,
+      dockerId: container.id,
+      started: wasRunning,
+      reason: 'Container recriado com sucesso a partir dos seus arquivos e configurações.'
+    };
+  }
+
   async _setStatus(containerId, status) {
     try {
       await database.query(

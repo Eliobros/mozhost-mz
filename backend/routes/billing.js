@@ -7,7 +7,10 @@ const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
 const authenticateToken = require('../middleware/auth');
 
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL_PAYMENT || 'https://alauda-api.duckdns.org/api/payment';
+// A env correta é ALAUDA_API_URL (aponta pra https://alauda-api.mozhost.shop/api/payment).
+// O antigo ALAUDA_API_URL_PAYMENT/duckdns.org era da VPS anterior — causa de cobranças
+// indo pro servidor velho e a tela ficar travada em "aguardando pagamento".
+const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.mozhost.shop/api/payment';
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ===== PLANOS =====
@@ -199,12 +202,13 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
           phone: phoneClean,
           reference: referenceCode,
-          transaction_id: alaudaData.payment?.transaction_id,
+          transaction_id: alaudaData.payment?.transaction_id || alaudaData.payment?.payment_id,
+          zp_reference: alaudaData.payment?.reference || alaudaData.payment?.payment_id,
+          push_status: alaudaData.payment?.status,
           instructions: [
             'Aguarde a notificação no seu celular',
             `Digite seu PIN ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'} para confirmar`,
-            `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
-            `Referência: ${referenceCode}`
+            `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`
           ]
         };
 
@@ -296,15 +300,13 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
             [alaudaData.payment.id, billingId]
           );
         }
-      }
-    } catch (alaudaError) {
+      }    } catch (alaudaError) {
       console.error('❌ Erro na Alauda API (billing):', alaudaError.response?.data || alaudaError.message);
 
       if (method === 'mpesa' || method === 'emola') {
         // Timeout do nosso axios, 5xx do gateway ou erro de rede: o push
         // provavelmente foi criado e o cliente ainda pode confirmar no
-        // celular. O webhook paymoz confirma depois — NÃO mostrar o fallback
-        // manual nesses casos.
+        // celular. O webhook/cron confirma depois — segue o fluxo automático.
         const pushPossivel = alaudaError.code === 'ECONNABORTED' ||
           !alaudaError.response ||
           alaudaError.response.status >= 500;
@@ -324,22 +326,16 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
             ]
           };
         } else {
-          // Erro definitivo da API (validação, API key, etc.): o pagamento
-          // nem começou. Aí sim oferece o pagamento manual como fallback.
-          const fallbackPhone = process.env[`${method.toUpperCase()}_PHONE`] || '258840000000';
-          paymentDetails = {
-            provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
-            phone: fallbackPhone,
-            reference: referenceCode,
-            manual: true,
-            instructions: [
-              `Abra o app ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'}`,
-              'Escolha "Enviar Dinheiro"',
-              `Para o número: ${fallbackPhone}`,
-              `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
-              `Referência: ${referenceCode}`
-            ]
-          };
+          // Erro definitivo da API (validação, número inválido, API key, saldo
+          // insuficiente etc.): o pagamento NEM COMEÇOU. Nada de pagamento
+          // manual — devolve o erro real pro usuário tentar de novo.
+          await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billingId]);
+          const apiMsg = alaudaError.response?.data?.error || alaudaError.response?.data?.message || alaudaError.message;
+          return res.status(502).json({
+            error: 'Não foi possível enviar o pedido de pagamento.',
+            message: apiMsg,
+            detail: 'Verifica o número e tenta novamente. Se o problema persistir, contacta o suporte.'
+          });
         }
       } else {
         // Cartão/MercadoPago: se o checkout não foi criado, marca o billing
@@ -460,6 +456,8 @@ router.get('/:id/status', authenticateToken, async (req, res) => {
       try {
         const statusRes = await axios.get(
           `${ALAUDA_API_URL}/zumbopay/status/${billing.transaction_id}`,
+          // Nota: a rota real na Alauda é /api/payment/zumbopay/status/:id e a
+          // ALAUDA_API_URL já inclui /api/payment, então este path relativo casa.
           { headers: { 'X-API-Key': ALAUDA_API_KEY }, timeout: 5000 }
         );
         const payStatus = statusRes.data?.data?.payment?.status;

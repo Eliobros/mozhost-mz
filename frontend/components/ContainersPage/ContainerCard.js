@@ -19,7 +19,8 @@ import {
   Eye,
   EyeOff,
   QrCode,
-  ExternalLink
+  ExternalLink,
+  Wrench
 } from 'lucide-react';
 
 const ContainerCard = ({ container, actionLoading, onAction, onDelete, isNearLimit, stats }) => {
@@ -387,6 +388,22 @@ Renove o plano da conta em Planos & Pagamentos para iniciar
             </button>
           )}
 
+
+          {/* Recriar (container Docker perdido, ex: migração de VPS) */}
+          {container.status === 'error' && (
+            <button
+              onClick={() => onAction(container.id, 'recreate')}
+              disabled={actionLoading === 'recreate'}
+              className="p-2 rounded-lg text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              title="Recriar container (recupera de falha/migração sem perder arquivos)"
+            >
+              {actionLoading === 'recreate' ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wrench className="w-4 h-4" />
+              )}
+            </button>
+          )}
 
           {/* QR Code - só para bots */}
           {(container.type?.toLowerCase() === 'bot-baileys' || container.type?.toLowerCase() === 'bot-wwebjs') && (
