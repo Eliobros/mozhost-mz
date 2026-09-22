@@ -95,7 +95,7 @@ const PaymentModal = ({ onClose, onSuccess, amount: initialAmount, description =
 
   const interval = setInterval(async () => {
     try {
-      const res = await fetch(`${ALAUDA_API_URL}/api/payment/debitopay/status/${paymentId}`, {
+      const res = await fetch(`${ALAUDA_API_URL}/api/payment/zumbopay/status/${paymentId}`, {
         headers: {
           'X-API-Key': process.env.NEXT_PUBLIC_ALAUDA_API_KEY
         }

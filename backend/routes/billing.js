@@ -186,7 +186,10 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
             headers: {
               'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
-            }
+            },
+            // A Alauda segura a conexão até o push ser confirmado/expirar.
+            // Cortar antes do gateway (Cloudflare ~100s) derrubar a request.
+            timeout: 90000
           }
         );
 
@@ -205,10 +208,10 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           ]
         };
 
-        if (alaudaData.payment?.transaction_id) {
+        if (alaudaData.payment?.transaction_id || alaudaData.payment?.payment_id) {
           await database.query(
             'UPDATE billing SET transaction_id = ?, status = "processing" WHERE id = ?',
-            [alaudaData.payment.transaction_id, billingId]
+            [alaudaData.payment.transaction_id || alaudaData.payment.payment_id, billingId]
           );
         }
 
@@ -229,7 +232,8 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
             headers: {
               'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 30000
           }
         );
 
@@ -245,11 +249,11 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
           url: paymentUrl
         };
 
-        if (alaudaData.payment?.payment_id) {
-          // O webhook paymoz confirma pelo transaction_id guardado aqui.
+        if (alaudaData.payment?.payment_id || alaudaData.payment?.transaction_id) {
+          // O webhook paymoz/zumbopay confirma pelo transaction_id guardado aqui.
           await database.query(
             'UPDATE billing SET transaction_id = ?, status = "processing" WHERE id = ?',
-            [alaudaData.payment.payment_id, billingId]
+            [alaudaData.payment.payment_id || alaudaData.payment.transaction_id, billingId]
           );
         }
 
@@ -272,7 +276,8 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
             headers: {
               'X-API-Key': ALAUDA_API_KEY,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 30000
           }
         );
 
@@ -296,20 +301,51 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
       console.error('❌ Erro na Alauda API (billing):', alaudaError.response?.data || alaudaError.message);
 
       if (method === 'mpesa' || method === 'emola') {
-        const fallbackPhone = process.env[`${method.toUpperCase()}_PHONE`] || '258840000000';
-        paymentDetails = {
-          provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
-          phone: fallbackPhone,
-          reference: referenceCode,
-          manual: true,
-          instructions: [
-            `Abra o app ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'}`,
-            'Escolha "Enviar Dinheiro"',
-            `Para o número: ${fallbackPhone}`,
-            `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
-            `Referência: ${referenceCode}`
-          ]
-        };
+        // Timeout do nosso axios, 5xx do gateway ou erro de rede: o push
+        // provavelmente foi criado e o cliente ainda pode confirmar no
+        // celular. O webhook paymoz confirma depois — NÃO mostrar o fallback
+        // manual nesses casos.
+        const pushPossivel = alaudaError.code === 'ECONNABORTED' ||
+          !alaudaError.response ||
+          alaudaError.response.status >= 500;
+
+        if (pushPossivel) {
+          await database.query('UPDATE billing SET status = "processing" WHERE id = ?', [billingId]);
+          paymentDetails = {
+            provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+            phone: phone.replace(/^258/, ''),
+            reference: referenceCode,
+            manual: false,
+            instructions: [
+              'Aguarde a notificação no seu celular',
+              `Digite seu PIN ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'} para confirmar`,
+              `Valor: ${amount} MT`,
+              'Assim que você confirmar, o plano é ativado automaticamente'
+            ]
+          };
+        } else {
+          // Erro definitivo da API (validação, API key, etc.): o pagamento
+          // nem começou. Aí sim oferece o pagamento manual como fallback.
+          const fallbackPhone = process.env[`${method.toUpperCase()}_PHONE`] || '258840000000';
+          paymentDetails = {
+            provider: method === 'mpesa' ? 'M-Pesa (Vodacom)' : 'E-Mola (Movitel)',
+            phone: fallbackPhone,
+            reference: referenceCode,
+            manual: true,
+            instructions: [
+              `Abra o app ${method === 'mpesa' ? 'M-Pesa' : 'E-Mola'}`,
+              'Escolha "Enviar Dinheiro"',
+              `Para o número: ${fallbackPhone}`,
+              `Valor: ${amount} ${currency === 'MZN' ? 'MT' : 'R$'}`,
+              `Referência: ${referenceCode}`
+            ]
+          };
+        }
+      } else {
+        // Cartão/MercadoPago: se o checkout não foi criado, marca o billing
+        // como failed e devolve erro em vez de deixar cobrança órfã pendente.
+        await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billingId]);
+        return res.status(502).json({ error: 'Erro ao iniciar pagamento no provedor. Tenta novamente.' });
       }
     }
 
@@ -362,20 +398,38 @@ router.post('/webhook/:method', async (req, res) => {
         }
       }
     } else if (method === 'paymoz') {
-      const { transaction_id, status: paymentStatus } = req.body;
+      const { transaction_id, status: paymentStatus, usuario_id } = req.body;
+      let billings = [];
       if (transaction_id) {
-        const billings = await database.query(
+        billings = await database.query(
           'SELECT id, user_id, plan_id FROM billing WHERE transaction_id = ? AND status IN ("pending", "processing")',
           [transaction_id]
         );
-        if (billings.length > 0) {
-          if (paymentStatus === 'completed') {
-            await activatePlan(billings[0]);
-          } else if (['failed', 'cancelled', 'expired', 'rejected'].includes(paymentStatus)) {
-            // Falhou (ex: saldo insuficiente) — não deixa o billing preso pra sempre.
-            await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billings[0].id]);
-            console.log(`❌ Billing ${billings[0].id} marcado como failed (paymoz: ${paymentStatus})`);
+        // Fallback: se o push demorou e o backend perdeu a resposta original
+        // (timeout), o billing pode ter ficado sem transaction_id. Casa pelo
+        // usuario_id devolvido pela Alauda no billing pendente mais recente.
+        if (billings.length === 0 && usuario_id) {
+          billings = await database.query(
+            `SELECT id, user_id, plan_id FROM billing
+             WHERE user_id = ? AND method IN ('mpesa', 'emola')
+               AND status IN ('pending', 'processing')
+               AND created_at > NOW() - INTERVAL 30 MINUTE
+             ORDER BY created_at DESC LIMIT 1`,
+            [usuario_id]
+          );
+          if (billings.length > 0) {
+            await database.query('UPDATE billing SET transaction_id = ? WHERE id = ?', [transaction_id, billings[0].id]);
+            console.log(`🔗 Billing ${billings[0].id} casado por usuario_id (resposta do push perdida por timeout)`);
           }
+        }
+      }
+      if (billings.length > 0) {
+        if (paymentStatus === 'completed') {
+          await activatePlan(billings[0]);
+        } else if (['failed', 'cancelled', 'expired', 'rejected'].includes(paymentStatus)) {
+          // Falhou (ex: saldo insuficiente) — não deixa o billing preso pra sempre.
+          await database.query('UPDATE billing SET status = "failed" WHERE id = ?', [billings[0].id]);
+          console.log(`❌ Billing ${billings[0].id} marcado como failed (paymoz: ${paymentStatus})`);
         }
       }
     }
@@ -405,7 +459,7 @@ router.get('/:id/status', authenticateToken, async (req, res) => {
     if (['pending', 'processing'].includes(billing.status) && billing.transaction_id) {
       try {
         const statusRes = await axios.get(
-          `${ALAUDA_API_URL}/debitopay/status/${billing.transaction_id}`,
+          `${ALAUDA_API_URL}/zumbopay/status/${billing.transaction_id}`,
           { headers: { 'X-API-Key': ALAUDA_API_KEY }, timeout: 5000 }
         );
         const payStatus = statusRes.data?.data?.payment?.status;
