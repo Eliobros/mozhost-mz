@@ -6,7 +6,7 @@ import {
   CreditCard, Smartphone, Loader2, CheckCircle2, XCircle, Clock, AlertCircle,
   X, Shield, Crown, Rocket, Zap, Star, Check, ArrowRight, History, RefreshCw,
   Server, HardDrive, Cpu, Globe, Info, ChevronDown, ChevronUp, ExternalLink,
-  Copy, Sparkles
+  Copy, Sparkles, Receipt, Download, RefreshCcw
 } from 'lucide-react';
 
 const API = 'https://api.mozhost.shop';
@@ -127,6 +127,7 @@ function BillingContent() {
 
   // History toggle
   const [showHistory, setShowHistory] = useState(false);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState(null);
 
   const showToast = useCallback((message, type = 'success') => setToast({ message, type }), []);
 
@@ -295,6 +296,32 @@ function BillingContent() {
 
   const cpy = (t) => { navigator.clipboard.writeText(t); showToast('Copiado!'); };
 
+  // ===== Baixar recibo PDF do pagamento do plano =====
+  const handleDownloadReceipt = async (billingId) => {
+    setDownloadingReceiptId(billingId);
+    try {
+      const res = await fetch(`${API}/api/billing/receipt/${billingId}`, { headers: hdrs() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao baixar recibo');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `recibo_plano_mozhost_${billingId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Erro ao baixar recibo:', err);
+      showToast(err.message || 'Erro ao baixar recibo. Tenta novamente.', 'error');
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
+
   const statusCfg = (s) => ({
     pending: { text: 'Pendente', cls: 'bg-yellow-100 text-yellow-700', icon: Clock },
     processing: { text: 'Processando', cls: 'bg-blue-100 text-blue-700', icon: RefreshCw },
@@ -318,6 +345,12 @@ function BillingContent() {
   const trialDaysLeft = trialEnds ? Math.max(0, Math.ceil((trialEnds - new Date()) / (1000 * 60 * 60 * 24))) : null;
   const trialExpired = trialDaysLeft !== null && trialDaysLeft <= 0;
   const activeSubscription = currentPlan?.active_subscription;
+  // Assinatura vencida: o plano vigente já passou da data de expiração → botão
+  // de renovação leva direto pro checkout do plano atual.
+  const subscriptionExpired = !!currentPlan?.suspended ||
+    (!!activeSubscription && new Date(activeSubscription.expires_at) <= new Date());
+  const renewPlanId = activeSubscription?.plan_id || currentPlan?.plan || 'basic';
+  const renewPlan = plans.find(p => p.id === renewPlanId);
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
@@ -348,6 +381,28 @@ function BillingContent() {
             </div>
           </div>
         </div>
+
+        {/* Renovar Plano (assinatura vencida) */}
+        {subscriptionExpired && renewPlan && (
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-red-900">Seu plano {renewPlan.name} venceu!</p>
+                <p className="text-sm text-red-700 mt-0.5">
+                  Renove agora para reativar seus containers e não perder seus dados. O pagamento confirma e o plano reativa automaticamente.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedPlan(renewPlan)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-bold text-sm shadow-lg transition-all flex-shrink-0"
+            >
+              <RefreshCcw className="w-4 h-4" />
+              Renovar Plano — {renewPlan.price_mt} MT
+            </button>
+          </div>
+        )}
 
         {/* Trial / Status Alerts */}
         {trialExpired && !activeSubscription && (
@@ -408,7 +463,7 @@ function BillingContent() {
                 key={plan.id}
                 plan={plan}
                 current={currentPlan}
-                isCurrentPlan={currentPlan?.plan === plan.id && !!activeSubscription}
+                isCurrentPlan={currentPlan?.plan === plan.id && !!activeSubscription && !subscriptionExpired}
                 onSelect={setSelectedPlan}
               />
             ))}
@@ -466,6 +521,21 @@ function BillingContent() {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.cls}`}>
                             {st.text}
                           </span>
+                          {['active', 'scheduled', 'expired'].includes(b.status) && (
+                            <button
+                              onClick={() => handleDownloadReceipt(b.id)}
+                              disabled={downloadingReceiptId === b.id}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white disabled:opacity-50 transition-all"
+                              title="Baixar recibo (PDF)"
+                            >
+                              {downloadingReceiptId === b.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Receipt className="w-3.5 h-3.5" />
+                              )}
+                              Recibo
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

@@ -139,19 +139,18 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Coins Section */}
+      {/* Assinatura Section (modelo por plano) */}
       <View style={styles.section}>
         <View style={styles.coinsCard}>
           <View style={styles.coinsHeader}>
-            <Ionicons name="wallet" size={24} color={Colors.coins} />
-            <Text style={styles.coinsAmount}>{coins}</Text>
-            <Text style={styles.coinsLabel}>coins</Text>
+            <Ionicons name="diamond" size={24} color={Colors.primary} />
+            <Text style={styles.planCardTitle}>Plano {planInfo.name}</Text>
           </View>
           <TouchableOpacity
             style={styles.buyCoinsBtn}
-            onPress={() => router.push('/coins')}>
-            <Ionicons name="cart" size={16} color="#fff" />
-            <Text style={styles.buyCoinsBtnText}>Comprar Coins</Text>
+            onPress={() => router.push('/plans')}>
+            <Ionicons name="card" size={16} color="#fff" />
+            <Text style={styles.buyCoinsBtnText}>Planos & Pagamentos</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -280,9 +279,8 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, marginTop: 20 },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.text, marginBottom: 12 },
   coinsCard: { backgroundColor: Colors.surface, borderRadius: 12, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  planCardTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
   coinsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  coinsAmount: { fontSize: 32, fontWeight: '800', color: Colors.text },
-  coinsLabel: { fontSize: 16, color: Colors.textSecondary },
   buyCoinsBtn: {
     flexDirection: 'row',
     alignItems: 'center',

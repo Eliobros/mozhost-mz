@@ -105,6 +105,7 @@ function RootLayoutNav() {
         <Stack.Screen name="qrcode" options={{ headerShown: true }} />
         <Stack.Screen name="connections" options={{ headerShown: true }} />
         <Stack.Screen name="coins" options={{ headerShown: true, title: 'Comprar Coins' }} />
+        <Stack.Screen name="plans" options={{ headerShown: true, title: 'Planos & Pagamentos' }} />
         <Stack.Screen name="suspended" options={{ headerShown: false }} />
       </Stack>
     </SafeAreaView>

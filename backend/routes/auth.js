@@ -8,7 +8,12 @@ const authMiddleware = require('../middleware/auth');
 const passport = require('../utils/passport');
 
 const router = express.Router();
-const { sendEmail, generateCode } = require('../utils/email');
+const { sendEmail, sendWelcomeEmail, generateCode } = require('../utils/email');
+
+// Verificação por WhatsApp/SMS está temporariamente indisponível (problemas no
+// número que recebe os códigos). Toda verificação cai para EMAIL — os canais
+// continuam no código para reativação futura via env WHATSAPP_SMS_ENABLED=true.
+const PHONE_VERIFICATION_ENABLED = process.env.WHATSAPP_SMS_ENABLED === 'true';
 const { sendVerificationCode, checkWhatsAppConnection } = require('../utils/whatsapp');
 const { sendSMS, formatSMSVerificationMessage } = require('../utils/sms');
 
@@ -49,7 +54,9 @@ router.post('/register', [
       });
     }
 
-    const { username, email, password, phone, countryCode, preferredVerificationMethod } = req.body;
+    const { username, email, password, phone, countryCode } = req.body;
+    // WhatsApp/SMS indisponíveis: sempre verifica por email.
+    const preferredVerificationMethod = 'email';
 
     // Verificar se usuário já existe
     const existingUser = await database.query(
@@ -61,39 +68,57 @@ if (existingUser.length > 0) {
   const user = existingUser[0];
   const isVerified = user.email_verified || user.whatsapp_verified || user.sms_verified;
 
-  // Se existe mas não verificou, reenviar código e retornar token
-  if (!isVerified && user.email === email) {
+  // Cadastro começou mas não concluiu (aba fechada, navegador reiniciou,
+  // app atualizou etc.): o email pode bater e o username vir duplicado, ou o
+  // email/username coincide com essa conta pendente. Em vez de bloquear com
+  // "já existe", retomamos o fluxo: gera novo código por email e devolve
+  // redirect=verify para o frontend ir à tela de verificação.
+  const samePendingEmail = user.email === email && !isVerified;
+  const samePendingUsername = user.username === username && !isVerified;
+
+  if (!isVerified && (samePendingEmail || samePendingUsername)) {
     const token = jwt.sign(
       { userId: user.id, username: user.username, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Reenviar código
+    // Novo código por email (único canal ativo)
     const code = generateCode(6);
     const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
     await database.query(
-      'UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?',
+      'UPDATE users SET email_verification_code = ?, email_verification_expires = ?, preferred_verification_method = "email" WHERE id = ?',
       [code, expiresAt, user.id]
     );
-    await sendEmail({
-      toEmail: user.email,
-      toName: user.username,
-      subject: 'MozHost - Novo código de verificação',
-      htmlContent: `<h2>Novo código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
-      textContent: `Seu novo código: ${code} (válido por 15 minutos)`
-    });
+    try {
+      await sendWelcomeEmail({ toEmail: user.email, toName: user.username, code });
+    } catch (e) {
+      console.error('Erro ao reenviar email de verificação (cadastro pendente):', e.message);
+    }
 
     return res.status(200).json({
-      message: 'Account already exists but not verified. New code sent.',
+      message: 'Este cadastro já existe mas ainda não foi concluído. Enviamos um novo código para o seu email — digite-o para continuar.',
       redirect: 'verify',
+      incompleteRegistration: true,
       user: {
         id: user.id,
         username: user.username,
         email: user.email,
-        preferredVerificationMethod: user.preferred_verification_method
+        preferredVerificationMethod: 'email'
       },
       token
+    });
+  }
+
+  if (!isVerified) {
+    // Conta pendente com dados diferentes: orienta retomar o fluxo original.
+    return res.status(409).json({
+      error: 'User already exists',
+      message: 'Já existe um cadastro em verificação com este username. Use o mesmo email para retomar, ou escolha outro username.',
+      incompleteRegistration: true,
+      redirect: 'verify',
+      pendingEmail: user.email,
+      pendingUsername: user.username
     });
   }
 
@@ -125,7 +150,11 @@ if (existingUser.length > 0) {
       const code = generateCode(6);
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
 
-      const verificationMethod = preferredVerificationMethod || 'email';
+      const requestedMethod = preferredVerificationMethod || 'email';
+      const verificationMethod =
+        PHONE_VERIFICATION_ENABLED && (requestedMethod === 'whatsapp' || requestedMethod === 'sms') && phone && countryCode
+          ? requestedMethod
+          : 'email';
 
       if (verificationMethod === 'whatsapp' && phone && countryCode) {
         // Verificação via WhatsApp
@@ -167,16 +196,9 @@ if (existingUser.length > 0) {
           [code, expiresAt, userId]
         );
 
-        if (process.env.RESEND_API_KEY) {
-          await sendEmail({
-            toEmail: email,
-            toName: username,
-            subject: 'MozHost - Código de verificação de email',
-            htmlContent: `<h2>Seu código</h2><p><strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
-            textContent: `Seu código: ${code} (válido por 15 minutos)`
-          });
-        }
-        console.log(`📧 Código de verificação email enviado para: ${email}`);
+        // Email de boas-vindas com código + apresentação dos planos.
+        await sendWelcomeEmail({ toEmail: email, toName: username, code });
+        console.log(`📧 Email de boas-vindas com código enviado para: ${email}`);
       }
     } catch (e) {
       console.error('Erro ao enviar código de verificação:', e.message);
@@ -828,7 +850,14 @@ router.post('/resend-code', [
     const info = await database.query('SELECT username, email, phone, country_code, email_verified, whatsapp_verified, sms_verified, preferred_verification_method FROM users WHERE id = ?', [req.user.userId]);
     if (!info.length) return res.status(404).json({ error: 'User not found' });
 
-    const verificationMethod = method || info[0].preferred_verification_method || 'email';
+    let verificationMethod = method || info[0].preferred_verification_method || 'email';
+
+    // WhatsApp/SMS indisponíveis: cai para email e já atualiza o método
+    // preferido da conta, para o frontend seguir o fluxo de email de agora em diante.
+    if (!PHONE_VERIFICATION_ENABLED && (verificationMethod === 'whatsapp' || verificationMethod === 'sms')) {
+      verificationMethod = 'email';
+      await database.query('UPDATE users SET preferred_verification_method = "email" WHERE id = ?', [req.user.userId]);
+    }
 
     if (verificationMethod === 'sms') {
       if (!info[0].phone || !info[0].country_code) {
@@ -900,15 +929,14 @@ router.post('/resend-code', [
       const expiresAt = new Date(Date.now() + (Number(process.env.EMAIL_CODE_TTL_MIN) || 15) * 60 * 1000);
       await database.query('UPDATE users SET email_verification_code = ?, email_verification_expires = ? WHERE id = ?', [code, expiresAt, req.user.userId]);
 
-      if (process.env.BREVO_API_KEY) {
-        await sendEmail({
-          toEmail: info[0].email,
-          toName: info[0].username,
-          subject: 'MozHost - Novo código de verificação',
-          htmlContent: `<p>Seu novo código: <strong>${code}</strong></p>`,
-          textContent: `Seu novo código: ${code}`
-        });
-      }
+      // Sempre envia por Resend (sendEmail já lida com a ausência de chave).
+      await sendEmail({
+        toEmail: info[0].email,
+        toName: info[0].username,
+        subject: 'MozHost - Novo código de verificação',
+        htmlContent: `<p>Seu novo código: <strong>${code}</strong></p><p>Válido por 15 minutos.</p>`,
+        textContent: `Seu novo código: ${code} (válido por 15 minutos)`
+      });
 
       res.json({ message: 'Email verification code sent' });
     }

@@ -33,7 +33,7 @@ type AuthContextType = {
   accountStatus: AccountStatus | null;
   refreshAccountStatus: () => Promise<void>;
   login: (loginStr: string, password: string) => Promise<{ needsVerification?: boolean; method?: string }>;
-  register: (data: any) => Promise<{ needsVerification?: boolean; method?: string }>;
+  register: (data: any) => Promise<{ needsVerification?: boolean; method?: string; incompleteRegistration?: boolean }>;
   verifyCode: (code: string, method: string) => Promise<any>;
   resendCode: (method: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -102,12 +102,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setToken(data.token);
     await AsyncStorage.setItem('mozhost_user', JSON.stringify(data.user));
 
+    // Cadastro começado mas não concluído: o backend devolve redirect=verify
+    // e um novo código já foi enviado por email → retomar na tela de verificação.
+    if (data.redirect === 'verify') {
+      setUser(data.user);
+      return { needsVerification: true, method: 'email', incompleteRegistration: !!data.incompleteRegistration };
+    }
+
     const u = data.user;
-    const needsVerification = u.emailVerified === false || u.whatsappVerified === false || u.smsVerified === false;
+    // WhatsApp/SMS indisponíveis: a verificação é sempre por email.
+    const needsVerification = u.emailVerified === false;
 
     if (needsVerification) {
       setUser(u);
-      return { needsVerification: true, method: u.preferredVerificationMethod || 'email' };
+      return { needsVerification: true, method: 'email' };
     }
 
     setUser(u);
@@ -115,13 +123,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const verifyCode = async (code: string, method: string) => {
-    const data = await api.verifyCode(code, method);
+    // WhatsApp/SMS indisponíveis: verificação sempre por email.
+    const effectiveMethod = method === 'whatsapp' || method === 'sms' ? 'email' : method;
+    const data = await api.verifyCode(code, effectiveMethod);
     await refreshUser();
     return data;
   };
 
   const resendCode = async (method: string) => {
-    await api.resendCode(method);
+    // O backend também faz fallback, mas enviamos 'email' direto para
+    // evitar erros de validação quando a conta não tem telefone registado.
+    const effectiveMethod = method === 'whatsapp' || method === 'sms' ? 'email' : method;
+    return api.resendCode(effectiveMethod);
   };
 
   const logout = async () => {

@@ -45,6 +45,10 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login, register, verifyCode, resendCode, setAuthUser, refreshAccountStatus } = useAuth();
 
+  // WhatsApp/SMS temporariamente indisponíveis para verificação — use email.
+  // Para reativar, basta mudar esta constante para true.
+  const PHONE_VERIFICATION_ENABLED = false;
+
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,29 +118,13 @@ export default function LoginScreen() {
           setError('Você deve aceitar os Termos e Condições');
           return;
         }
-        if (
-          (formData.preferredVerificationMethod === 'whatsapp' ||
-            formData.preferredVerificationMethod === 'sms') &&
-          !formData.phone.trim()
-        ) {
-          setError('Número de telefone é obrigatório');
-          return;
-        }
-
+        // WhatsApp/SMS indisponíveis: a verificação é sempre por email.
         const registerData: any = {
           username: formData.username,
           email: formData.email,
           password: formData.password,
-          preferredVerificationMethod: formData.preferredVerificationMethod,
+          preferredVerificationMethod: 'email',
         };
-
-        if (
-          formData.preferredVerificationMethod === 'whatsapp' ||
-          formData.preferredVerificationMethod === 'sms'
-        ) {
-          registerData.phone = formData.phone;
-          registerData.countryCode = formData.countryCode;
-        }
 
         const result = await register(registerData);
         if (result.needsVerification) {
@@ -148,7 +136,11 @@ export default function LoginScreen() {
               : result.method === 'sms'
               ? 'SMS'
               : 'e-mail';
-          setSuccess(`Código de verificação enviado para o seu ${dest}`);
+          setSuccess(
+            (result as any).incompleteRegistration
+              ? 'Encontramos um cadastro seu que ainda não foi concluído. Enviamos um novo código para o seu e-mail — digite-o abaixo para continuar. 📩'
+              : `Código de verificação enviado para o seu ${dest}`
+          );
         } else {
           // ✅ Registar push token após registo bem sucedido
           await registerPushToken(api);
@@ -158,7 +150,10 @@ export default function LoginScreen() {
         }
       }
     } catch (err: any) {
-      if (err.status === 409) {
+      if (err.status === 409 && err.incompleteRegistration) {
+        // Conta pendente com username/email diferentes: orienta retomar o fluxo.
+        setError(err.message || 'Já existe um cadastro em verificação. Use o mesmo email para retomar o fluxo.');
+      } else if (err.status === 409) {
         setError('Este usuário ou e-mail já está cadastrado');
       } else if (err.status === 401) {
         setError('Usuário ou senha incorretos');
@@ -201,14 +196,22 @@ export default function LoginScreen() {
   const handleResend = async () => {
     setIsLoading(true);
     try {
-      await resendCode(verificationMethod);
+      const data = await resendCode(verificationMethod);
+      const effectiveMethod =
+        verificationMethod === 'whatsapp' || verificationMethod === 'sms'
+          ? 'email'
+          : verificationMethod;
       const dest =
-        verificationMethod === 'whatsapp'
+        effectiveMethod === 'whatsapp'
           ? 'WhatsApp'
-          : verificationMethod === 'sms'
+          : effectiveMethod === 'sms'
           ? 'SMS'
           : 'e-mail';
-      setSuccess(`Novo código enviado para o seu ${dest}`);
+      setSuccess(
+        (data as any)?.fallbacked
+          ? 'O WhatsApp/SMS está indisponível — enviamos o código para o seu e-mail. 📧'
+          : `Novo código enviado para o seu ${dest}`
+      );
     } catch {
       setError('Erro ao reenviar código');
     } finally {
@@ -346,20 +349,36 @@ export default function LoginScreen() {
     icon: string;
     label: string;
     color: string;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.methodBtn,
-        formData.preferredVerificationMethod === method && {
-          borderColor: color,
-          backgroundColor: color + '20',
-        },
-      ]}
-      onPress={() => updateForm('preferredVerificationMethod', method)}>
+  }) => {
+    const disabled = !PHONE_VERIFICATION_ENABLED && method !== 'email';
+    return (
+      <TouchableOpacity
+        style={[
+          styles.methodBtn,
+          formData.preferredVerificationMethod === method && {
+            borderColor: color,
+            backgroundColor: color + '20',
+          },
+          disabled && { opacity: 0.45 },
+        ]}
+        disabled={disabled}
+        onPress={() => {
+          if (disabled) {
+            setError(
+              method === 'whatsapp'
+                ? 'A verificação por WhatsApp está temporariamente indisponível. Por favor, use o e-mail para receber seu código. 📧'
+                : 'A verificação por SMS está temporariamente indisponível. Por favor, use o e-mail para receber seu código. 📧'
+            );
+            return;
+          }
+          updateForm('preferredVerificationMethod', method);
+        }}>
       <Ionicons name={icon as any} size={20} color={color} />
-      <Text style={[styles.methodLabel, { color }]}>{label}</Text>
-    </TouchableOpacity>
-  );
+        <Text style={[styles.methodLabel, { color }]}>{label}</Text>
+        {disabled && <Text style={styles.methodDisabledTag}>Indisponível</Text>}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -811,6 +830,11 @@ const styles = StyleSheet.create({
   methodLabel: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  methodDisabledTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fbbf24',
   },
   phoneSection: {
     backgroundColor: 'rgba(34,197,94,0.1)',

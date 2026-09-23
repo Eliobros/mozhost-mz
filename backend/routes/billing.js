@@ -3,9 +3,33 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const PDFDocument = require('pdfkit');
 const database = require('../models/database');
 const dockerManager = require('../utils/docker-manager');
 const authenticateToken = require('../middleware/auth');
+const { sendPlanActivatedEmail } = require('../utils/email');
+
+// Dispara o email de plano ativado/renovado sem quebrar o fluxo de ativação
+// se o envio falhar (ex: Resend fora do ar).
+async function notifyPlanActivated(user, plan, { currency, amount, isScheduled, expiresAt }) {
+  try {
+    if (!user?.email) return;
+    await sendPlanActivatedEmail({
+      toEmail: user.email,
+      toName: user.username,
+      planName: plan.name,
+      amount: parseFloat(amount).toFixed(2),
+      currency: currency === 'BRL' ? 'R$' : 'MT',
+      isRenewal: !isScheduled,
+      isScheduled,
+      expiresAt,
+      pendingPlanName: isScheduled ? plan.name : null
+    });
+    console.log(`📧 Email de plano ${isScheduled ? 'agendado' : 'ativado'} enviado para ${user.email}`);
+  } catch (e) {
+    console.error('Erro ao enviar email de plano ativado:', e.message);
+  }
+}
 
 // A env correta é ALAUDA_API_URL (aponta pra https://alauda-api.mozhost.shop/api/payment).
 // O antigo ALAUDA_API_URL_PAYMENT/duckdns.org era da VPS anterior — causa de cobranças
@@ -479,6 +503,150 @@ router.get('/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
+// ===== GET /api/billing/receipt/:billingId — Recibo PDF do pagamento do plano =====
+// Modelo de assinatura: o recibo cobre a compra inicial do plano e também as
+// renovações (toda ativação de billing gera linha nesta tabela).
+router.get('/receipt/:billingId', authenticateToken, async (req, res) => {
+  try {
+    const { billingId } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    const billings = await database.query(
+      `SELECT b.*, u.username, u.email
+       FROM billing b
+       LEFT JOIN users u ON b.user_id = u.id
+       WHERE b.id = ? AND b.user_id = ?`,
+      [billingId, userId]
+    );
+
+    if (!billings.length) return res.status(404).json({ error: 'Pagamento não encontrado' });
+    const billing = billings[0];
+
+    if (!['active', 'scheduled', 'expired'].includes(billing.status)) {
+      return res.status(400).json({ error: 'Só é possível emitir recibo de pagamentos confirmados' });
+    }
+
+    const plan = PLANS.find(p => p.id === billing.plan_id);
+    const planName = plan?.name || billing.plan_id;
+    const isRenewal = ['active', 'expired'].includes(billing.status) &&
+      billing.activated_at &&
+      new Date(billing.created_at).getTime() !== new Date(billing.activated_at).getTime();
+
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const filename = `recibo_plano_${billingId}_${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    // === HEADER ===
+    doc
+      .fontSize(28)
+      .fillColor('#1e40af')
+      .text('MOZHOST', 50, 50, { align: 'center' })
+      .fontSize(10)
+      .fillColor('#6b7280')
+      .text('Hospedagem de Bots & APIs', { align: 'center' })
+      .moveDown(0.5)
+      .text('mozhost.shop', { align: 'center' });
+
+    doc.moveTo(50, 120).lineTo(545, 120).stroke('#e5e7eb');
+
+    // === STATUS ===
+    doc
+      .fontSize(20)
+      .fillColor('#16a34a')
+      .text('✓ PAGO', 50, 140, { align: 'center' })
+      .moveDown(1);
+
+    doc
+      .fontSize(16)
+      .fillColor('#111827')
+      .text(isRenewal ? 'RECIBO DE RENOVAÇÃO DE PLANO' : 'RECIBO DE ASSINATURA DE PLANO', { align: 'center' })
+      .moveDown(2);
+
+    // === DADOS ===
+    const startY = 220;
+    const lineHeight = 25;
+
+    const info = [
+      { label: 'Nº do Recibo:', value: `BIL-${billing.id}` },
+      { label: 'Referência:', value: billing.reference_code || 'N/A' },
+      { label: 'ID da Transação:', value: billing.transaction_id || 'N/A' },
+      { label: 'Nome:', value: billing.username || 'N/A' },
+      { label: 'Email:', value: billing.email || 'N/A' },
+      { label: 'Plano:', value: `${planName} (mensal)` },
+      { label: 'Valor Pago:', value: `${billing.currency === 'BRL' ? 'R$' : 'MT'} ${parseFloat(billing.amount).toFixed(2)}` },
+      { label: 'Método:', value: (billing.method || '').toUpperCase() },
+      { label: 'Data do Pagamento:', value: new Date(billing.activated_at || billing.created_at).toLocaleString('pt-BR') },
+      { label: 'Status:', value: 'Confirmado' }
+    ];
+
+    info.forEach((item, index) => {
+      const y = startY + (index * lineHeight);
+      doc
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(item.label, 80, y, { width: 160, align: 'left' })
+        .fontSize(12)
+        .fillColor('#111827')
+        .text(item.value, 250, y, { width: 250, align: 'left' });
+    });
+
+    // === BOX DE VIGÊNCIA ===
+    const boxY = startY + (info.length * lineHeight) + 30;
+
+    doc
+      .rect(50, boxY, 495, 60)
+      .fillAndStroke('#f3f4f6', '#e5e7eb');
+
+    doc
+      .fontSize(10)
+      .fillColor('#374151')
+      .text('Vigência do Plano:', 60, boxY + 15)
+      .fontSize(12)
+      .fillColor('#1e40af')
+      .text(
+        billing.activated_at && billing.expires_at
+          ? `${new Date(billing.activated_at).toLocaleDateString('pt-BR')} até ${new Date(billing.expires_at).toLocaleDateString('pt-BR')}`
+          : '30 dias a partir da data do pagamento',
+        60,
+        boxY + 32
+      );
+
+    // === RODAPÉ ===
+    doc
+      .moveTo(50, 740)
+      .lineTo(545, 740)
+      .stroke('#e5e7eb');
+
+    doc
+      .fontSize(8)
+      .fillColor('#9ca3af')
+      .text(
+        'Este documento é um comprovante válido de pagamento.\nGuarde-o para controle e referência futura.',
+        50,
+        750,
+        { align: 'center', width: 495 }
+      );
+
+    doc
+      .fontSize(7)
+      .fillColor('#d1d5db')
+      .text(
+        `Gerado em: ${new Date().toLocaleString('pt-BR')} | MozHost © ${new Date().getFullYear()}`,
+        50,
+        770,
+        { align: 'center' }
+      );
+
+    doc.end();
+  } catch (error) {
+    console.error('Erro ao gerar recibo do plano:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'Erro ao gerar recibo' });
+  }
+});
+
 // ===== GET /api/billing/history =====
 router.get('/history', authenticateToken, async (req, res) => {
   try {
@@ -566,6 +734,15 @@ async function activatePlan(billing) {
         title: `Upgrade para ${plan.name} agendado`,
         message: `O pagamento foi confirmado. O plano ${plan.name} será aplicado na renovação do seu ciclo atual.`
       });
+      const scheduledExpires = active[0]?.expires_at
+        ? new Date(active[0].expires_at).toLocaleDateString('pt-BR')
+        : new Date().toLocaleDateString('pt-BR');
+      await notifyPlanActivated(user, plan, {
+        currency,
+        amount: billing.amount,
+        isScheduled: true,
+        expiresAt: scheduledExpires
+      });
       return;
     }
 
@@ -618,6 +795,15 @@ async function activatePlan(billing) {
         title: `Downgrade para ${plan.name} aplicado`,
         message: `Os limites do plano ${plan.name} já estão ativos. Containers excedentes foram preservados, mas não poderão ser iniciados.`
       });
+      const downExpires = currentExpires
+        ? new Date(currentExpires).toLocaleDateString('pt-BR')
+        : new Date().toLocaleDateString('pt-BR');
+      await notifyPlanActivated(user, plan, {
+        currency: billing.currency,
+        amount: billing.amount,
+        isScheduled: false,
+        expiresAt: downExpires
+      });
       return;
     }
 
@@ -650,6 +836,12 @@ async function activatePlan(billing) {
       category: 'billing',
       title: `Plano ${plan.name} ativado! 🎉`,
       message: `Seu plano foi ativado com sucesso e expira em ${expiresAt.toLocaleDateString('pt-BR')}.`
+    });
+    await notifyPlanActivated(user, plan, {
+      currency: billing.currency,
+      amount: billing.amount,
+      isScheduled: false,
+      expiresAt: expiresAt.toLocaleDateString('pt-BR')
     });
   } catch (error) {
     console.error('Erro ao ativar plano:', error);

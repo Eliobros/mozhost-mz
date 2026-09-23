@@ -357,17 +357,21 @@ export default function ContainersScreen() {
                 {sub?.expired && (
                   <View style={styles.subExpired}>
                     <Ionicons name="alert-circle" size={16} color="#fff" />
-                    <Text style={styles.subExpiredText}>Plano da conta expirado — renove em Planos & Pagamentos</Text>
-
+                    <Text style={styles.subExpiredText}>Plano da conta expirado — renove para reativar</Text>
+                    <TouchableOpacity style={styles.subRenewBtn} onPress={() => router.push('/plans')}>
+                      <Text style={styles.subRenewBtnText}>Renovar</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
                 {sub?.expiringSoon && !sub?.expired && (
                   <View style={styles.subExpiring}>
                     <Ionicons name="time" size={16} color="#fff" />
                     <Text style={styles.subExpiringText}>
-                      Plano da conta expira em {sub.daysLeft} {sub.daysLeft === 1 ? 'dia' : 'dias'} — renove em Planos & Pagamentos.
+                      Plano da conta expira em {sub.daysLeft} {sub.daysLeft === 1 ? 'dia' : 'dias'}.
                     </Text>
-
+                    <TouchableOpacity style={styles.subRenewBtnYellow} onPress={() => router.push('/plans')}>
+                      <Text style={styles.subRenewBtnYellowText}>Renovar</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 

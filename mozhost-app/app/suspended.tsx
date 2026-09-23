@@ -68,13 +68,16 @@ export default function SuspendedScreen() {
           </View>
 
           {/* Ações */}
-          <TouchableOpacity style={[styles.button, styles.whatsappButton]} onPress={openWhatsApp}>
-            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Enviar comprovante no WhatsApp</Text>
+          <TouchableOpacity
+            style={[styles.button, styles.primaryButton]}
+            onPress={() => router.replace('/plans')}
+          >
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Renovar plano agora</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
+            style={[styles.button, styles.webButton]}
             onPress={() => Linking.openURL('https://mozhost.shop/billing')}
           >
             <Ionicons name="globe" size={20} color="#fff" />
@@ -219,6 +222,9 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: Colors.primary,
+  },
+  webButton: {
+    backgroundColor: Colors.gradient.middle,
   },
   buttonText: {
     color: '#fff',

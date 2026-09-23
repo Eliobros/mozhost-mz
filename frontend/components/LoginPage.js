@@ -8,6 +8,9 @@ import CountrySelector from './CountrySelector';
 const API_URL = 'https://api.mozhost.shop';
 
 const LoginPage = () => {
+  // WhatsApp/SMS temporariamente indisponíveis para verificação — use email.
+  // Para reativar, basta mudar esta constante para true.
+  const PHONE_VERIFICATION_ENABLED = false;
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -171,6 +174,21 @@ const LoginPage = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Cadastro começado mas não concluído (aba fechada, app reiniciou etc.):
+        // o backend devolve redirect=verify → vai direto à tela de verificação.
+        if (!isLogin && data.redirect === 'verify') {
+          localStorage.setItem('mozhost_token', data.token);
+          localStorage.setItem('mozhost_user', JSON.stringify(data.user));
+          setPendingToken(data.token);
+          setShowVerifyStep(true);
+          setSuccess(
+            data.incompleteRegistration === false
+              ? 'Enviamos um novo código para o seu e-mail.'
+              : 'Encontramos um cadastro seu que ainda não foi concluído. Enviamos um novo código para o seu e-mail — digite-o abaixo para continuar. 📩'
+          );
+          return;
+        }
+
         localStorage.setItem('mozhost_token', data.token);
         localStorage.setItem('mozhost_user', JSON.stringify(data.user));
 
@@ -182,7 +200,7 @@ const LoginPage = () => {
           if (needsEmailVerification || needsWhatsAppVerification || needsSMSVerification) {
             setShowVerifyStep(true);
             setPendingToken(data.token);
-            const method = data.user.preferredVerificationMethod || 'email';
+            const method = PHONE_VERIFICATION_ENABLED ? (data.user.preferredVerificationMethod || 'email') : 'email';
             const destination = method === 'whatsapp' ? 'WhatsApp' : method === 'sms' ? 'SMS' : 'e-mail';
 
             // Se a Meta bloqueou o envio (política 24h, sem template), pedimos
@@ -215,7 +233,10 @@ setTimeout(() => {
 
 
       } else {
-        if (response.status === 409) {
+        if (response.status === 409 && data.incompleteRegistration) {
+          // Conta pendente com username/email diferentes: orienta retomar o fluxo.
+          setError(data.message || 'Já existe um cadastro em verificação. Use o mesmo email para retomar o fluxo.');
+        } else if (response.status === 409) {
           setError('Este usuário ou e-mail já está cadastrado. Tente fazer login.');
         } else if (response.status === 401) {
           setError('Usuário ou senha incorretos. Verifique suas credenciais.');
@@ -590,32 +611,32 @@ setTimeout(() => {
 
                       <button
                         type="button"
-                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'whatsapp'})}
-                        className={`p-3 rounded-lg border transition-all ${
-                          formData.preferredVerificationMethod === 'whatsapp' 
-                            ? 'border-green-500 bg-green-500/20' 
-                            : 'border-white/20 bg-white/10'
-                        }`}
+                        disabled
+                        onClick={() =>
+                          setError('A verificação por WhatsApp está temporariamente indisponível. Por favor, use o e-mail para receber seu código. 📧')
+                        }
+                        className={`p-3 rounded-lg border transition-all opacity-50 cursor-not-allowed border-white/20 bg-white/10`}
                       >
                         <div className="flex items-center justify-center mb-2">
                           <MessageCircle className="w-5 h-5 text-green-300" />
                         </div>
                         <div className="text-white text-xs font-medium">WhatsApp</div>
+                        <div className="text-blue-300 text-[10px] mt-0.5">Indisponível</div>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setFormData({...formData, preferredVerificationMethod: 'sms'})}
-                        className={`p-3 rounded-lg border transition-all ${
-                          formData.preferredVerificationMethod === 'sms' 
-                            ? 'border-blue-500 bg-blue-500/20' 
-                            : 'border-white/20 bg-white/10'
-                        }`}
+                        disabled
+                        onClick={() =>
+                          setError('A verificação por SMS está temporariamente indisponível. Por favor, use o e-mail para receber seu código. 📧')
+                        }
+                        className={`p-3 rounded-lg border transition-all opacity-50 cursor-not-allowed border-white/20 bg-white/10`}
                       >
                         <div className="flex items-center justify-center mb-2">
                           <MessageSquare className="w-5 h-5 text-blue-300" />
                         </div>
                         <div className="text-white text-xs font-medium">SMS</div>
+                        <div className="text-blue-300 text-[10px] mt-0.5">Indisponível</div>
                       </button>
                     </div>
                   </div>
