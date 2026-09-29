@@ -14,7 +14,8 @@ const menuItems = [
   { id: 'containers', label: 'Containers', icon: '🐳' },
   { id: 'coins', label: 'Coins', icon: '💰' },
   { id: 'campaigns', label: 'Campanhas', icon: '📧' },
-  { id: 'support-agents', label: 'Agentes Suporte', icon: '🎧' }
+  { id: 'support-agents', label: 'Agentes Suporte', icon: '🎧' },
+  { id: 'agent-config', label: 'Config. Agentes', icon: '⚙️' }
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, isOpen = false, onClose }) => {

@@ -276,6 +276,9 @@ const pushRoutes = require('./routes/push');
 app.use('/api/push', pushRoutes);
 const whatsappRoutes = require('./routes/whatsapp');
 app.use('/api/whatsapp', whatsappRoutes);
+
+// 🎧 CRUD de agentes de suporte (painel admin → Config. Agentes)
+app.use('/api/agents', require('./routes/agents'));
 const emailForwarding = require('./routes/emailForwarding');
 const passkeysRouter = require('./routes/passkeys');
 app.use('/api/passkeys', passkeysRouter);

@@ -159,8 +159,8 @@ export const SupportAgents: React.FC<SupportAgentsProps> = ({ password }) => {
           <div className="text-3xl mb-3">👥</div>
           <div className="font-medium">Nenhum agente configurado ainda.</div>
           <p className="text-xs mt-2">
-            Define o env <code className="bg-gray-100 px-1 rounded">SUPPORT_AGENT_NUMBERS</code> ou
-            insere linhas em <code className="bg-gray-100 px-1 rounded">support_agents</code>.
+            Cadastra agentes na aba <strong>⚙️ Config. Agentes</strong> (tabela{' '}
+            <code className="bg-gray-100 px-1 rounded">support_agents</code>).
           </p>
         </div>
       ) : (

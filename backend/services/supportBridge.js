@@ -7,10 +7,38 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 let _io = null;
 
-const AGENT_NUMBERS = (process.env.SUPPORT_AGENT_NUMBERS || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+// ─── Agentes (tabela support_agents — geridos no painel admin) ──────────────
+// Cache de 30s para não bater no banco a cada mensagem recebida.
+const AGENTS_CACHE_TTL_MS = 30_000;
+let _agentsCache = { numbers: [], at: 0 };
+
+async function getAgentNumbers() {
+  const now = Date.now();
+  if (now - _agentsCache.at < AGENTS_CACHE_TTL_MS) return _agentsCache.numbers;
+  try {
+    const rows = await database.query(
+      'SELECT phone FROM support_agents WHERE active = TRUE'
+    );
+    _agentsCache = {
+      numbers: rows.map((r) => normalizePhone(r.phone)).filter(Boolean),
+      at: now,
+    };
+    if (_agentsCache.numbers.length === 0) {
+      console.warn(
+        '⚠️  Nenhum agente ativo na tabela support_agents. Cadastre no painel admin (Config. Agentes).'
+      );
+    }
+  } catch (err) {
+    console.error('❌ Erro ao carregar agentes do banco:', err.message);
+    _agentsCache = { numbers: [], at: now }; // evita martelar o banco a cada msg
+  }
+  return _agentsCache.numbers;
+}
+
+/** Chamar após CRUD de agentes no painel para refletir mudanças já no próximo evento. */
+function invalidateAgentCache() {
+  _agentsCache.at = 0;
+}
 
 const NEW_TICKET_TEMPLATE = process.env.WHATSAPP_TEMPLATE_NEW_TICKET || 'alerta_novo_suporte';
 
@@ -54,12 +82,9 @@ function sameAgent(a, b) {
   return false;
 }
 
-function isAgentMessage(phone) {
-  if (AGENT_NUMBERS.length === 0) {
-    console.warn('⚠️  SUPPORT_AGENT_NUMBERS vazio — nenhum número será reconhecido como agente.');
-    return false;
-  }
-  return AGENT_NUMBERS.some((a) => sameAgent(a, phone));
+async function isAgentMessage(phone) {
+  const agents = await getAgentNumbers();
+  return agents.some((a) => sameAgent(a, phone));
 }
 
 /**
@@ -107,15 +132,12 @@ function init(io) {
   if (!wa.isConfigured()) {
     console.warn('⚠️  WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID não configurados.');
   }
-  if (AGENT_NUMBERS.length === 0) {
-    console.warn(
-      '⚠️  SUPPORT_AGENT_NUMBERS não configurado.\n' +
-        '   Nenhum número WhatsApp será reconhecido como agente.\n' +
-        '   Defina no .env: SUPPORT_AGENT_NUMBERS=258840075123,258840075124'
-    );
-  } else {
-    console.log(`👥 ${AGENT_NUMBERS.length} agente(s) configurado(s):`, AGENT_NUMBERS);
-  }
+  // Pré-carrega a lista de agentes (tabela support_agents) só para logar o estado
+  getAgentNumbers()
+    .then((n) => {
+      if (n.length > 0) console.log(`👥 ${n.length} agente(s) ativo(s) no banco:`, n);
+    })
+    .catch(() => {});
   console.log('✅ SupportBridge iniciado (WhatsApp Cloud API)');
 }
 
@@ -174,7 +196,8 @@ async function notifyAgents({ ticketId, user, summary, lastMessage }) {
   }
 
   // A Cloud API não tem grupos: o template vai para cada agente individualmente.
-  for (const n of AGENT_NUMBERS) {
+  const agents = await getAgentNumbers();
+  for (const n of agents) {
     const to = normalizePhone(n);
     try {
       await wa.sendTemplate({
@@ -239,7 +262,8 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
 // ─── Notificar outros agentes ─────────────────────────────────────────────────
 
 async function notifyOtherAgents({ ticketId, agentName, agentPhone }) {
-  const others = AGENT_NUMBERS.filter((n) => !sameAgent(n, agentPhone));
+  const agents = await getAgentNumbers();
+  const others = agents.filter((n) => !sameAgent(n, agentPhone));
   for (const n of others) {
     await sendAgent(n, `ℹ️ O ticket #${ticketId} foi aceite por ${agentName}.`);
   }
@@ -570,7 +594,7 @@ const BUTTON_PAYLOAD_REGEX = /^(aceitar|recusar):(\d+)$/i;
 async function handleIncomingMessage(ev) {
   const phone = normalizePhone(ev.from);
 
-  if (!isAgentMessage(phone)) return false;
+  if (!(await isAgentMessage(phone))) return false;
 
   const agentName = await getAgentName(phone);
 
@@ -695,4 +719,6 @@ module.exports = {
   normalizePhone,
   sameAgent,
   isAgentMessage,
+  getAgentNumbers,
+  invalidateAgentCache,
 };

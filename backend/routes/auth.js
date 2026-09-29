@@ -1374,9 +1374,7 @@ adminRouter.get('/support/agents/reports', async (req, res) => {
       }));
     }
 
-    // 4. Merge: stats + nomes de support_agents + nºs do env ainda sem atividade.
-    const envNumbers = (process.env.SUPPORT_AGENT_NUMBERS || '')
-      .split(',').map(s => s.trim()).filter(Boolean);
+    // 4. Merge: stats + nomes de support_agents (agentes geridos no painel admin).
     const normalize = (p) => (p || '').replace(/\D/g, '');
 
     const reports = stats.map(s => {
@@ -1415,7 +1413,6 @@ adminRouter.get('/support/agents/reports', async (req, res) => {
       });
     };
     for (const a of dbAgents) addFrom(a.phone, a.agent_name);
-    for (const p of envNumbers) addFrom(p);
 
     // 5. Tickets em fila sem agente (queue stats).
     const unclaimed = await database.query(
