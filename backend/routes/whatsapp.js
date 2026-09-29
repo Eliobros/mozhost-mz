@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const whatsapp = require('../utils/whatsapp');
+const whatsapp = require('../services/whatsappCloud');
 
 // Verificar status da conexão (Cloud API: configurado com token + Phone Number ID)
 router.get('/status', (req, res) => {

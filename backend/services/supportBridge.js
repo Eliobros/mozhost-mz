@@ -1,40 +1,25 @@
 // services/supportBridge.js
-// Bridge bidirecional: painel do usuário ↔ agente no WhatsApp via Baileys
+// Bridge bidirecional: painel do usuário ↔ agente no WhatsApp via API oficial (Cloud API)
 
 const database = require('../models/database');
+const wa = require('./whatsappCloud');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Decodifica um JID do WhatsApp sem depender do Baileys (que é ESM-only e
-// não pode ser usado via require() em CommonJS). Equivalente ao antigo
-// jidDecode do Baileys para os campos que usamos.
-//   "258840075123@s.whatsapp.net" → { user: "258840075123", server: "s.whatsapp.net" }
-//   "258840075123:42@c.us"        → { user: "258840075123", server: "c.us" }
-function decodeJid(jid) {
-  if (!jid) return null;
-  const str = String(jid);
-  const atIndex = str.lastIndexOf('@');
-  if (atIndex === -1) return null;
-  const user = str.slice(0, atIndex).split(':')[0];
-  const server = str.slice(atIndex + 1);
-  if (!user) return null;
-  return { user, server };
-}
-
-// ─── Referências injetadas no init() ────────────────────────────────────────
 let _io = null;
-let _waSocket = null;
 
-const AGENT_NUMBERS = (process.env.SUPPORT_AGENT_NUMBERS || '').split(',').filter(Boolean);
-const AGENT_GROUP_JID = process.env.SUPPORT_AGENT_GROUP_JID || null;
+const AGENT_NUMBERS = (process.env.SUPPORT_AGENT_NUMBERS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const NEW_TICKET_TEMPLATE = process.env.WHATSAPP_TEMPLATE_NEW_TICKET || 'alerta_novo_suporte';
 
 // ─── Helpers de normalização de telefone ────────────────────────────────────
 
 /**
- * Normaliza um JID/número cru para apenas dígitos.
- *  - 258840075123@s.whatsapp.net  → 258840075123
- *  - 258840075123:42@c.us          → 258840075123
- *  - 123456@lid                    → 123456
- *  - +258 84 007 5123              → 258840075123
+ * Normaliza um número cru para apenas dígitos.
+ *  - +258 84 007 5123 → 258840075123
+ *  - 258840075123@s.whatsapp.net → 258840075123
  */
 function normalizePhone(raw) {
   if (raw === null || raw === undefined) return '';
@@ -43,61 +28,10 @@ function normalizePhone(raw) {
 }
 
 /**
- * Extrai o número de telefone real do autor de uma mensagem do Baileys,
- * ignorando JIDs LID-only (cujo `user` é um identificador e NÃO o telefone).
- *
- * Ordem de prioridade:
- *   1. msg.key.participantPn  → PN real do participante (se disponível)
- *   2. msg.key.participant    → JID do participante (PN ou LID)
- *   3. msg.key.remoteJid      → JID do chat 1-1
- *
- * Só considera candidatos cujo `server` é `s.whatsapp.net` ou `c.us`
- * (que indicam JID baseado em número de telefone). Candidatos LID
- * (`server === 'lid'`) são ignorados nesta etapa, porque o `user`
- * nesses JIDs é o LID em si, não o telefone — compará-lo com
- * SUPPORT_AGENT_NUMBERS produziria falsos negativos.
- *
- * Se nenhum candidato tiver o PN, faz fallback para normalizePhone,
- * preservando o comportamento anterior.
- */
-function extractAgentPhone(msg) {
-  const candidates = [
-    msg?.key?.remoteJidAlt,    // ← PV com @lid: número real aqui
-    msg?.key?.participantPn,   // ← grupos: PN real do participante
-    msg?.key?.participant,     // ← grupos: JID do participante
-    msg?.key?.remoteJid,       // ← fallback geral
-  ];
-
-  for (const c of candidates) {
-    if (!c) continue;
-    try {
-      const decoded = decodeJid(c);
-      if (!decoded) continue;
-      if (decoded.server !== 's.whatsapp.net' && decoded.server !== 'c.us') continue;
-      const digits = String(decoded.user || '').replace(/[^\d]/g, '');
-      if (digits.length >= 8) return digits;
-    } catch {
-      // candidato mal-formado — ignora e tenta o próximo
-    }
-  }
-
-  // Fallback: comportamento antigo (usado se nenhum candidato tiver PN).
-  for (const c of candidates) {
-    if (!c) continue;
-    const d = normalizePhone(c);
-    if (d) return d;
-  }
-  return '';
-}
-
-/**
  * Compara dois números tolerando variações (com/sem código de país).
- *
- * Casos contemplados:
- *   - 258841234567 vs 258841234567 → match (exact)
+ *   - 258841234567 vs 258841234567 → match
  *   - 258841234567 vs 841234567    → match (com/sem DDI MZ +258)
- *   - 258841234567 vs 258861234567 → NO match (pessoas diferentes)
- *   - 841234567 vs 258861234567    → NO match
+ *   - 258841234567 vs 258861234567 → NO match
  */
 function sameAgent(a, b) {
   const na = normalizePhone(a);
@@ -105,16 +39,13 @@ function sameAgent(a, b) {
   if (!na || !nb) return false;
   if (na === nb) return true;
 
-  const hasCountry = (n) => n.length >= 11; // DDI + DDD + 9 dígitos
+  const hasCountry = (n) => n.length >= 11;
   const aHas = hasCountry(na);
   const bHas = hasCountry(nb);
 
-  // Caso onde só um dos lados tem DDI: emparelha últimos N dígitos do que
-  // tem DDI com o número curto. Evita falsos positivos entre números
-  // moçambicanos que partilham só os últimos 8.
   if (aHas !== bHas) {
     const withCountry = aHas ? na : nb;
-    const noCountry    = aHas ? nb : na;
+    const noCountry = aHas ? nb : na;
     if (noCountry.length >= 8 && noCountry.length <= 10) {
       return withCountry.endsWith(noCountry);
     }
@@ -126,22 +57,30 @@ function sameAgent(a, b) {
 function isAgentMessage(phone) {
   if (AGENT_NUMBERS.length === 0) {
     console.warn('⚠️  SUPPORT_AGENT_NUMBERS vazio — nenhum número será reconhecido como agente.');
-//    console.log("Mensagem completa:", JSON.stringify(msg, null, 2));
     return false;
   }
-  return AGENT_NUMBERS.some(a => sameAgent(a, phone));
+  return AGENT_NUMBERS.some((a) => sameAgent(a, phone));
 }
 
 /**
- * Envia uma mensagem para um agente (jid = phone@s.whatsapp.net).
+ * Envia texto livre a um agente. Só funciona se o agente escreveu para o
+ * número do bot nas últimas 24h (janela de atendimento da Meta).
+ * Devolve true/false em vez de lançar erro.
  */
 async function sendAgent(agentPhone, text) {
-  if (!_waSocket) return;
+  if (!wa.isConfigured()) return false;
   try {
-    const jid = `${normalizePhone(agentPhone)}@s.whatsapp.net`;
-    await _waSocket.sendMessage(jid, { text });
+    await wa.sendText(normalizePhone(agentPhone), text);
+    return true;
   } catch (err) {
-    console.error(`❌ Falha ao enviar msg para agente ${agentPhone}:`, err.message);
+    if (err.code === wa.WINDOW_CLOSED_CODE) {
+      console.warn(
+        `⚠️  Janela de 24h fechada para o agente ${agentPhone} — texto livre não enviado.`
+      );
+    } else {
+      console.error(`❌ Falha ao enviar msg para agente ${agentPhone}:`, err.message);
+    }
+    return false;
   }
 }
 
@@ -160,42 +99,40 @@ const SENTIMENT_LABELS = {
   negativo: '😟 Negativo',
   muito_negativo: '😡 Muito negativo',
 };
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
-function init(io, waSocket) {
+function init(io) {
   _io = io;
-  _waSocket = waSocket;
+  if (!wa.isConfigured()) {
+    console.warn('⚠️  WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID não configurados.');
+  }
   if (AGENT_NUMBERS.length === 0) {
     console.warn(
       '⚠️  SUPPORT_AGENT_NUMBERS não configurado.\n' +
-      '   Nenhum número WhatsApp será reconhecido como agente.\n' +
-      '   Defina no .env: SUPPORT_AGENT_NUMBERS=258840075123,258840075124'
+        '   Nenhum número WhatsApp será reconhecido como agente.\n' +
+        '   Defina no .env: SUPPORT_AGENT_NUMBERS=258840075123,258840075124'
     );
   } else {
     console.log(`👥 ${AGENT_NUMBERS.length} agente(s) configurado(s):`, AGENT_NUMBERS);
   }
-  console.log('✅ SupportBridge iniciado');
+  console.log('✅ SupportBridge iniciado (WhatsApp Cloud API)');
 }
 
-function attachSocket(waSocket) {
-  _waSocket = waSocket;
-  console.log('🔄 SupportBridge: socket Baileys actualizado');
-}
+// Mantido só por compatibilidade com o código antigo (não faz nada).
+function attachSocket() {}
 
 // ─── Criar ticket ─────────────────────────────────────────────────────────────
 
 async function createTicket({ userId, summary, lastMessage, conversationHistory = [] }) {
-  const users = await database.query(
-    'SELECT id, username, email FROM users WHERE id = ?',
-    [userId]
-  );
+  const users = await database.query('SELECT id, username, email FROM users WHERE id = ?', [
+    userId,
+  ]);
 
   if (users.length === 0) throw new Error('Usuário não encontrado');
   const user = users[0];
 
-  // INSERT atômico: só cria se NÃO existir ticket waiting/active para o
-  // usuário. Elimina a corrida (TOCTOU) entre o SELECT e o INSERT anteriores,
-  // que podia gerar tickets duplicados em requisições simultâneas.
+  // INSERT atômico: só cria se NÃO existir ticket waiting/active para o usuário.
   const result = await database.query(
     `INSERT INTO support_tickets
        (user_id, status, summary, last_message, conversation_history, created_at)
@@ -228,34 +165,33 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
   return { ticketId, userId, username: user.username };
 }
 
-// ─── Notificar agentes ────────────────────────────────────────────────────────
+// ─── Notificar agentes (template com botões Aceitar / Recusar) ───────────────
 
 async function notifyAgents({ ticketId, user, summary, lastMessage }) {
-  if (!_waSocket) {
-    console.warn('⚠️  Baileys não está conectado — agentes não notificados');
+  if (!wa.isConfigured()) {
+    console.warn('⚠️  WhatsApp Cloud API não configurada — agentes não notificados');
     return;
   }
 
-  const msg =
-    `🎫 *Novo Ticket de Suporte #${ticketId}*\n\n` +
-    `👤 *Usuário:* ${user.username} (${user.email})\n` +
-    `📝 *Resumo:* ${summary}\n` +
-    `💬 *Última msg:* ${lastMessage}\n\n` +
-    `Para aceitar:   *!aceitar ${ticketId}*\n` +
-    `               (ou *!aceitar* para o próximo em fila)\n` +
-    `Para recusar:   *!recusar ${ticketId}*\n` +
-    `Para encerrar (se for seu): *!encerrar ${ticketId}*`;
-
-  const targets = AGENT_GROUP_JID
-    ? [AGENT_GROUP_JID]
-    : AGENT_NUMBERS.map(n => `${normalizePhone(n)}@s.whatsapp.net`);
-
-  for (const jid of targets) {
+  // A Cloud API não tem grupos: o template vai para cada agente individualmente.
+  for (const n of AGENT_NUMBERS) {
+    const to = normalizePhone(n);
     try {
-      await _waSocket.sendMessage(jid, { text: msg });
-      console.log(`📤 Ticket #${ticketId} notificado para ${jid}`);
+      await wa.sendTemplate({
+        to,
+        name: NEW_TICKET_TEMPLATE,
+        language: 'pt_BR',
+        params: {
+          ticket_number: ticketId,
+          username: user.username,
+          email: user.email,
+          msg: lastMessage || summary,
+        },
+        buttonPayloads: [`aceitar:${ticketId}`, `recusar:${ticketId}`],
+      });
+      console.log(`📤 Ticket #${ticketId} notificado para ${to}`);
     } catch (err) {
-      console.error(`❌ Falha ao notificar ${jid}:`, err.message);
+      console.error(`❌ Falha ao notificar ${to}:`, err.message, err.details || '');
     }
   }
 }
@@ -285,14 +221,14 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
 
   _io.to(`ticket_${ticketId}`).emit('agente_entrou', {
     agentName,
-    ticketId
+    ticketId,
   });
 
   await sendAgent(
     agentPhone,
     `✅ *Ticket #${ticketId} aceite!*\n\n` +
-    `Agora as mensagens do usuário aparecerão aqui.\n` +
-    `Para encerrar a conversa, envie: *!encerrar ${ticketId}*`
+      `Agora as mensagens do usuário aparecerão aqui.\n` +
+      `Para encerrar a conversa, envie: *!encerrar ${ticketId}*`
   );
 
   await notifyOtherAgents({ ticketId, agentName, agentPhone });
@@ -303,18 +239,9 @@ async function agentClaimTicket({ ticketId, agentPhone, agentName }) {
 // ─── Notificar outros agentes ─────────────────────────────────────────────────
 
 async function notifyOtherAgents({ ticketId, agentName, agentPhone }) {
-  if (!_waSocket) return;
-
-  const others = AGENT_NUMBERS.filter(n => !sameAgent(n, agentPhone));
+  const others = AGENT_NUMBERS.filter((n) => !sameAgent(n, agentPhone));
   for (const n of others) {
-    try {
-      const jid = `${normalizePhone(n)}@s.whatsapp.net`;
-      await _waSocket.sendMessage(jid, {
-        text: `ℹ️ O ticket #${ticketId} foi aceite por ${agentName}.`
-      });
-    } catch (err) {
-      console.error(`❌ Falha ao notificar agente ${n}:`, err.message);
-    }
+    await sendAgent(n, `ℹ️ O ticket #${ticketId} foi aceite por ${agentName}.`);
   }
 }
 
@@ -337,14 +264,12 @@ async function userToAgent({ ticketId, userId, message }) {
 
   await saveChatMessage({ ticketId, from: 'user', message });
 
-  if (_waSocket) {
-    const jid = `${normalizePhone(ticket.agent_phone)}@s.whatsapp.net`;
-    await _waSocket.sendMessage(jid, {
-      text: `💬 *[Ticket #${ticketId}] Usuário:*\n${message}`
-    });
-  }
+  const delivered = await sendAgent(
+    ticket.agent_phone,
+    `💬 *[Ticket #${ticketId}] Usuário:*\n${message}`
+  );
 
-  return { success: true };
+  return { success: true, delivered };
 }
 
 // ─── Agente envia mensagem pro usuário ───────────────────────────────────────
@@ -361,9 +286,7 @@ async function agentToUser({ ticketId, agentPhone, agentName, message }) {
     return;
   }
 
-  // INSERT direto (em vez de saveChatMessage) para capturar o insertId e
-  // enviá-lo no socket event — o frontend usa este id como cursor do
-  // polling incremental de fallback (GET /messages?after=<id>).
+  // INSERT direto para capturar o insertId (cursor do polling incremental do frontend)
   const result = await database.query(
     `INSERT INTO support_messages (ticket_id, sender, agent_name, message, created_at)
      VALUES (?, 'agent', ?, ?, NOW())`,
@@ -383,7 +306,6 @@ async function agentToUser({ ticketId, agentPhone, agentName, message }) {
 // ─── Encerrar ticket (pelo agente) ───────────────────────────────────────────
 
 async function closeTicket({ ticketId, agentPhone }) {
-  // Validação detalhada para dar mensagens úteis ao agente
   const tickets = await database.query(
     `SELECT id, agent_phone, status FROM support_tickets WHERE id = ?`,
     [ticketId]
@@ -410,7 +332,7 @@ async function closeTicket({ ticketId, agentPhone }) {
     await sendAgent(
       agentPhone,
       `ℹ️ Ticket #${ticketId} ainda está em espera (sem agente). ` +
-      `Se quiser assumir: *!aceitar ${ticketId}*`
+        `Se quiser assumir: *!aceitar ${ticketId}*`
     );
     return;
   }
@@ -420,7 +342,7 @@ async function closeTicket({ ticketId, agentPhone }) {
     await sendAgent(
       agentPhone,
       `⚠️ Você não é o agente do ticket #${ticketId}. ` +
-      `Se quiser assumir, envie *!aceitar ${ticketId}*.`
+        `Se quiser assumir, envie *!aceitar ${ticketId}*.`
     );
     return;
   }
@@ -466,16 +388,12 @@ async function cancelTicket({ ticketId, userId }) {
 
   if (result.affectedRows === 0) throw new Error('Ticket não encontrado ou já encerrado');
 
-  const tickets = await database.query(
-    'SELECT agent_phone FROM support_tickets WHERE id = ?',
-    [ticketId]
-  );
+  const tickets = await database.query('SELECT agent_phone FROM support_tickets WHERE id = ?', [
+    ticketId,
+  ]);
 
-  if (tickets[0]?.agent_phone && _waSocket) {
-    const jid = `${normalizePhone(tickets[0].agent_phone)}@s.whatsapp.net`;
-    await _waSocket.sendMessage(jid, {
-      text: `❌ O usuário cancelou o ticket #${ticketId}.`
-    });
+  if (tickets[0]?.agent_phone) {
+    await sendAgent(tickets[0].agent_phone, `❌ O usuário cancelou o ticket #${ticketId}.`);
   }
 
   return { success: true };
@@ -516,7 +434,7 @@ SENTIMENT: <um dos seguintes: muito_positivo|positivo|neutro|negativo|muito_nega
     if (eM) {
       const allowed = ['muito_positivo', 'positivo', 'neutro', 'negativo', 'muito_negativo'];
       const found = eM[1].toLowerCase();
-      sentiment = allowed.find(a => found.includes(a)) || null;
+      sentiment = allowed.find((a) => found.includes(a)) || null;
     }
     return { ok: true, summary, sentiment };
   } catch (err) {
@@ -526,13 +444,12 @@ SENTIMENT: <um dos seguintes: muito_positivo|positivo|neutro|negativo|muito_nega
 }
 
 /**
- * Envia a avaliação (nota + resumo + texto) ao agente (WhatsApp) que encerrou.
+ * Envia a avaliação (nota + resumo + texto) ao agente que encerrou.
  */
 async function notifyAgentAboutFeedback({ ticketId, rating, summary, sentiment, feedbackText }) {
-  const tickets = await database.query(
-    `SELECT agent_phone FROM support_tickets WHERE id = ?`,
-    [ticketId]
-  );
+  const tickets = await database.query(`SELECT agent_phone FROM support_tickets WHERE id = ?`, [
+    ticketId,
+  ]);
   const agentPhone = tickets[0]?.agent_phone;
   if (!agentPhone) return;
 
@@ -547,9 +464,8 @@ async function notifyAgentAboutFeedback({ ticketId, rating, summary, sentiment, 
     lines.push(`📋 *Resumo IA:* ${summary}`);
   }
   if (feedbackText) {
-    const truncated = String(feedbackText).length > 600
-      ? String(feedbackText).slice(0, 600) + '…'
-      : feedbackText;
+    const truncated =
+      String(feedbackText).length > 600 ? String(feedbackText).slice(0, 600) + '…' : feedbackText;
     lines.push(``);
     lines.push(`💬 *Mensagem original:*`);
     lines.push(`"${truncated}"`);
@@ -559,14 +475,7 @@ async function notifyAgentAboutFeedback({ ticketId, rating, summary, sentiment, 
 
 /**
  * Submete a avaliação do utilizador para um ticket encerrado.
- *
- * Fluxo:
- *   1) Persiste rating + feedback_text atomicamente (idempotente via rating IS NULL).
- *   2) Persiste sentiment básico (derivado da nota).
- *   3) Retorna 200 imediatamente ao front.
- *   4) Em background: resume com Gemini (se houver texto) e notifica o agente.
- *
- * Isto evita que o utilizador fique 1-5s à espera do Gemini.
+ * Persiste a nota de forma idempotente e faz o resumo (Gemini) + aviso ao agente em background.
  */
 async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
   const r = parseInt(rating, 10);
@@ -577,7 +486,7 @@ async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
   const text = feedbackText ? String(feedbackText).trim().slice(0, 4000) : '';
   const baseSentiment = sentimentFromRating(r);
 
-  // 1) Idempotência atomic — rating IS NULL garante 1 avaliação por ticket
+  // Idempotência atómica — rating IS NULL garante 1 avaliação por ticket
   const result = await database.query(
     `UPDATE support_tickets
      SET rating = ?, feedback_text = ?, feedback_at = NOW(),
@@ -590,8 +499,6 @@ async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
     throw new Error('Ticket já avaliado ou não elegível para avaliação.');
   }
 
-  // 2) Resposta imediata ao cliente (latência ~50ms).
-  //    O resumo e a notificação ao agente acontecem em background.
   if (text.length > 0 && process.env.GEMINI_API_KEY) {
     setImmediate(async () => {
       try {
@@ -613,155 +520,136 @@ async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
         });
       } catch (err) {
         console.error('⚠️ Background feedback error:', err.message);
-        // Notifica o agente mesmo sem resumo
         try {
           await notifyAgentAboutFeedback({
-            ticketId, rating: r, summary: null,
-            sentiment: baseSentiment, feedbackText: text,
+            ticketId,
+            rating: r,
+            summary: null,
+            sentiment: baseSentiment,
+            feedbackText: text,
           });
         } catch {}
       }
     });
   } else if (text.length > 0) {
-    // Texto presente mas sem GEMINI_API_KEY — manda o texto bruto ao agente
     notifyAgentAboutFeedback({
-      ticketId, rating: r, summary: null,
-      sentiment: baseSentiment, feedbackText: text,
-    }).catch(err => console.error('⚠️ Notificação agente:', err.message));
+      ticketId,
+      rating: r,
+      summary: null,
+      sentiment: baseSentiment,
+      feedbackText: text,
+    }).catch((err) => console.error('⚠️ Notificação agente:', err.message));
   } else {
-    // Só nota, sem comentário — notifica com a nota pura
     notifyAgentAboutFeedback({
-      ticketId, rating: r, summary: null,
-      sentiment: baseSentiment, feedbackText: null,
-    }).catch(err => console.error('⚠️ Notificação agente:', err.message));
+      ticketId,
+      rating: r,
+      summary: null,
+      sentiment: baseSentiment,
+      feedbackText: null,
+    }).catch((err) => console.error('⚠️ Notificação agente:', err.message));
   }
 
   return { success: true, rating: r, summary: null, sentiment: baseSentiment };
 }
 
-// ─── Handler principal do Baileys ─────────────────────────────────────────────
+// ─── Handler principal (chamado pelo webhook da Cloud API) ───────────────────
 
-// Regex dos comandos: aceitam ! opcional, prefixo # opcional, espaços à volta.
-// O /i cobre aceitar/ACEITAR/Aceitar. Captura o id (opcional) no grupo 1.
+// Comandos de texto: ! opcional, # opcional, espaços à volta.
 const ACCEPT_REGEX = /^!?(?:aceitar)\s*(?:#?\s*(\d+))?\s*$/i;
 const RECUSE_REGEX = /^!?(?:recusar)\s*(?:#?\s*(\d+))?\s*$/i;
-const CLOSE_REGEX  = /^!?(?:encerrar)\s*(?:#?\s*(\d+))?\s*$/i;
+const CLOSE_REGEX = /^!?(?:encerrar)\s*(?:#?\s*(\d+))?\s*$/i;
 
-async function handleIncomingWhatsApp({ messages, type }) {
-  if (type !== 'notify') return false;
-  let handled = false;
+// Payload dos botões do template: "aceitar:123" / "recusar:123"
+const BUTTON_PAYLOAD_REGEX = /^(aceitar|recusar):(\d+)$/i;
 
-  for (const msg of messages) {
-    if (!msg.message || msg.key.fromMe) continue;
+/**
+ * Recebe um evento normalizado de whatsappCloud.extractMessages():
+ * { id, from, name, type, text, payload }
+ * Devolve true se a mensagem era de um agente (e foi tratada).
+ */
+async function handleIncomingMessage(ev) {
+  const phone = normalizePhone(ev.from);
 
-    const jid = msg.key.remoteJid;
-    const senderJid = msg.key.participantPn || msg.key.participant || jid;
-    // prioritiza o phone real (PN) e ignora JIDs LID-only
-    const phone = extractAgentPhone(msg);
+  if (!isAgentMessage(phone)) return false;
 
-    if (AGENT_NUMBERS.length > 0) {
-      console.log(
-        '📞 Msg de:', senderJid,
-        '| participantPn:', msg.key.participantPn || '(vazio)',
-        '| participant:  ', msg.key.participant || '(vazio)',
-        '| phone extraído:', msg.key.remoteJidAlt || '[ vazio]'
-      );
-//      console.log("Mensagem completa:", JSON.stringify(msg, null, 2));
-    }
+  const agentName = await getAgentName(phone);
 
-    if (!isAgentMessage(phone)) continue;
-    handled = true;
+  // 🔘 Toque num botão do template
+  if (ev.payload) {
+    const b = String(ev.payload).match(BUTTON_PAYLOAD_REGEX);
+    if (b) {
+      const action = b[1].toLowerCase();
+      const ticketId = parseInt(b[2], 10);
 
-    // 🔘 Resposta de botão
-    const btnResponse = msg.message.buttonsResponseMessage;
-    if (btnResponse) {
-      const id = btnResponse.selectedButtonId;
-      const agentName = await getAgentName(phone);
-
-      if (id === 'aceitar_suporte') {
-        const tickets = await database.query(
-          `SELECT id FROM support_tickets WHERE status = 'waiting' ORDER BY created_at ASC LIMIT 1`
-        );
-        if (tickets.length > 0) {
-          await agentClaimTicket({ ticketId: tickets[0].id, agentPhone: phone, agentName });
-        } else {
-          await sendAgent(phone, `ℹ️ Não há tickets em espera no momento.`);
-        }
-        continue;
-      }
-
-      if (id === 'recusar_suporte') {
-        // "Recusar" apenas recusa o ticket oferecido — NÃO deve encerrar o
-        // ticket ativo do agente (isso era um bug: podia fechar conversas em
-        // andamento por engano). Outro agente pode aceitar o ticket.
-        await sendAgent(phone, `ℹ️ Ticket recusado. Outro agente pode aceitá-lo.`);
-        continue;
-      }
-    }
-
-    // 📝 Texto — comandos
-    const text = (
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      ''
-    ).trim();
-
-    if (!text) continue;
-
-    const agentName = await getAgentName(phone);
-
-    let m;
-    if ((m = text.match(ACCEPT_REGEX))) {
-      const id = m[1] ? parseInt(m[1], 10) : null;
-      if (id) {
-        await agentClaimTicket({ ticketId: id, agentPhone: phone, agentName });
+      if (action === 'aceitar') {
+        await agentClaimTicket({ ticketId, agentPhone: phone, agentName });
       } else {
-        const waiting = await database.query(
-          `SELECT id FROM support_tickets WHERE status = 'waiting' ORDER BY created_at ASC LIMIT 1`
-        );
-        if (waiting.length === 0) {
-          await sendAgent(phone, `ℹ️ Não há tickets em espera no momento.`);
-        } else {
-          await agentClaimTicket({ ticketId: waiting[0].id, agentPhone: phone, agentName });
-        }
+        // "Recusar" só recusa o ticket oferecido — não encerra o ticket activo do agente.
+        await sendAgent(phone, `ℹ️ Ticket #${ticketId} recusado. Outro agente pode aceitá-lo.`);
       }
-      continue;
-    }
-
-    if ((m = text.match(RECUSE_REGEX))) {
-      const id = m[1] ? parseInt(m[1], 10) : null;
-      await sendAgent(
-        phone,
-        id
-          ? `ℹ️ Ticket #${id} recusado por você. Outro agente pode aceitá-lo.`
-          : `ℹ️ Recusa registrada. Você continua com seu ticket ativo (se houver) — use *!encerrar* para fechá-lo.`
-      );
-      continue;
-    }
-
-    if ((m = text.match(CLOSE_REGEX))) {
-      const id = m[1] ? parseInt(m[1], 10) : null;
-      if (id) {
-        await closeTicket({ ticketId: id, agentPhone: phone });
-      } else {
-        await closeOwnActiveTicket(phone);
-      }
-      continue;
-    }
-
-    // Mensagem normal → encaminhar pro ticket activo do agente
-    const activeTickets = await database.query(
-      `SELECT id FROM support_tickets WHERE agent_phone = ? AND status = 'active' ORDER BY claimed_at DESC LIMIT 1`,
-      [phone]
-    );
-
-    if (activeTickets.length > 0) {
-      const ticketId = activeTickets[0].id;
-      await agentToUser({ ticketId, agentPhone: phone, agentName, message: text });
+      return true;
     }
   }
 
-  return handled;
+  // 📝 Texto — comandos
+  const text = (ev.type === 'text' ? ev.text || '' : '').trim();
+  if (!text) return true;
+
+  let m;
+  if ((m = text.match(ACCEPT_REGEX))) {
+    const id = m[1] ? parseInt(m[1], 10) : null;
+    if (id) {
+      await agentClaimTicket({ ticketId: id, agentPhone: phone, agentName });
+    } else {
+      const waiting = await database.query(
+        `SELECT id FROM support_tickets WHERE status = 'waiting' ORDER BY created_at ASC LIMIT 1`
+      );
+      if (waiting.length === 0) {
+        await sendAgent(phone, `ℹ️ Não há tickets em espera no momento.`);
+      } else {
+        await agentClaimTicket({ ticketId: waiting[0].id, agentPhone: phone, agentName });
+      }
+    }
+    return true;
+  }
+
+  if ((m = text.match(RECUSE_REGEX))) {
+    const id = m[1] ? parseInt(m[1], 10) : null;
+    await sendAgent(
+      phone,
+      id
+        ? `ℹ️ Ticket #${id} recusado por você. Outro agente pode aceitá-lo.`
+        : `ℹ️ Recusa registrada. Você continua com seu ticket ativo (se houver) — use *!encerrar* para fechá-lo.`
+    );
+    return true;
+  }
+
+  if ((m = text.match(CLOSE_REGEX))) {
+    const id = m[1] ? parseInt(m[1], 10) : null;
+    if (id) {
+      await closeTicket({ ticketId: id, agentPhone: phone });
+    } else {
+      await closeOwnActiveTicket(phone);
+    }
+    return true;
+  }
+
+  // Mensagem normal → encaminhar pro ticket activo do agente
+  const activeTickets = await database.query(
+    `SELECT id FROM support_tickets WHERE agent_phone = ? AND status = 'active' ORDER BY claimed_at DESC LIMIT 1`,
+    [phone]
+  );
+
+  if (activeTickets.length > 0) {
+    await agentToUser({
+      ticketId: activeTickets[0].id,
+      agentPhone: phone,
+      agentName,
+      message: text,
+    });
+  }
+
+  return true;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -774,7 +662,6 @@ async function getAgentName(phone) {
     );
     if (agents[0]?.agent_name) return agents[0].agent_name;
 
-    // fallback: usar últimos 4 dígitos do número
     const digits = normalizePhone(phone);
     return `Agente (${digits.slice(-4)})`;
   } catch {
@@ -803,10 +690,9 @@ module.exports = {
   closeOwnActiveTicket,
   cancelTicket,
   submitFeedback,
-  handleIncomingWhatsApp,
-  // utils exported for tests:
+  handleIncomingMessage,
+  // utils exportados para testes:
   normalizePhone,
-  extractAgentPhone,
   sameAgent,
   isAgentMessage,
 };

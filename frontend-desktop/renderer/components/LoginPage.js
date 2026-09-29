@@ -60,6 +60,11 @@ const LoginPage = () => {
         }
       }
     }
+    if (hash.includes('error=github_not_configured')) {
+      setError('Login com GitHub indisponível no momento (servidor sem GitHub configurado). Use e-mail ou Google.');
+      window.location.hash = '';
+      return;
+    }
     if (hash.includes('error=google_failed') || hash.includes('error=github_failed')) {
       setError('Falha na autenticação. Tente novamente.');
       window.location.hash = '';

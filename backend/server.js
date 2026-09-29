@@ -384,8 +384,8 @@ async function startServer() {
     startWhatsApp();
 
     // ✅ NOVO: inicializar bridge APÓS o WhatsApp estar a arrancar
-    // No Cloud API não há sessão/QR: ligamos o bridge ao sender da API oficial
-    supportBridge.init(io, getWhatsAppSocket());
+    // No Cloud API não há sessão/QR: o bridge fala direto com services/whatsappCloud
+    supportBridge.init(io);
 
     server.listen(PORT, () => {
       console.log('🚀 MozHost Backend started successfully!');

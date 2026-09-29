@@ -313,6 +313,12 @@ router.get('/google/callback', (req, res, next) => {
 
 // GitHub OAuth
 router.get('/github', (req, res, next) => {
+  // Sem GITHUB_CLIENT_ID o GitHub devolve 404 ao usuário; falhamos cedo com erro claro.
+  if (!process.env.GITHUB_CLIENT_ID) {
+    console.error('GitHub OAuth não configurado: GITHUB_CLIENT_ID ausente no backend');
+    const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
+    return res.redirect(`${frontendUrl}/login#error=github_not_configured`);
+  }
   const state = req.query.redirect_uri ? Buffer.from(JSON.stringify({ redirect_uri: req.query.redirect_uri })).toString('base64') : undefined;
   passport.authenticate('github', { 
     scope: ['user:email'],

@@ -69,6 +69,11 @@ function cloneToHost(repoUrlWithToken, branch, containerId) {
 // ===== OAUTH WEB =====
 
 router.get('/auth', auth, (req, res) => {
+  // Sem GITHUB_CLIENT_ID o GitHub devolve 404 ao usuário; falhamos cedo com erro claro.
+  if (!GITHUB_CLIENT_ID) {
+    console.error('GitHub OAuth não configurado: GITHUB_CLIENT_ID ausente no backend');
+    return res.status(503).json({ success: false, error: 'GitHub OAuth não configurado no servidor (GITHUB_CLIENT_ID ausente)' });
+  }
   const userId = req.user.userId || req.user.id;
   // Fluxo de CONEXÃO (aba Connections): usa callback próprio para voltar
   // para /connections. O login usa o callback do passport em auth.js.

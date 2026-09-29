@@ -8,21 +8,51 @@
 // No painel do Meta (WhatsApp > Configuration > Webhook):
 //   Callback URL : https://api.mozhost.shop/webhook/whatsapp
 //   Verify token : WHATSAPP_WEBHOOK_VERIFY_TOKEN (o MESMO do .env)
+//   App secret   : WHATSAPP_APP_SECRET (opcional — valida a assinatura X-Hub-Signature-256)
 const express = require('express');
+const whatsapp = require('../services/whatsappCloud');
+const supportBridge = require('../services/supportBridge');
+const whatsappBotService = require('../services/whatsappBotService');
+
 const router = express.Router();
-const whatsapp = require('../utils/whatsapp');
 
-// Verificação do webhook (GET)
-router.get('/', whatsapp.verifyWebhook);
+// Sender compatível com Baileys, para o bot de comandos do usuário final
+const sender = whatsapp.createSender();
 
-// Recebimento de mensagens (POST)
-router.post('/', (req, res) => {
-  // Valida a assinatura X-Hub-Signature-256 (se WHATSAPP_APP_SECRET estiver configurado)
-  if (!whatsapp.verifyWebhookSignature(req)) {
-    console.warn('⚠️ Webhook WhatsApp rejeitado: assinatura inválida');
-    return res.sendStatus(401);
+// Converte um evento normalizado do whatsappCloud para o formato que o
+// whatsappBotService espera (estrutura compatível com Baileys).
+function eventToBaileysMessage(ev) {
+  const jid = `${whatsapp.normalizePhone(ev.from)}@s.whatsapp.net`;
+  return {
+    key: {
+      fromMe: false,
+      remoteJid: jid,
+      participant: jid,
+      participantPn: jid,
+    },
+    message: { conversation: ev.text || '' },
+  };
+}
+
+// Handler central: recebe cada evento normalizado
+// { id, from, name, type, text, payload }
+async function onMessage(ev) {
+  if (!ev.from) return;
+
+  // 1) SupportBridge primeiro (mensagens/botões dos agentes de suporte).
+  //    Devolve true se o remetente era um agente e a mensagem foi tratada.
+  const handledBySupport = await supportBridge.handleIncomingMessage(ev);
+  if (handledBySupport) return;
+
+  // 2) 🆕 Código de verificação pendente → usuário iniciou a conversa.
+  //    A janela de 24h abriu, então o código pode ser enviado sem template.
+  if (await whatsapp.maybeSendPendingVerificationCode(ev.from)) return;
+
+  // 3) Bot de usuário final (comandos !menu, !saldo, etc.)
+  if (ev.type === 'text' && ev.text) {
+    await whatsappBotService.handleMessage(sender, eventToBaileysMessage(ev));
   }
-  whatsapp.processWebhookEvent(req, res);
-});
+}
 
-module.exports = router;
+// Router completo (GET verificação + POST eventos, com assinatura e dedupe)
+module.exports = whatsapp.createWebhookRouter(express, onMessage);
