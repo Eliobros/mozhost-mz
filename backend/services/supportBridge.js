@@ -671,6 +671,10 @@ async function handleIncomingMessage(ev) {
       agentName,
       message: text,
     });
+  } else {
+    console.warn(
+      `⚠️  Msg de agente ${phone} sem ticket ativo e sem comando — ignorada: "${text.slice(0, 50)}"`
+    );
   }
 
   return true;

@@ -36,20 +36,41 @@ function eventToBaileysMessage(ev) {
 
 // Handler central: recebe cada evento normalizado
 // { id, from, name, type, text, payload }
+const WA_DEBUG = process.env.WHATSAPP_DEBUG === 'true';
+
 async function onMessage(ev) {
   if (!ev.from) return;
+
+  if (WA_DEBUG) {
+    console.log(
+      `🐛 Msg recebida: id=${ev.id} de=${ev.from} nome=${ev.name || '?'} tipo=${ev.type} ` +
+      `texto=${JSON.stringify(ev.text)} payload=${JSON.stringify(ev.payload)}`
+    );
+  } else {
+    console.log(
+      `📩 WhatsApp de ${ev.from} (${ev.name || 'sem nome'}): ` +
+      `${ev.payload ? `[botão] ${ev.payload}` : ev.text || `[${ev.type}]`}`
+    );
+  }
 
   // 1) SupportBridge primeiro (mensagens/botões dos agentes de suporte).
   //    Devolve true se o remetente era um agente e a mensagem foi tratada.
   const handledBySupport = await supportBridge.handleIncomingMessage(ev);
-  if (handledBySupport) return;
+  if (handledBySupport) {
+    console.log(`↪️ Tratada pelo supportBridge (remetente é agente)`);
+    return;
+  }
 
   // 2) 🆕 Código de verificação pendente → usuário iniciou a conversa.
   //    A janela de 24h abriu, então o código pode ser enviado sem template.
-  if (await whatsapp.maybeSendPendingVerificationCode(ev.from)) return;
+  if (await whatsapp.maybeSendPendingVerificationCode(ev.from)) {
+    console.log(`↪️ Tratada pelo fluxo de verificação (código pendente enviado)`);
+    return;
+  }
 
   // 3) Bot de usuário final (comandos !menu, !saldo, etc.)
   if (ev.type === 'text' && ev.text) {
+    console.log(`↪️ Encaminhada ao bot de comandos`);
     await whatsappBotService.handleMessage(sender, eventToBaileysMessage(ev));
   }
 }

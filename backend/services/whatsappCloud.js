@@ -501,8 +501,33 @@ function createWebhookRouter(express, onMessage) {
       return;
     }
 
-    for (const ev of extractMessages(body)) {
-      if (alreadySeen(ev.id)) continue;
+    const events = extractMessages(body);
+
+    // 🧪 Log de chegada — confirma que a Meta está a entregar mensagens.
+    // Payload completo (JSON bruto) com WHATSAPP_DEBUG=true no .env.
+    const statusCount = (body?.entry || []).reduce(
+      (n, e) => n + (e.changes || []).reduce((m, c) => m + (c.value?.statuses?.length || 0), 0),
+      0
+    );
+    if (events.length > 0) {
+      console.log(
+        `📥 Webhook WhatsApp: ${events.length} mensagem(ns) recebida(s)` +
+          (statusCount ? `, ${statusCount} status update(s)` : '')
+      );
+    } else if (statusCount > 0) {
+      console.log(`📥 Webhook WhatsApp: ${statusCount} status update(s) (entrega/read, sem mensagem)`);
+    } else if (process.env.WHATSAPP_DEBUG === 'true') {
+      console.log('📥 Webhook WhatsApp: evento sem mensagens/status:', JSON.stringify(body));
+    }
+    if (process.env.WHATSAPP_DEBUG === 'true') {
+      console.log('🐛 Payload completo da Meta:', JSON.stringify(body));
+    }
+
+    for (const ev of events) {
+      if (alreadySeen(ev.id)) {
+        if (process.env.WHATSAPP_DEBUG === 'true') console.log(`🔁 Evento duplicado ignorado: ${ev.id}`);
+        continue;
+      }
       Promise.resolve(onMessage(ev)).catch((err) =>
         console.error('❌ Erro ao processar msg WhatsApp:', err.message)
       );
