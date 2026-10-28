@@ -94,13 +94,29 @@ class DockerComposeManager {
   }
 
   async startCompose(containerPath) {
-    await execAsync(`cd ${containerPath} && docker compose up -d`);
-    console.log(`🐳 Docker-compose iniciado em ${containerPath}`);
+    const composeFile = path.join(containerPath, 'docker-compose.yml');
+    if (await fs.pathExists(composeFile)) {
+      await execAsync(`cd ${containerPath} && docker compose up -d`);
+    } else {
+      const id = path.basename(containerPath);
+      await execAsync(
+        `docker restart mozhost_php_${id} mozhost_mysql_${id} mozhost_pma_${id}`
+      );
+    }
+    console.log(`🐳 Stack iniciada em ${containerPath}`);
   }
 
   async stopCompose(containerPath) {
-    await execAsync(`cd ${containerPath} && docker compose stop`);
-    console.log(`🛑 Docker-compose parado em ${containerPath}`);
+    const composeFile = path.join(containerPath, 'docker-compose.yml');
+    if (await fs.pathExists(composeFile)) {
+      await execAsync(`cd ${containerPath} && docker compose stop`);
+    } else {
+      const id = path.basename(containerPath);
+      await execAsync(
+        `docker stop mozhost_php_${id} mozhost_mysql_${id} mozhost_pma_${id}`
+      );
+    }
+    console.log(`🛑 Stack parada em ${containerPath}`);
   }
 
   async removeCompose(containerPath) {

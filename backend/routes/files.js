@@ -519,6 +519,26 @@ router.delete('/:containerId/*', async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
+    // Protege as raizes do container (pastas montadas nos containers Docker)
+
+    const protectedRoots = [containerPath, path.join(containerPath, 'php'), path.join(containerPath, 'mysql')];
+
+    const deployFolderDel = await getDeployFolder(containerId);
+
+    if (deployFolderDel) protectedRoots.push(path.join(containerPath, deployFolderDel));
+
+    if (protectedRoots.some(r => path.resolve(r) === path.resolve(fullPath))) {
+
+      return res.status(403).json({
+
+        error: 'Cannot delete root folder',
+
+        message: 'A pasta raiz do container não pode ser apagada. Apague os ficheiros lá dentro.'
+
+      });
+
+    }
+
     await fs.remove(fullPath);
 
     res.json({

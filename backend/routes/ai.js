@@ -1,5 +1,6 @@
 // routes/ai.js
-// Rota da IA MozHost - Chat com Gemini + Function Calling
+// Rota da IA MozHost - Chat com Meta Model API + Tool Calling
+// (provider selecionável via AI_PROVIDER — ver services/mozhostAiService.js)
 
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
@@ -60,7 +61,8 @@ router.post('/reset', authMiddleware, async (req, res) => {
 router.get('/status', (req, res) => {
   res.json({
     enabled: mozhostAi.enabled,
-    model: 'gemini-2.5-flash',
+    provider: mozhostAi.provider,
+    model: mozhostAi.model,
     features: ['function_calling', 'consultas_banco', 'chat_contextual']
   });
 });

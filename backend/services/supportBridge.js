@@ -3,7 +3,11 @@
 
 const database = require('../models/database');
 const wa = require('./whatsappCloud');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// A IA (Meta Model API ou Gemini, consoante AI_PROVIDER) é falada através
+// do serviço único mozhostAiService — ver mozhostAiService.js (seletor).
+const mozhostAi = require('./mozhostAiService');
+const discord = require('./discordBot');
+const discordSupport = require('./discordSupport'); // webhook do canal #support
 
 let _io = null;
 
@@ -93,6 +97,8 @@ async function isAgentMessage(phone) {
  * Devolve true/false em vez de lançar erro.
  */
 async function sendAgent(agentPhone, text) {
+  const agentId = normalizePhone(agentPhone);
+  if (discord.isDiscordId(agentId)) return discord.sendText(agentId, text);
   if (!wa.isConfigured()) return false;
   try {
     await wa.sendText(normalizePhone(agentPhone), text);
@@ -129,6 +135,8 @@ const SENTIMENT_LABELS = {
 
 function init(io) {
   _io = io;
+  discord.setHandler(handleIncomingMessage);
+  discord.start();
   if (!wa.isConfigured()) {
     console.warn('⚠️  WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID não configurados.');
   }
@@ -145,6 +153,45 @@ function init(io) {
 function attachSocket() {}
 
 // ─── Criar ticket ─────────────────────────────────────────────────────────────
+
+/**
+ * Última mensagem escrita pelo utilizador no histórico da conversa.
+ * (No pedido manual o `summary`/`lastMessage` são frases fixas do sistema,
+ * então é daqui que sai o texto real do problema.)
+ */
+function lastUserText(conversationHistory) {
+  if (!Array.isArray(conversationHistory)) return '';
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const m = conversationHistory[i];
+    const txt = m?.role === 'user' && typeof m.content === 'string' ? m.content.trim() : '';
+    if (txt) return txt;
+  }
+  return '';
+}
+
+/**
+ * Corpo comum da notificação de ticket — usado na DM do bot (com botões) e
+ * no canal #support (webhook), para os dois mostrarem sempre o mesmo.
+ */
+function buildTicketNotice({ ticketId, user, summary, userMsg }) {
+  const lines = [
+    `🎫 *Novo ticket #${ticketId}* — a aguardar aceitação`,
+    ``,
+    `👤 *Utilizador:* ${user.username || 'sem nome'}`,
+    `🆔 *ID:* ${user.id}`,
+    `📧 *E-mail:* ${user.email || 'sem e-mail'}`,
+    ``,
+    // Resumo da IA quando ela escalou; frase do sistema no pedido manual.
+    `📝 *Motivo:* ${summary || 'Utilizador solicitou suporte humano'}`,
+  ];
+
+  const txt = String(userMsg || '').trim();
+  if (txt && txt !== summary) {
+    lines.push(`💬 *Mensagem:* ${txt.slice(0, 600)}`);
+  }
+
+  return lines.join('\n');
+}
 
 async function createTicket({ userId, summary, lastMessage, conversationHistory = [] }) {
   const users = await database.query('SELECT id, username, email FROM users WHERE id = ?', [
@@ -182,23 +229,47 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
   const ticketId = result.insertId;
   console.log(`🎫 Ticket #${ticketId} criado para ${user.username}`);
 
-  await notifyAgents({ ticketId, user, summary, lastMessage });
+  const userMsg = lastUserText(conversationHistory);
+  const notice = buildTicketNotice({ ticketId, user, summary, userMsg });
+
+  await notifyAgents({ ticketId, user, summary, lastMessage, notice });
+
+  // Fila pública: avisa o canal #support no Discord (webhook). Não bloqueia a
+  // criação do ticket nem afecta o fluxo — falha só é logada.
+  discordSupport
+    .notifyTicket({ content: notice })
+    .catch((err) => console.error('❌ Aviso no canal #support falhou:', err.message));
 
   return { ticketId, userId, username: user.username };
 }
 
 // ─── Notificar agentes (template com botões Aceitar / Recusar) ───────────────
 
-async function notifyAgents({ ticketId, user, summary, lastMessage }) {
-  if (!wa.isConfigured()) {
-    console.warn('⚠️  WhatsApp Cloud API não configurada — agentes não notificados');
-    return;
+async function notifyAgents({ ticketId, user, summary, lastMessage, notice }) {
+  // O canal Discord NÃO depende do WhatsApp: agentes com ID de Discord são
+  // avisados mesmo que o Twilio/Meta estejam por configurar (ou bloqueados).
+  const waConfigured = wa.isConfigured();
+  if (!waConfigured) {
+    console.warn('⚠️  WhatsApp não configurado — só agentes do Discord serão notificados');
   }
 
   // A Cloud API não tem grupos: o template vai para cada agente individualmente.
   const agents = await getAgentNumbers();
   for (const n of agents) {
     const to = normalizePhone(n);
+    if (discord.isDiscordId(to)) {
+      const ok = await discord.sendTicketOffer(to, { ticketId, body: notice });
+      console.log(
+        ok
+          ? `📤 Ticket #${ticketId} enviado ao Discord de ${to}`
+          : `❌ Falha ao avisar o Discord de ${to}`
+      );
+      continue;
+    }
+    if (!waConfigured) {
+      console.warn(`⚠️  WhatsApp não configurado — ticket #${ticketId} não enviado a ${to}`);
+      continue;
+    }
     try {
       await wa.sendTemplate({
         to,
@@ -425,20 +496,14 @@ async function cancelTicket({ ticketId, userId }) {
 
 // ─── submitFeedback (avaliação do utilizador) ────────────────────────────────
 
-async function callGeminiSummarize({ rating, text }) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
+async function callAISummarize({ rating, text }) {
+  if (!mozhostAi.enabled) {
     return { ok: false, summary: null, reason: 'no_api_key' };
   }
   if (!text || !text.trim()) {
     return { ok: false, summary: null, reason: 'empty_text' };
   }
   try {
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { temperature: 0.3, maxOutputTokens: 220 },
-    });
     const prompt = `Analisa o seguinte feedback de um cliente sobre o suporte recebido na plataforma MozHost.
 Nota: ${rating}/5
 Mensagem: ${JSON.stringify(text)}
@@ -447,8 +512,13 @@ Devolve EXACTAMENTE este formato (uma linha cada, sem markdown extra):
 SUMMARY: <resumo em até 2 frases curtas na mesma língua do cliente>
 SENTIMENT: <um dos seguintes: muito_positivo|positivo|neutro|negativo|muito_negativo>`;
 
-    const result = await model.generateContent(prompt);
-    const response = (result.response.text() || '').trim();
+    const response = await mozhostAi.complete({
+      prompt,
+      temperature: 0.3,
+      // muse-spark gasta tokens em reasoning antes de escrever: 220 não bastava
+      // (content voltava null) — ver services/mozhostAiService.meta.js
+      maxTokens: 800,
+    });
 
     let summary = null;
     let sentiment = null;
@@ -462,7 +532,7 @@ SENTIMENT: <um dos seguintes: muito_positivo|positivo|neutro|negativo|muito_nega
     }
     return { ok: true, summary, sentiment };
   } catch (err) {
-    console.warn('⚠️ Gemini summarize falhou:', err.message);
+    console.warn('⚠️ Resumo IA falhou:', err.message);
     return { ok: false, summary: null, reason: err.message };
   }
 }
@@ -499,7 +569,7 @@ async function notifyAgentAboutFeedback({ ticketId, rating, summary, sentiment, 
 
 /**
  * Submete a avaliação do utilizador para um ticket encerrado.
- * Persiste a nota de forma idempotente e faz o resumo (Gemini) + aviso ao agente em background.
+ * Persiste a nota de forma idempotente e faz o resumo (IA) + aviso ao agente em background.
  */
 async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
   const r = parseInt(rating, 10);
@@ -523,10 +593,10 @@ async function submitFeedback({ ticketId, userId, rating, feedbackText }) {
     throw new Error('Ticket já avaliado ou não elegível para avaliação.');
   }
 
-  if (text.length > 0 && process.env.GEMINI_API_KEY) {
+  if (text.length > 0 && mozhostAi.enabled) {
     setImmediate(async () => {
       try {
-        const ai = await callGeminiSummarize({ rating: r, text });
+        const ai = await callAISummarize({ rating: r, text });
         const summary = (ai.ok && ai.summary) || null;
         const finalSentiment = (ai.ok && ai.sentiment) || baseSentiment;
         await database.query(
@@ -725,4 +795,6 @@ module.exports = {
   isAgentMessage,
   getAgentNumbers,
   invalidateAgentCache,
+  lastUserText,
+  buildTicketNotice,
 };

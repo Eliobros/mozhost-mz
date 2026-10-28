@@ -17,7 +17,9 @@
  * rodar de novo (ou o cliente paga pela tela de billing normalmente).
  * ============================================================
  */
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const database = require('../models/database');
 
 const PLANS = {

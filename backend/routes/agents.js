@@ -82,8 +82,9 @@ router.post(
 
       const name = req.body.name.trim();
       const number = normalizeAgentPhone(req.body.number);
-      if (!/^\d{9,15}$/.test(number)) {
-        return res.status(400).json({ error: 'Número inválido (use formato internacional, ex: 258841234567)' });
+      // Telefone (9-15 dígitos) OU ID de utilizador do Discord (17-20 dígitos)
+      if (!/^(?:\d{9,15}|\d{17,20})$/.test(number)) {
+        return res.status(400).json({ error: 'Número inválido (telefone ex: 258841234567, ou ID de Discord com 17-20 dígitos)' });
       }
 
       // Unicidade tolerante: compara por dígitos normalizados
@@ -151,8 +152,9 @@ router.put(
 
       if (req.body.number !== undefined) {
         const number = normalizeAgentPhone(req.body.number);
-        if (!/^\d{9,15}$/.test(number)) {
-          return res.status(400).json({ error: 'Número inválido (use formato internacional, ex: 258841234567)' });
+        // Telefone (9-15 dígitos) OU ID de utilizador do Discord (17-20 dígitos)
+        if (!/^(?:\d{9,15}|\d{17,20})$/.test(number)) {
+          return res.status(400).json({ error: 'Número inválido (telefone ex: 258841234567, ou ID de Discord com 17-20 dígitos)' });
         }
         const dup = await database.query(
           'SELECT id FROM support_agents WHERE phone = ? AND id <> ? LIMIT 1',
