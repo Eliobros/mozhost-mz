@@ -95,3 +95,4 @@ temp/
 mozhost-app/mozhost-key.json
 .env*
 todo_list.txt
+core.*
