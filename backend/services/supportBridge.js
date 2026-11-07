@@ -234,11 +234,18 @@ async function createTicket({ userId, summary, lastMessage, conversationHistory 
 
   await notifyAgents({ ticketId, user, summary, lastMessage, notice });
 
-  // Fila pública: avisa o canal #support no Discord (webhook). Não bloqueia a
-  // criação do ticket nem afecta o fluxo — falha só é logada.
-  discordSupport
-    .notifyTicket({ content: notice })
-    .catch((err) => console.error('❌ Aviso no canal #support falhou:', err.message));
+  // Canal #support no Discord — prioriza o BOT (mensagem com botões);
+  // se não houver DISCORD_SUPPORT_CHANNEL, cai para o webhook (sem botões).
+  // Não bloqueia a criação do ticket nem afecta o fluxo — falha só é logada.
+  const supportChannel = String(process.env.DISCORD_SUPPORT_CHANNEL || '').trim();
+  const channelPromise = /^\d{17,20}$/.test(supportChannel)
+    ? discord.postTicketInChannel(supportChannel, { ticketId, body: notice })
+        .then((ok) => {
+          if (!ok) console.warn('⚠️ #support não publicado pelo bot — tentar webhook?');
+        })
+    : discordSupport.notifyTicket({ content: notice });
+
+  channelPromise.catch((err) => console.error('❌ Aviso no canal #support falhou:', err.message));
 
   return { ticketId, userId, username: user.username };
 }

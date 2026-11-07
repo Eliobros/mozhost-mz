@@ -6,8 +6,10 @@ import {
   Copy, Trash2, RefreshCw, Search, ShoppingCart, Server, Edit3, Save,
   ExternalLink, Shield, Settings, X, ChevronDown, ChevronUp, Calendar,
   Link2, Unlink, Eye, DollarSign, Tag, Info, ArrowRight, Filter,
-  Smartphone, CreditCard
+  Smartphone, CreditCard, Mail
 } from 'lucide-react';
+
+import CorporateEmailManager from '@/components/CorporateEmailManager';
 
 const API = 'https://api.mozhost.shop';
 const ALAUDA_API_URL = 'https://alauda-api.mozhost.shop';
@@ -702,7 +704,8 @@ const submitTransferOut = async () => {
     { id: 'mydomains', label: 'Meus Domínios', icon: Globe, count: domains.length },
     { id: 'register', label: 'Registrar', icon: ShoppingCart },
     { id: 'dns', label: 'DNS', icon: Settings },
-    { id: 'nameservers', label: 'Nameservers', icon: Server }
+    { id: 'nameservers', label: 'Nameservers', icon: Server },
+    { id: 'email', label: 'E-mail Corporativo', icon: Mail }
   ];
 
   return (
@@ -1444,6 +1447,11 @@ const submitTransferOut = async () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ======== TAB: E-MAIL CORPORATIVO ======== */}
+        {activeTab === 'email' && (
+          <CorporateEmailManager domains={allDomainNames} />
         )}
 
         {/* ======== MODALS ======== */}

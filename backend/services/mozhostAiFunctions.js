@@ -210,6 +210,24 @@ const functionDeclarations = [
     }
   },
   {
+  name: 'solicitar_troca_email',
+  description: 'Envia um código para o NOVO e-mail do utilizador autenticado. Ainda não altera o e-mail.',
+  parameters: {
+    type: 'object',
+    properties: { novo_email: { type: 'string', description: 'Novo e-mail desejado' } },
+    required: ['novo_email']
+  }
+},
+{
+  name: 'confirmar_troca_email',
+  description: 'Confirma a troca de e-mail com o código de 6 dígitos recebido no novo e-mail',
+  parameters: {
+    type: 'object',
+    properties: { code: { type: 'string', description: 'Código de 6 dígitos' } },
+    required: ['code']
+  }
+},
+  {
     name: 'buscar_usuario',
     description: 'Busca informações de um usuário específico pelo nome de usuário ou email',
     parameters: {
@@ -1085,6 +1103,89 @@ async verificar_codigo_suporte({ code, purpose }, userId) {
       }))
     };
   },
+
+  async solicitar_troca_email({ novo_email }, userId) {
+  const { sendEmail, generateCode } = require('../utils/email');
+  const email = String(novo_email || '').trim().toLowerCase();
+  const purpose = 'change_email_confirm';
+
+  if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return { erro: 'E-mail inválido' };
+
+  const users = await database.query(
+    'SELECT id, username, email FROM users WHERE id = ?', [userId]);
+  if (users.length === 0) return { erro: 'Usuário não encontrado' };
+  const user = users[0];
+
+  if (user.email.toLowerCase() === email)
+    return { erro: 'Esse já é o e-mail atual da conta' };
+
+  const taken = await database.query(
+    'SELECT id FROM users WHERE email = ?', [email]);
+  if (taken.length > 0) return { erro: 'Este e-mail já está em uso' };
+
+  const recent = await database.query(
+    `SELECT COUNT(*) AS n FROM verification_codes
+     WHERE user_id = ? AND purpose = ?
+       AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)`,
+    [userId, purpose]);
+  if (recent[0].n >= 3)
+    return { erro: 'Muitos pedidos. Tenta novamente mais tarde.' };
+
+  await database.query(
+    `UPDATE verification_codes SET used_at = NOW()
+     WHERE user_id = ? AND purpose = ? AND used_at IS NULL`,
+    [userId, purpose]);
+
+  const code = generateCode(6);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await database.query(
+    `INSERT INTO verification_codes (user_id, code, purpose, new_value, expires_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [userId, code, purpose, email, expiresAt]);
+
+  await sendEmail({
+    toEmail: email,
+    toName: user.username,
+    subject: 'MozHost - Confirma o teu novo e-mail',
+    htmlContent: `<p>Olá, <strong>${user.username}</strong>!</p>
+      <p>Código para confirmar o novo e-mail:</p>
+      <h2 style="letter-spacing:8px;color:#6c47ff">${code}</h2>
+      <p>Expira em 10 minutos. Se não foste tu, ignora.</p>`,
+    textContent: `O teu código é: ${code} (expira em 10 minutos)`
+  });
+
+  return { sucesso: true, mensagem: `Código enviado para ${email}`, expira_em: '10 minutos' };
+},
+
+async confirmar_troca_email({ code }, userId) {
+  const purpose = 'change_email_confirm';
+
+  const pend = await database.query(
+    `SELECT new_value FROM verification_codes
+     WHERE user_id = ? AND purpose = ? AND used_at IS NULL
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, purpose]);
+  if (pend.length === 0 || !pend[0].new_value)
+    return { sucesso: false, erro: 'Nenhum pedido de troca pendente' };
+
+  // reaproveita expiração + limite de tentativas
+  const check = await functionImplementations.verificar_codigo_suporte(
+    { code, purpose }, userId);
+  if (!check.valido) return { sucesso: false, erro: check.motivo };
+
+  try {
+    await database.query(
+      'UPDATE users SET email = ?, email_verified = true WHERE id = ?',
+      [pend[0].new_value, userId]);
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY')
+      return { sucesso: false, erro: 'Este e-mail já está em uso' };
+    throw e;
+  }
+  return { sucesso: true, mensagem: 'E-mail atualizado com sucesso ✅' };
+},
 
   async minha_conta(_args, userId) {
     const user = await database.query(

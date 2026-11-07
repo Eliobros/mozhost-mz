@@ -7,8 +7,12 @@
 //
 // .env necessário:
 //   DISCORD_BOT_TOKEN=
+//   DISCORD_SUPPORT_CHANNEL=   (opcional — comandos como !encerrar também valem nele)
 //
 // Requer: npm install discord.js@14   (Node 18+)
+// Portal do Developer → Bot → PRIVILEGED INTENTS → ligar MESSAGE CONTENT INTENT.
+// Sem isso o Discord entrega message.content vazio e os comandos de texto
+// (!aceitar / !encerrar / respostas) são ignorados sem erro nenhum.
 
 const {
   Client,
@@ -49,7 +53,14 @@ function start() {
   }
 
   client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages, // comandos no canal #support
+      GatewayIntentBits.DirectMessages,
+      // PRIVILEGIADO — sem ele o content vem vazio e o !encerrar morre
+      // silencioso no `if (!text) return` (ver Portal do Developer).
+      GatewayIntentBits.MessageContent,
+    ],
     partials: [Partials.Channel], // necessário para receber DMs
   });
 
@@ -82,11 +93,27 @@ function start() {
     });
   });
 
-  // Mensagens do agente em DM (comandos e respostas ao utilizador)
+  // Mensagens do agente: DM (comandos e respostas ao utilizador) + canal
+  // #support (o ticket é publicado lá com botões, por isso o !encerrar e as
+  // respostas também têm de valer no canal).
   client.on(Events.MessageCreate, (message) => {
-    if (message.author.bot || message.guild) return; // só DMs de pessoas
+    if (message.author.bot) return;
+    if (message.guild) {
+      // Só o canal de suporte configurado — o resto do servidor é ignorado.
+      // Quem não é agente é filtrado a seguir pelo supportBridge.
+      const supportChannel = String(process.env.DISCORD_SUPPORT_CHANNEL || '').trim();
+      if (!supportChannel || message.channelId !== supportChannel) return;
+    }
     const text = (message.content || '').trim();
-    if (!text) return;
+    if (!text) {
+      // Content vazio = MESSAGE CONTENT INTENT desligado no Portal (o código
+      // já o pede). Antes isto era um return silencioso que engolia o
+      // !encerrar sem erro nenhum — agora fica no log.
+      console.warn(
+        '⚠️ Discord entregou mensagem sem texto — ligue MESSAGE CONTENT INTENT no Portal do Developer (Bot → Privileged Intents).'
+      );
+      return;
+    }
 
     dispatch({
       id: message.id,
@@ -120,8 +147,25 @@ async function sendText(userId, text) {
   }
 }
 
-/**
- * Oferta de ticket com botões Aceitar / Recusar.
+/** Linha de botões Aceitar / Recusar (partilhada por DM e canal). */
+function buildOfferRow(ticketId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`aceitar:${ticketId}`)
+      .setLabel('Aceitar')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`recusar:${ticketId}`)
+      .setLabel('Recusar')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
+function offerContent(body) {
+  return `${body}\n\n🎯 Toca em *Aceitar* para assumir este ticket.`.slice(0, 1900);
+}
+
+/** Oferta de ticket com botões Aceitar / Recusar.
  * `body` é o texto já formatado pelo supportBridge (id, e-mail, motivo,
  * mensagem) — assim a DM e o canal #support mostram exactamente o mesmo.
  */
@@ -132,16 +176,6 @@ async function sendTicketOffer(userId, { ticketId, body, username, email, msg })
   }
   try {
     const user = await client.users.fetch(userId);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`aceitar:${ticketId}`)
-        .setLabel('Aceitar')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`recusar:${ticketId}`)
-        .setLabel('Recusar')
-        .setStyle(ButtonStyle.Danger)
-    );
     // Corpo vindo do bridge; fallback para o formato antigo se não vier.
     const content =
       body ||
@@ -149,8 +183,8 @@ async function sendTicketOffer(userId, { ticketId, body, username, email, msg })
         `👤 ${username || 'Usuário'} (${email || 'sem e-mail'})\n` +
         `💬 ${String(msg || '').slice(0, 1500)}`;
     await user.send({
-      content: `${content}\n\n🎯 Toca em *Aceitar* para assumir este ticket.`.slice(0, 1900),
-      components: [row],
+      content: offerContent(content),
+      components: [buildOfferRow(ticketId)],
       allowedMentions: { parse: [] },
     });
     return true;
@@ -160,4 +194,40 @@ async function sendTicketOffer(userId, { ticketId, body, username, email, msg })
   }
 }
 
-module.exports = { isDiscordId, setHandler, start, sendText, sendTicketOffer };
+/**
+ * Publica o ticket num canal (ex.: #support) COM botões Aceitar/Recusar.
+ * Alternativa ao webhook: um clique no canal chega ao mesmo handler.
+ * Requer permissão de "Enviar mensagens" do bot nesse canal.
+ */
+async function postTicketInChannel(channelId, { ticketId, body }) {
+  if (!client || !ready) {
+    console.warn('⚠️ Discord bot ainda não está pronto — ticket não publicado no canal');
+    return false;
+  }
+  try {
+    const channel = await client.channels.fetch(String(channelId));
+    if (!channel || typeof channel.send !== 'function') {
+      console.error(`❌ Canal Discord ${channelId} não encontrado ou não é de texto`);
+      return false;
+    }
+    await channel.send({
+      content: offerContent(body || `🎫 **Novo ticket #${ticketId}**`),
+      components: [buildOfferRow(ticketId)],
+      allowedMentions: { parse: [] },
+    });
+    return true;
+  } catch (err) {
+    console.error(`❌ Publicação no canal Discord ${channelId} falhou:`, err.message);
+    return false;
+  }
+}
+
+module.exports = {
+  isDiscordId,
+  isReady: () => ready,
+  setHandler,
+  start,
+  sendText,
+  sendTicketOffer,
+  postTicketInChannel,
+};
