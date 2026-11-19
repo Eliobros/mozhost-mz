@@ -507,7 +507,14 @@ const GitHubTab = () => {
           </div>
           <div>
             <h3 className="font-bold text-gray-900">GitHub Conectado</h3>
-            <p className="text-sm text-gray-600">@{ghStatus.github_username}</p>
+            <p className="text-sm text-gray-600">@{ghStatus.github_username || 'conta GitHub'}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {ghStatus.last_sync_at
+                ? `Última sincronização: ${new Date(ghStatus.last_sync_at).toLocaleString('pt-MZ', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                  })}`
+                : 'Nenhuma sincronização ainda'}
+            </p>
           </div>
         </div>
         <button
@@ -708,6 +715,7 @@ const ConnectionsPage = () => {
           missing_code: 'GitHub não devolveu o código de autorização. Tente novamente.',
           invalid_state: 'Sessão de conexão expirada. Clique em "Conectar com GitHub" novamente.',
           no_token: 'Não foi possível obter o token do GitHub. Tente novamente.',
+          not_configured: 'GitHub OAuth não está configurado no servidor. Avise o suporte.',
           server_error: 'Erro interno ao conectar o GitHub. Tente novamente.'
         };
         setGithubAlert({ type: 'error', text: messages[reason] || 'Falha ao conectar o GitHub. Tente novamente.' });

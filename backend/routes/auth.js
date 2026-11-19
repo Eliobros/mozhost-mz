@@ -327,8 +327,81 @@ router.get('/github', (req, res, next) => {
   })(req, res, next);
 });
 
-router.get('/github/callback', (req, res, next) => {
+router.get('/github/callback', async (req, res, next) => {
   const frontendUrl = process.env.FRONTEND_URL || 'https://mozhost.shop';
+
+  // Fluxo de CONEXÃO (aba Connections) reaproveita este mesmo callback e o
+  // mesmo OAuth App do login. A rota /api/github/auth assina um state com
+  // prefixo "connect."; login continua usando o state em base64.
+  const rawState = typeof req.query.state === 'string' ? req.query.state : '';
+  if (rawState.startsWith('connect.')) {
+    const redirectTo = (status, reason) => {
+      const params = new URLSearchParams({ github: status });
+      if (reason) params.set('reason', reason);
+      return res.redirect(`${frontendUrl}/connections?${params.toString()}`);
+    };
+
+    let connectState;
+    try {
+      connectState = jwt.verify(rawState.slice('connect.'.length), process.env.JWT_SECRET);
+    } catch (e) {
+      return redirectTo('error', 'invalid_state');
+    }
+
+    const { code } = req.query;
+    if (!code) return redirectTo('error', 'missing_code');
+    if (!connectState.userId || !process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+      return redirectTo('error', 'not_configured');
+    }
+
+    try {
+      const callbackUrl = process.env.GITHUB_CALLBACK_URL
+        || `${process.env.BACKEND_URL || 'https://api.mozhost.shop'}/api/auth/github/callback`;
+
+      const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: process.env.GITHUB_CLIENT_ID,
+          client_secret: process.env.GITHUB_CLIENT_SECRET,
+          code,
+          redirect_uri: callbackUrl
+        })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) return redirectTo('error', 'no_token');
+
+      const userRes = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'MozHost'
+        }
+      });
+      if (!userRes.ok) return redirectTo('error', 'server_error');
+      const githubUser = await userRes.json();
+      const userId = connectState.userId;
+
+      const existing = await database.query('SELECT id FROM github_accounts WHERE user_id = ?', [userId]);
+      if (existing.length) {
+        await database.query(
+          'UPDATE github_accounts SET access_token = ?, github_id = ?, github_username = ?, updated_at = NOW() WHERE user_id = ?',
+          [tokenData.access_token, String(githubUser.id), githubUser.login, userId]
+        );
+      } else {
+        await database.query(
+          'INSERT INTO github_accounts (user_id, github_id, github_username, access_token) VALUES (?, ?, ?, ?)',
+          [userId, String(githubUser.id), githubUser.login, tokenData.access_token]
+        );
+      }
+
+      console.log(`✅ GitHub conectado: user ${userId} → @${githubUser.login}`);
+      return redirectTo('success');
+    } catch (error) {
+      console.error('Erro ao conectar GitHub:', error);
+      return redirectTo('error', 'server_error');
+    }
+  }
 
   let mobileRedirectUri = null;
   if (req.query.state) {

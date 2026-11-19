@@ -21,7 +21,7 @@ router.get('/status', async (req, res) => {
       const ownerBalance = await alauda.getBalance(userId, plan);
       let ownerOnline = false;
       try {
-        const h = await axios.get(`${alauda.ALAUDA_API_URL}/health`, { timeout: 5000 });
+        const h = await axios.get(`${alauda.ALAUDA_API_ROOT}/health`, { timeout: 5000 });
         ownerOnline = h.data?.status === 'ok';
       } catch (e) { /* offline */ }
       return res.json({
@@ -48,7 +48,7 @@ router.get('/status', async (req, res) => {
     // Ping na Alauda pra saber se tá online
     let alaudaOnline = false;
     try {
-      const health = await axios.get(`${alauda.ALAUDA_API_URL}/health`, { timeout: 5000 });
+      const health = await axios.get(`${alauda.ALAUDA_API_ROOT}/health`, { timeout: 5000 });
       alaudaOnline = health.data?.status === 'ok';
     } catch (e) { /* offline */ }
 

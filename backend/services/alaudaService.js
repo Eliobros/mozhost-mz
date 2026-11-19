@@ -4,8 +4,8 @@
 
 const axios = require('axios');
 const database = require('../models/database');
+const { ALAUDA_API_ROOT, alaudaApi } = require('../utils/alaudaUrl');
 
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'http://208.110.72.191:3000';
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY;
 
 // 👑 Dono da plataforma — acesso total, sem débito e sem verificação de plano
@@ -193,7 +193,7 @@ async function getUsage(userId, limit = 50) {
 async function callAlauda(method, path, body = null, params = null) {
   const response = await axios({
     method,
-    url: `${ALAUDA_API_URL}/api${path}`,
+    url: alaudaApi(path),
     data: body,
     params,
     headers: {
@@ -211,7 +211,7 @@ function hasPlanAccess(plan) {
 }
 
 module.exports = {
-  ALAUDA_API_URL,
+  ALAUDA_API_ROOT,
   OWNER_ID,
   isOwner,
   COSTS,

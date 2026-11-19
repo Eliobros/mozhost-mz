@@ -7,7 +7,8 @@ const axios = require('axios');
 const auth = require('../middleware/auth');
 const database = require('../models/database');
 
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.mozhost.shop/api/payment';
+// Raiz de pagamentos da Alauda (normalizada pelo helper: com ou sem /api/payment na env).
+const { ALAUDA_PAYMENT_URL: ALAUDA_API_URL } = require('../utils/alaudaUrl');
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ===== CONFIGURAÇÕES DYNADOT =====

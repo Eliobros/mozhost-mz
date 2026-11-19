@@ -31,10 +31,11 @@ async function notifyPlanActivated(user, plan, { currency, amount, isScheduled, 
   }
 }
 
-// A env correta é ALAUDA_API_URL (aponta pra https://alauda-api.mozhost.shop/api/payment).
+// A ALAUDA_API_URL aponta pra raiz de pagamentos (https://alauda-api.mozhost.shop/api/payment).
 // O antigo ALAUDA_API_URL_PAYMENT/duckdns.org era da VPS anterior — causa de cobranças
 // indo pro servidor velho e a tela ficar travada em "aguardando pagamento".
-const ALAUDA_API_URL = process.env.ALAUDA_API_URL || 'https://alauda-api.mozhost.shop/api/payment';
+// O helper normaliza o sufixo, então a env pode vir com ou sem /api/payment.
+const { ALAUDA_PAYMENT_URL: ALAUDA_API_URL } = require('../utils/alaudaUrl');
 const ALAUDA_API_KEY = process.env.ALAUDA_API_KEY || 'sua_api_key_aqui';
 
 // ===== PLANOS =====

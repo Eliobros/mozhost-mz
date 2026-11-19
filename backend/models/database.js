@@ -492,6 +492,58 @@ console.log('✅ Email tables initialized successfully');
         )
       `);
 
+      // ===== Integração GitHub (deploy via repositório) =====
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS github_accounts (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL UNIQUE,
+          github_id VARCHAR(50),
+          github_username VARCHAR(100),
+          access_token TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS github_repos (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          container_id VARCHAR(36) NOT NULL,
+          repo_url TEXT NOT NULL,
+          repo_name VARCHAR(255) NOT NULL,
+          branch VARCHAR(255) DEFAULT 'main',
+          webhook_id VARCHAR(100),
+          auto_deploy BOOLEAN DEFAULT true,
+          last_deploy_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_github_repo_container (container_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE,
+          INDEX idx_github_repos_user (user_id)
+        )
+      `);
+
+      await this.query(`
+        CREATE TABLE IF NOT EXISTS deploy_logs (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          container_id VARCHAR(36) NOT NULL,
+          repo_id INT,
+          commit_sha VARCHAR(64),
+          commit_message TEXT,
+          status ENUM('running', 'success', 'failed') DEFAULT 'running',
+          log LONGTEXT,
+          triggered_by VARCHAR(50) DEFAULT 'push',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          finished_at TIMESTAMP NULL,
+          INDEX idx_deploy_logs_container (container_id, created_at),
+          INDEX idx_deploy_logs_user (user_id)
+        )
+      `);
+
       console.log('✅ Database tables initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing database:', error);

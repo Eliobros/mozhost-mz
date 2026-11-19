@@ -1,0 +1,288 @@
+const express = require('express');
+const router = express.Router();
+const EmailService = require('../services/EmailService');
+const checkEmailQuota = require('../middleware/checkEmailQuota');
+const alaudaAuthMiddleware = require('../middleware/alaudaAuth');
+
+// =========================================================================
+// CONEXÃO COM O BANCO DE DADOS DA VPS DE E-MAIL (REMOTO - CORRIGIDO)
+// =========================================================================
+const mysql = require('mysql2/promise');
+const dbEmail = mysql.createPool({
+    host: '13.121.82.195',         // IP da sua VPS de e-mail
+    user: 'mozhost_panel',         // Usuário liberado para o seu IP
+    password: 'SuaNovaSenhaForteAqui', // ⚠️ COLOQUE AQUI A NOVA SENHA QUE VOCÊ DEFINIU VIA ALTER USER
+    database: 'server_email',      // Banco correto listado na VPS externa
+    waitForConnections: true,
+    connectionLimit: 5,
+    queueLimit: 0
+});
+
+// Função auxiliar para executar as queries no banco remoto de e-mails
+async function queryEmailDB(sql, params = []) {
+    const [rows] = await dbEmail.execute(sql, params);
+    return rows;
+}
+// =========================================================================
+
+// Enviar email
+router.post('/send', alaudaAuthMiddleware, checkEmailQuota, async (req, res) => {
+  try {
+    const { to, subject, html, text, fromName } = req.body;
+
+    // Validações
+    if (!to || !subject || (!html && !text)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Campos obrigatórios: to, subject, e (html ou text)'
+      });
+    }
+
+    // Validação de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email inválido'
+      });
+    }
+
+    const emailService = new EmailService();
+    const result = await emailService.send({
+      userId: req.user.id, // ← Vem do seu authMiddleware
+      to,
+      subject,
+      html,
+      text,
+      fromName
+    });
+
+    res.json({
+      success: true,
+      messageId: result.messageId,
+      message: 'Email enviado com sucesso',
+      quota: req.emailQuota
+    });
+
+  } catch (error) {
+    console.error('[Email] Erro ao enviar:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erro ao enviar email'
+    });
+  }
+});
+
+// Ver estatísticas de emails
+router.get('/stats', alaudaAuthMiddleware, async (req, res) => {
+  try {
+    const emailService = new EmailService();
+    const stats = await emailService.getStats(req.user.id);
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('[Email] Erro ao buscar estatísticas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Listar emails enviados (histórico)
+router.get('/logs', alaudaAuthMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const emailService = new EmailService();
+    const logs = await emailService.getLogs(req.user.id, {
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+
+    res.json({
+      success: true,
+      data: logs
+    });
+  } catch (error) {
+    console.error('[Email] Erro ao buscar logs:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Ver quota atual
+router.get('/quota', alaudaAuthMiddleware, async (req, res) => {
+  try {
+    const emailService = new EmailService();
+    const quota = await emailService.getQuota(req.user.id);
+
+    res.json({
+      success: true,
+      data: quota
+    });
+  } catch (error) {
+    console.error('[Email] Erro ao buscar quota:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// =========================================================================
+// NOVAS ROTAS - SERVIÇO DE E-MAIL CORPORATIVO DEDICADO (SaaS)
+// =========================================================================
+const dns = require('dns').promises;
+const crypto = require('crypto');
+
+// Email API da VPS de e-mail: só aceita requisições vindas do IP desta máquina
+const EMAIL_API_URL = 'http://13.121.82.195:3002';
+const EMAIL_API_TIMEOUT_MS = 20000;
+
+// Mesma validação da email-api: evita domínio malformado/injeção antes de sair daqui
+const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,63}$/;
+
+const normalizeDomain = (value) => String(value || '').toLowerCase().trim();
+const isValidDomain = (value) => DOMAIN_REGEX.test(value);
+
+// Chamada à email-api com timeout: sem isso o painel ficaria pendurado se a VPS travasse
+const callEmailApi = async (pathAndQuery, options = {}) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), EMAIL_API_TIMEOUT_MS);
+    try {
+        const response = await fetch(`${EMAIL_API_URL}${pathAndQuery}`, { ...options, signal: controller.signal });
+        const data = await response.json().catch(() => ({}));
+        return { ok: response.ok, status: response.status, data };
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+// 1. ADICIONAR DOMÍNIO E GERAR TOKEN DE VERIFICAÇÃO TXT
+// Endpoint: POST /api/emails/corporate/domain/add
+router.post('/corporate/domain/add', alaudaAuthMiddleware, async (req, res) => {
+    const { domainName } = req.body;
+
+    if (!domainName) {
+        return res.status(400).json({ success: false, error: 'O nome do domínio é obrigatório.' });
+    }
+
+    const name = normalizeDomain(domainName);
+
+    if (!isValidDomain(name)) {
+        return res.status(400).json({ success: false, error: 'Formato de domínio inválido. Ex: seunegocio.com' });
+    }
+
+    try {
+        // Gera um token único (ex: mozhost-verification=a1b2c3d4...)
+        const token = `mozhost-verification=${crypto.randomBytes(16).toString('hex')}`;
+
+        // Salva na tabela virtual_domains da VPS externa com status "não verificado" (verified = 0)
+        await queryEmailDB(
+            'INSERT INTO virtual_domains (name, verified, verification_token) VALUES (?, 0, ?)',
+            [name, token]
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: 'Domínio pré-registrado. Adicione o registro TXT no seu gerenciador de DNS para validar.',
+            domain: name,
+            txtRecordName: '@',
+            txtRecordValue: token
+        });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'Este domínio já está cadastrado no sistema de e-mail.' });
+        }
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 1.1 CONSULTAR STATUS DO DOMÍNIO CORPORATIVO (token + verificação)
+// Endpoint: GET /api/emails/corporate/domain/status/:domainName
+router.get('/corporate/domain/status/:domainName', alaudaAuthMiddleware, async (req, res) => {
+    const { domainName } = req.params;
+
+    if (!domainName) {
+        return res.status(400).json({ success: false, error: 'O nome do domínio é obrigatório.' });
+    }
+
+    const name = normalizeDomain(domainName);
+
+    if (!isValidDomain(name)) {
+        return res.status(400).json({ success: false, error: 'Formato de domínio inválido.' });
+    }
+
+    try {
+        // CORRIGIDO: Busca na VPS externa de e-mails usando a pool dbEmail via queryEmailDB
+        const rows = await queryEmailDB(
+            'SELECT name, verification_token, verified FROM virtual_domains WHERE name = ?',
+            [name]
+        );
+
+        // Domínio ainda não cadastrado: resposta 200 para o painel decidir o estado inicial
+        if (!rows || rows.length === 0) {
+            return res.json({ success: true, domain: name, exists: false, verified: false, token: null });
+        }
+
+        const domainRecord = rows[0];
+
+        return res.json({
+            success: true,
+            domain: domainRecord.name,
+            exists: true,
+            verified: domainRecord.verified === 1,
+            token: domainRecord.verification_token || null
+        });
+    } catch (error) {
+        console.error('Error fetching corporate domain status:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. BOTÃO "VERIFICAR DOMÍNIO" - CONSULTA O DNS E ATIVA O DKIM AUTOMATICAMENTE
+// Endpoint: POST /api/emails/corporate/domain/verify
+router.post('/corporate/domain/verify', alaudaAuthMiddleware, async (req, res) => {
+    const { domainName } = req.body;
+
+    if (!domainName) {
+        return res.status(400).json({ success: false, error: 'O nome do domínio é obrigatório.' });
+    }
+
+    const name = normalizeDomain(domainName);
+
+    if (!isValidDomain(name)) {
+        return res.status(400).json({ success: false, error: 'Formato de domínio inválido.' });
+    }
+
+    try {
+        // CORRIGIDO: Busca o token gerado para esse domínio direto na VPS de e-mail
+        const rows = await queryEmailDB(
+            'SELECT id, verification_token, verified FROM virtual_domains WHERE name = ?',
+            [name]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Este domínio não foi adicionado no painel ainda.' });
+        }
+
+        const domainRecord = rows[0];
+
+        if (domainRecord.verified === 1) {
+            return res.json({ success: true, message: 'Este domínio já se encontra verificado.' });
+        }
+
+        const expectedToken = domainRecord.verification_token;
+
+        // Faz a pesquisa real de registros TXT usando o resolvedor DNS do Node.js
+        const records = await dns.resolveTxt(name);
+        const flatRecords = records.flat();
+
+        // Compara se o token gerado pela MozHost foi encontrado no DNS do domínio
+        if (flatRecords.includes(expectedToken)) {
+

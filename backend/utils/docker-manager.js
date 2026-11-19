@@ -333,13 +333,13 @@ CMD ["python", "main.py"]
       name: `mozhost_${containerId}`,
       ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
       HostConfig: {
-        PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+        PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
         Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
         CpuQuota: parseInt(parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000),
         CpuPeriod: 100000,
         RestartPolicy: { Name: 'unless-stopped' },
         Binds: volumeMount,
-        NetworkMode: 'bridge'
+        NetworkMode: 'mozhost_isolated'
       },
       Env: [
         `NODE_ENV=production`,
@@ -412,13 +412,13 @@ async createNodePythonContainer(userId, containerId, containerPath, port, name, 
     name: `mozhost_${containerId}`,
     ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
     HostConfig: {
-      PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+      PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
       Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
       CpuQuota: parseInt(parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000),
       CpuPeriod: 100000,
       RestartPolicy: { Name: 'unless-stopped' },
       Binds: volumeMount,
-      NetworkMode: 'bridge'
+      NetworkMode: 'mozhost_isolated'
     },
     Env: [
       `NODE_ENV=production`,
@@ -498,12 +498,12 @@ async promoteStaticToNextJs(containerId) {
     name: `mozhost_${containerId}`,
     ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
     HostConfig: {
-      PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: containerInfo.port.toString() }] },
+      PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: containerInfo.port.toString() }] },
       Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
       CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
       CpuPeriod: 100000,
       Binds: [`${containerPath}:/app/code:rw`],
-      NetworkMode: 'bridge',
+      NetworkMode: 'mozhost_isolated',
       RestartPolicy: { Name: 'unless-stopped' }
     },
     Env: [
@@ -560,13 +560,13 @@ server {
     name: `mozhost_${containerId}`,
     ExposedPorts: { '80/tcp': {} },
     HostConfig: {
-      PortBindings: { '80/tcp': [{ HostPort: port.toString() }] },
+      PortBindings: { '80/tcp': [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
       Binds: [
         `${htmlPath}:/usr/share/nginx/html:rw`,
         `${containerPath}/nginx.conf:/etc/nginx/conf.d/default.conf:ro`
       ],
       RestartPolicy: { Name: 'unless-stopped' },
-      NetworkMode: 'bridge'
+      NetworkMode: 'mozhost_isolated'
     }
   };
 
@@ -665,13 +665,13 @@ server {
       name: `mozhost_${containerId}`,
       ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
       HostConfig: {
-        PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+        PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
         Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
         CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
         CpuPeriod: 100000,
         RestartPolicy: { Name: 'unless-stopped' },
         Binds: [`${containerPath}:/app/code:rw`],
-        NetworkMode: 'bridge'
+        NetworkMode: 'mozhost_isolated'
       },
       Env: [
         `NODE_ENV=production`,
@@ -863,13 +863,13 @@ server {
         name: `mozhost_${containerId}`,
         ExposedPorts: { '80/tcp': {} },
         HostConfig: {
-          PortBindings: { '80/tcp': [{ HostPort: port.toString() }] },
+          PortBindings: { '80/tcp': [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
           Binds: [
             `${htmlPath}:/usr/share/nginx/html:rw`,
             `${nginxConfPath}:/etc/nginx/conf.d/default.conf:ro`
           ],
           RestartPolicy: { Name: 'unless-stopped' },
-          NetworkMode: 'bridge'
+          NetworkMode: 'mozhost_isolated'
         }
       };
     } else {
@@ -879,13 +879,13 @@ server {
         name: `mozhost_${containerId}`,
         ExposedPorts: { [`${imageConfig.internalPort}/tcp`]: {} },
         HostConfig: {
-          PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostPort: port.toString() }] },
+          PortBindings: { [`${imageConfig.internalPort}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: port.toString() }] },
           Memory: parseInt(process.env.MAX_RAM_PER_CONTAINER) * 1024 * 1024 || 512 * 1024 * 1024,
           CpuQuota: parseFloat(process.env.MAX_CPU_PER_CONTAINER || '0.5') * 100000,
           CpuPeriod: 100000,
           RestartPolicy: { Name: 'unless-stopped' },
           Binds: [`${containerPath}:/app/code:rw`],
-          NetworkMode: 'bridge'
+          NetworkMode: 'mozhost_isolated'
         },
         Env: [
           `NODE_ENV=production`,

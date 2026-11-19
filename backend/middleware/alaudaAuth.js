@@ -1,5 +1,7 @@
 const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken'); // Adicionado para ler o token JWT do painel
 const db = require('../models/database');
+const { alaudaApi } = require('../utils/alaudaUrl');
 
 /**
  * Obtém IP do cliente
@@ -23,7 +25,7 @@ const CACHE_TTL = 5 * 60 * 1000;
  */
 async function validateWithAlauda(apiKey) {
     try {
-        const response = await fetch(`${process.env.ALAUDA_API_URL}/api/validate/key`, {
+        const response = await fetch(alaudaApi('/validate/key'), {
             method: 'GET',
             headers: {
                 'X-API-Key': apiKey,
@@ -55,26 +57,24 @@ async function syncUserLocally(alaudaData) {
         );
 
         if (existing.length > 0) {
-            // Atualiza
             await db.query(`
-                UPDATE users 
+                UPDATE users
                 SET username = ?, email = ?, email_plan = ?, last_sync_at = NOW()
                 WHERE alauda_user_id = ?
             `, [alaudaData.userName, alaudaData.email, alaudaData.plan, alaudaData.userId]);
 
             return existing[0].id;
         } else {
-            // Cria novo
             const quotas = { free: 500, basic: 5000, pro: 50000, premium: 100000 };
             const result = await db.query(`
                 INSERT INTO users (
                     username, email, password_hash, alauda_user_id,
-                    email_plan, email_quota, plan, is_active, 
+                    email_plan, email_quota, plan, is_active,
                     last_sync_at, created_at
                 ) VALUES (?, ?, 'ALAUDA_AUTH', ?, ?, ?, ?, true, NOW(), NOW())
             `, [
-                alaudaData.userName, 
-                alaudaData.email, 
+                alaudaData.userName,
+                alaudaData.email,
                 alaudaData.userId,
                 alaudaData.plan,
                 quotas[alaudaData.plan] || 500,
@@ -90,36 +90,71 @@ async function syncUserLocally(alaudaData) {
 }
 
 /**
- * Middleware principal
+ * Middleware principal corrigido
  */
 const alaudaAuthMiddleware = async (req, res, next) => {
     try {
-        // 1. Extrai API Key
-        const apiKey = req.headers['x-api-key'] ||
-                      req.headers.authorization?.replace('Bearer ', '');
+        const authHeader = req.headers.authorization;
+        const xApiKey = req.headers['x-api-key'];
+        
+        let tokenOrKey = xApiKey || authHeader?.replace('Bearer ', '');
 
-        if (!apiKey) {
+        if (!tokenOrKey) {
             return res.status(401).json({
                 success: false,
-                error: 'API Key não fornecida',
-                message: 'Use: X-API-Key ou Authorization: Bearer <key>'
+                error: 'API Key ou Token não fornecido',
+                message: 'Use: X-API-Key ou Authorization: Bearer <token>'
             });
         }
 
-        // 2. Verifica cache
-        const cached = validationCache.get(apiKey);
+        // =====================================================================
+        // CASO 1: Requisição veio do Painel Web (Token JWT começando com 'ey')
+        // =====================================================================
+        if (authHeader && tokenOrKey.startsWith('ey')) {
+            try {
+                // Decodifica o JWT usando a secret local da MozHost
+                const decoded = jwt.verify(tokenOrKey, process.env.JWT_SECRET);
+                
+                req.user = {
+                    id: decoded.userId,
+                    userId: decoded.userId,
+                    username: decoded.username,
+                    email: decoded.email,
+                    plan: decoded.plan || 'free',
+                    isActive: true
+                };
+                req.clientIP = getClientIP(req);
+
+                // injeta a sua chave mestra do .env para uso interno, caso precise
+                req.alaudaKey = process.env.ALAUDA_API_KEY; 
+
+                console.log(`[Alauda Auth] ✅ Painel Web autenticado via JWT: ${req.user.username}`);
+                return next(); // Libera o acesso direto
+                
+            } catch (jwtError) {
+                console.error('[Alauda Auth] JWT inválido:', jwtError.message);
+                return res.status(401).json({
+                    success: false,
+                    error: 'Sessão expirada. Faça login novamente.'
+                });
+            }
+        }
+
+        // =====================================================================
+        // CASO 2: Requisição externa / API Key Tradicional estática
+        // =====================================================================
+        const cached = validationCache.get(tokenOrKey);
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             req.user = cached.data.user;
             req.alaudaKey = cached.data.alaudaKey;
             return next();
         }
 
-        // 3. Valida com Alauda
-        console.log('[Alauda Auth] Validando key...');
-        const alaudaResponse = await validateWithAlauda(apiKey);
+        console.log('[Alauda Auth] Validando API Key com a Alauda...');
+        const alaudaResponse = await validateWithAlauda(tokenOrKey);
 
         if (!alaudaResponse || !alaudaResponse.success) {
-            validationCache.delete(apiKey);
+            validationCache.delete(tokenOrKey);
             return res.status(401).json({
                 success: false,
                 error: 'API Key inválida ou expirada'
@@ -128,12 +163,8 @@ const alaudaAuthMiddleware = async (req, res, next) => {
 
         const alaudaData = alaudaResponse.data;
 
-        // 4. Verifica status
         if (!alaudaData.active) {
-            return res.status(403).json({
-                success: false,
-                error: 'API Key desativada'
-            });
+            return res.status(403).json({ success: false, error: 'API Key desativada' });
         }
 
         if (alaudaData.suspended) {
@@ -144,10 +175,8 @@ const alaudaAuthMiddleware = async (req, res, next) => {
             });
         }
 
-        // 5. Sincroniza localmente
         const localUserId = await syncUserLocally(alaudaData);
 
-        // 6. Prepara dados
         const userData = {
             id: localUserId,
             userId: localUserId,
@@ -158,22 +187,20 @@ const alaudaAuthMiddleware = async (req, res, next) => {
             isActive: true
         };
 
-        // 7. Cache
-        validationCache.set(apiKey, {
+        validationCache.set(tokenOrKey, {
             timestamp: Date.now(),
-            data: { user: userData, alaudaKey: alaudaData }
+            data: { user: userData, alaudaKey: tokenOrKey }
         });
 
-        // 8. Adiciona no request
         req.user = userData;
-        req.alaudaKey = alaudaData;
+        req.alaudaKey = tokenOrKey;
         req.clientIP = getClientIP(req);
 
-        console.log(`[Alauda Auth] ✅ ${userData.username} (${userData.plan})`);
+        console.log(`[Alauda Auth] ✅ API Key válida: ${userData.username}`);
         next();
 
     } catch (error) {
-        console.error('[Alauda Auth] Erro:', error);
+        console.error('[Alauda Auth] Erro Crítico:', error);
         res.status(500).json({
             success: false,
             error: 'Erro na autenticação'
