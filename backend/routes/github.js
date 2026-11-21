@@ -79,6 +79,40 @@ function getDeployTargetPath(containerId, containerType) {
   return base; // node/python/api/bots: pasta montada em /app/code
 }
 
+function isPermissionError(error) {
+  return error?.code === 'EACCES' || error?.code === 'EPERM';
+}
+
+const PERMISSION_HINT = (target) =>
+  `Sem permissão para escrever em ${target}. No servidor, como root: ` +
+  `chown -R ${process.getuid()}:${process.getgid()} ${dockerManager.containersPath} ` +
+  'e garanta permissão de travessia nos diretórios pais (chmod o+x), ' +
+  'ou libere sudo sem senha para chown/mkdir do usuário do backend.';
+
+/**
+ * Algumas pastas dos containers foram criadas pelo Docker daemon (root), então
+ * o processo do MozHost não consegue limpar nem copiar arquivos nelas. Tenta
+ * corrigir a posse com `sudo -n` (sem prompt de senha) e repete a cópia.
+ */
+async function fixTargetOwnership(target) {
+  const owner = `${process.getuid()}:${process.getgid()}`;
+  await execFileAsync('sudo', ['-n', 'mkdir', '-p', target]);
+  await execFileAsync('sudo', ['-n', 'chown', '-R', owner, target]);
+  console.log(`🔧 Posse corrigida via sudo: ${target} → ${owner}`);
+}
+
+async function copyRepoFiles(tmpDir, target, containerType) {
+  await fs.ensureDir(target);
+  const preserve = (containerType === 'static' || containerType === 'php') ? [] : ['.env.host'];
+  for (const entry of await fs.readdir(target)) {
+    if (preserve.includes(entry)) continue;
+    await fs.remove(path.join(target, entry));
+  }
+  await fs.copy(tmpDir, target, {
+    filter: (src) => path.basename(src) !== '.git'
+  });
+}
+
 /**
  * Clona o repositório no HOST e sincroniza os arquivos na pasta montada no
  * container. Não usamos `git` dentro do container porque as imagens python e
@@ -94,19 +128,27 @@ async function cloneRepoToHost(containerId, containerType, repoUrl, branch, toke
       repoUrlWithToken(repoUrl, token), tmpDir
     ], { maxBuffer: 20 * 1024 * 1024 });
 
-    await fs.ensureDir(target);
-    const preserve = (containerType === 'static' || containerType === 'php') ? [] : ['.env.host'];
-    for (const entry of await fs.readdir(target)) {
-      if (preserve.includes(entry)) continue;
-      await fs.remove(path.join(target, entry));
+    try {
+      await copyRepoFiles(tmpDir, target, containerType);
+    } catch (error) {
+      if (!isPermissionError(error)) throw error;
+      try {
+        await fixTargetOwnership(target);
+      } catch (sudoError) {
+        console.error(`❌ Não foi possível corrigir a posse de ${target}:`, sudoError.message);
+        throw new Error(PERMISSION_HINT(target));
+      }
+      try {
+        await copyRepoFiles(tmpDir, target, containerType);
+      } catch (retryError) {
+        if (!isPermissionError(retryError)) throw retryError;
+        throw new Error(PERMISSION_HINT(target));
+      }
     }
-
-    await fs.copy(tmpDir, target, {
-      filter: (src) => path.basename(src) !== '.git'
-    });
 
     return target;
   } catch (error) {
+    if (error.message?.startsWith('Sem permissão')) throw error;
     const detail = String(error.stderr || error.message || 'erro desconhecido')
       .replaceAll(token, '***')
       .trim()
@@ -378,7 +420,7 @@ router.post('/connect', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao conectar repo:', error);
-    const safeMessage = error.message?.startsWith('Falha ao clonar')
+    const safeMessage = error.message?.startsWith('Falha ao clonar') || error.message?.startsWith('Sem permissão')
       ? error.message
       : 'Erro ao conectar repositório';
     res.status(500).json({ error: safeMessage });
