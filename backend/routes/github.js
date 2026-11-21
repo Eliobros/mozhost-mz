@@ -114,6 +114,33 @@ async function copyRepoFiles(tmpDir, target, containerType) {
 }
 
 /**
+ * O clone abaixo coloca o token do usuário na URL. Quando existe
+ * `credential.helper=store` (padrão em muitas VPS), o git grava esse token em
+ * ~/.git-credentials — e, como ele usa a primeira entrada que casa com o host,
+ * o token de um usuário passava a ser usado em TODAS as operações git do
+ * servidor. Aqui removemos as entradas "oauth2" (o usuário que o MozHost usa na
+ * URL) para que nenhum token de usuário fique persistido no disco.
+ */
+async function scrubPlatformGitCredentials() {
+  const credentialsPath = path.join(os.homedir(), '.git-credentials');
+  try {
+    const content = await fs.readFile(credentialsPath, 'utf8');
+    const lines = content.split('\n');
+    const kept = lines.filter((line) => !line.includes('://oauth2:'));
+    if (kept.length === lines.length) return;
+
+    const body = kept.filter(Boolean).join('\n');
+    await fs.writeFile(credentialsPath, body ? `${body}\n` : '', { mode: 0o600 });
+    await fs.chmod(credentialsPath, 0o600).catch(() => {});
+    console.warn('🧹 Credenciais temporárias do MozHost removidas de ~/.git-credentials');
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('⚠️ Não foi possível limpar ~/.git-credentials:', error.message);
+    }
+  }
+}
+
+/**
  * Clona o repositório no HOST e sincroniza os arquivos na pasta montada no
  * container. Não usamos `git` dentro do container porque as imagens python e
  * php não o possuem. O `.git` (que contém o token do usuário) não é copiado.
@@ -124,9 +151,15 @@ async function cloneRepoToHost(containerId, containerType, repoUrl, branch, toke
 
   try {
     await execFileAsync('git', [
+      // credential.helper= (vazio) desliga os helpers só neste comando: o token
+      // da URL é usado uma vez e não é gravado nem reaproveitado de outro usuário.
+      '-c', 'credential.helper=',
       'clone', '--depth', '1', '--single-branch', '--branch', branch,
       repoUrlWithToken(repoUrl, token), tmpDir
-    ], { maxBuffer: 20 * 1024 * 1024 });
+    ], {
+      maxBuffer: 20 * 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    });
 
     try {
       await copyRepoFiles(tmpDir, target, containerType);
@@ -158,6 +191,7 @@ async function cloneRepoToHost(containerId, containerType, repoUrl, branch, toke
     throw new Error(`Falha ao clonar ${repoUrl}@${branch}: ${detail}`);
   } finally {
     await fs.remove(tmpDir).catch(() => {});
+    await scrubPlatformGitCredentials();
   }
 }
 
